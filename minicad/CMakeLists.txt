@@ -1,19 +1,18 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(sandbox CXX)
+project(minicad CXX)
 message(STATUS "Configuring " ${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 23)
 
 file(GLOB_RECURSE SOURCES 
-    "${CMAKE_CURRENT_SOURCE_DIR}/sandbox/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/*.cpp"
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC liberay)
-target_include_directories(${PROJECT_NAME}
-                           PUBLIC . "${CMAKE_BINARY_DIR}/generated")
+target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Set compile options and properties of the target
 target_compile_options(${PROJECT_NAME} PRIVATE ${PROJ_CXX_FLAGS})
