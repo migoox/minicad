@@ -11,7 +11,7 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "BUILD_SANDBOX": "ON",
+                "BUILD_SANDBOX": "OFF",
                 "BUILD_TESTS": "OFF",
                 "USE_SYSTEM_INCLUDE": "OFF"
             }

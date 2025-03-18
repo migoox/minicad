@@ -4,7 +4,7 @@ project(
   minicad 
   DESCRIPTION "MiNI CAD"
   LANGUAGES CXX C
-  VERSION ${VERSION})
+  )
 
 option(GENERATE_CLANGD_FILE
   "Generate the .clangd file for the host operating system" ON)
