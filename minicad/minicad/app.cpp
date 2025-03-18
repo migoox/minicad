@@ -29,10 +29,10 @@ using namespace eray::util;
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   float vertices[] = {
-      1.0F,  1.0F,   //
-      1.0F,  -1.0F,  //
-      -1.0F, -1.0F,  //
-      -1.0F, 1.0F    //
+      0.5F,  0.5F,  -1.0F,  //
+      0.5F,  -0.5F, -1.0F,  //
+      -0.5F, -0.5F, -1.0F,  //
+      -0.5F, 0.5F,  -1.0F,  //
   };
 
   unsigned int indices[] = {
@@ -41,7 +41,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   };
 
   auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(0, 2, false),
+      gl::VertexBuffer::Attribute(0, 3, false),
   });
   vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
 
@@ -51,10 +51,13 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto manager = GLSLShaderManager();
   auto vert    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.vert"));
   auto frag    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.frag"));
-  auto program = unwrap_or_panic(gl::RenderingShaderProgram::create("test", std::move(vert), std::move(frag)));
+  auto program = unwrap_or_panic(gl::RenderingShaderProgram::create("shader", std::move(vert), std::move(frag)));
 
   return MiniCadApp(std::move(window),
-                    {.vao = gl::VertexArray::create(std::move(vbo), std::move(ebo)), .shader_prog = program});
+                    {
+                        .screen_plane_vao = gl::VertexArray::create(std::move(vbo), std::move(ebo)),  //
+                        .shader_prog      = program                                                   //
+                    });
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Application(std::move(window)), m_(std::move(m)) {
@@ -75,6 +78,9 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   glClearColor(0.5F, 0.6F, 0.6F, 1.0F);
   glClear(GL_COLOR_BUFFER_BIT);
+  m_.shader_prog.bind();
+  m_.screen_plane_vao.bind();
+  glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.screen_plane_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 }
 
 void MiniCadApp::update(Duration /* delta */) {}

@@ -23,7 +23,7 @@ class MiniCadApp final : public eray::os::Application {
 
  private:
   struct Members {
-    eray::driver::gl::VertexArray vao;
+    eray::driver::gl::VertexArray screen_plane_vao;
     eray::driver::gl::RenderingShaderProgram shader_prog;
   };
 
