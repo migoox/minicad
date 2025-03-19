@@ -1,11 +1,13 @@
 #include <glad/gl.h>
 #include <imgui/imgui.h>
 
+#include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/driver/glsl_shader.hpp>
 #include <liberay/math/mat.hpp>
 #include <liberay/math/mat_fwd.hpp>
+#include <liberay/math/transform3_fwd.hpp>
 #include <liberay/math/vec.hpp>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/os/app.hpp>
@@ -16,11 +18,10 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/timer.hpp>
+#include <memory>
 #include <minicad/app.hpp>
+#include <minicad/camera/orbiting_camera_operator.hpp>
 
-#include "liberay/driver/gl/buffer.hpp"
-#include "liberay/driver/gl/gl_error.hpp"
-#include "liberay/math/transform3_fwd.hpp"
 
 namespace mini {
 
@@ -123,14 +124,19 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto program = unwrap_or_panic(gl::RenderingShaderProgram::create("shader", std::move(vert), std::move(frag)));
 
   auto camera = std::make_unique<minicad::Camera>(
-      false, math::radians(45.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
+      false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
+  camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, -4.F));
+
+  auto gimbal = std::make_unique<eray::math::Transform3f>();
+  camera->transform.set_parent(*gimbal);
 
   return MiniCadApp(std::move(window),
                     {
-                        .box_vao     = get_box_vao(),       //
-                        .shader_prog = std::move(program),  //
-                        .camera      = std::move(camera),
+                        .box_vao       = get_box_vao(),       //
+                        .shader_prog   = std::move(program),  //
+                        .camera        = std::move(camera),   //
+                        .camera_gimbal = std::move(gimbal),   //
                     });
 }
 
@@ -141,6 +147,7 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
   window_->set_event_callback<MouseButtonReleasedEvent>(
       class_method_as_event_callback(this, &MiniCadApp::on_mouse_released));
   window_->set_event_callback<MouseScrolledEvent>(class_method_as_event_callback(this, &MiniCadApp::on_scrolled));
+  window_->set_event_callback<KeyPressedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_pressed));
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
@@ -162,11 +169,40 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.box_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 }
 
-void MiniCadApp::update(Duration /* delta */) {}
+void MiniCadApp::update(Duration delta) {
+  auto deltaf = std::chrono::duration<float>(delta).count();
 
-bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) { return true; }
+  m_.orbiting_camera_operator.update(*m_.camera, *m_.camera_gimbal, math::Vec2f(window_->mouse_pos()), deltaf);
+}
 
-bool MiniCadApp::on_mouse_released(const MouseButtonReleasedEvent& ev) { return true; }
+bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) {
+  if (ev.is_on_ui()) {
+    return false;
+  }
+
+  if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
+    m_.orbiting_camera_operator.start_looking_around(math::Vec2f(ev.x(), ev.y()));
+  }
+
+  if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonMiddle) {
+    m_.orbiting_camera_operator.start_pan(math::Vec2f(ev.x(), ev.y()));
+  }
+
+  if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonRight) {
+    m_.orbiting_camera_operator.start_rot(math::Vec2f(ev.x(), ev.y()));
+  }
+
+  return true;
+}
+
+bool MiniCadApp::on_mouse_released(const MouseButtonReleasedEvent& ev) {
+  if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
+    m_.orbiting_camera_operator.stop_looking_around(*m_.camera, *m_.camera_gimbal);
+  }
+  m_.orbiting_camera_operator.stop_rot();
+  m_.orbiting_camera_operator.stop_pan();
+  return true;
+}
 
 bool MiniCadApp::on_resize(const WindowResizedEvent& ev) {  // NOLINT
   glViewport(0, 0, ev.width(), ev.height());
@@ -174,7 +210,18 @@ bool MiniCadApp::on_resize(const WindowResizedEvent& ev) {  // NOLINT
   return true;
 }
 
-bool MiniCadApp::on_scrolled(const MouseScrolledEvent& ev) { return true; }
+bool MiniCadApp::on_scrolled(const MouseScrolledEvent& ev) {
+  m_.orbiting_camera_operator.zoom(*m_.camera, static_cast<float>(ev.y_offset()));
+  return true;
+}
+
+bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
+  if (ev.key_code() == KeyCode::C) {
+    m_.camera_gimbal->set_local_pos(math::Vec3f::filled(0.F));
+    return true;
+  }
+  return false;
+}
 
 MiniCadApp::~MiniCadApp() {}
 

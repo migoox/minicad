@@ -12,6 +12,7 @@
 #include <memory>
 
 #include "minicad/camera/camera.hpp"
+#include "minicad/camera/orbiting_camera_operator.hpp"
 
 namespace mini {
 
@@ -30,6 +31,8 @@ class MiniCadApp final : public eray::os::Application {
     eray::driver::gl::VertexArray box_vao;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
     std::unique_ptr<minicad::Camera> camera;
+    std::unique_ptr<eray::math::Transform3f> camera_gimbal;
+    minicad::OrbitingCameraOperator orbiting_camera_operator;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -38,6 +41,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
   bool on_resize(const eray::os::WindowResizedEvent& ev);
   bool on_scrolled(const eray::os::MouseScrolledEvent& ev);
+  bool on_key_pressed(const eray::os::KeyPressedEvent& ev);
 
  private:
   static constexpr float kScrollingSens = 0.036F;

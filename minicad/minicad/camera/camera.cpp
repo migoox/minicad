@@ -38,13 +38,13 @@ void Camera::set_far_plane(float far_plane) { far_plane_ = far_plane; }
 
 void Camera::recalculate_projection() {
   float focal_length = is_orthographic_ ? eray::math::length(transform.pos()) : near_plane_;
-  height_            = focal_length * std::tan(eray::math::radians(fov_ * 0.5F));
+  height_            = focal_length * std::tan(fov_ * 0.5F);
   width_             = height_ * aspect_ratio_;
 
   if (is_orthographic_) {
     projection_ = eray::math::orthographic_gl_rh(-width_, width_, -height_, height_, near_plane_, far_plane_);
   } else {
-    projection_ = eray::math::perspective_gl_rh(eray::math::radians(fov_), aspect_ratio_, near_plane_, far_plane_);
+    projection_ = eray::math::perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
   }
 }
 
