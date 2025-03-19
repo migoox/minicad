@@ -177,7 +177,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   ImGui::SliderFloat("Rad Major", &m_.rad_major, 0.1F, 5.F);
   ImGui::End();
 
-  glClearColor(0.5F, 0.6F, 0.6F, 1.0F);
+  glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT);
   m_.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
