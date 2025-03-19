@@ -5,6 +5,7 @@
 #include <liberay/math/mat_fwd.hpp>
 #include <liberay/math/transform3.hpp>
 #include <liberay/math/vec.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/os/app.hpp>
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/res/image.hpp>
@@ -12,8 +13,6 @@
 #include <memory>
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
-
-#include "liberay/math/vec_fwd.hpp"
 
 
 namespace mini {
@@ -39,8 +38,10 @@ class MiniCadApp final : public eray::os::Application {
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
-    // torus tess level
+    // torus
     eray::math::Vec2i tess_level;
+    float rad_minor;
+    float rad_major;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -52,9 +53,8 @@ class MiniCadApp final : public eray::os::Application {
   bool on_key_pressed(const eray::os::KeyPressedEvent& ev);
 
  private:
-  static constexpr float kScrollingSens = 0.036F;
-  static constexpr float kRotationSens  = 0.006F;
-  static constexpr float kMoveSens      = 0.001F;
+  static constexpr int kMinTessLevel = 3;
+  static constexpr int kMaxTessLevel = 64;
 
   Members m_;
 };

@@ -121,7 +121,6 @@ gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   glPatchParameteri(GL_PATCH_VERTICES, 4);
-  glEnable(GL_DEPTH_TEST);
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
   auto manager = GLSLShaderManager();
@@ -153,6 +152,8 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                         .camera        = std::move(camera),      //
                         .camera_gimbal = std::move(gimbal),      //
                         .tess_level    = math::Vec2i(16, 16),    //
+                        .rad_minor     = 2.F,                    //
+                        .rad_major     = 4.F,                    //
                     });
 }
 
@@ -167,28 +168,24 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
-  ImGui::SetNextWindowSizeConstraints(ImVec2(280, 220), ImVec2(280, 220));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(300, 160), ImVec2(300, 160));
   ImGui::Begin("Torus");
-  ImGui::SliderInt2("Tess Level", m_.tess_level.raw_ptr(), 1, 256);
-
   ImGui::Text("FPS: %d", fps_);
+  ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
+  ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
+  ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, 5.F);
+  ImGui::SliderFloat("Rad Major", &m_.rad_major, 0.1F, 5.F);
   ImGui::End();
 
-  // TODO(migoox): lazy loading
-  m_.shader_prog->set_uniform("mMat", math::translation(math::Vec3f(0.5F, 0.5F, 0.5F)));
-  m_.shader_prog->set_uniform("vMat", m_.camera->view_matrix());
-  m_.shader_prog->set_uniform("pMat", m_.camera->proj_matrix());
   glClearColor(0.5F, 0.6F, 0.6F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  m_.shader_prog->bind();
-  m_.box_vao.bind();
-  glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.box_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
-
+  glClear(GL_COLOR_BUFFER_BIT);
   m_.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
   m_.param_sh_prog->set_uniform("tessLevelX", m_.tess_level.x);
   m_.param_sh_prog->set_uniform("tessLevelY", m_.tess_level.y);
+  m_.param_sh_prog->set_uniform("minorRad", m_.rad_minor);
+  m_.param_sh_prog->set_uniform("majorRad", m_.rad_major);
   m_.param_sh_prog->bind();
   m_.patch_vao.bind();
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
