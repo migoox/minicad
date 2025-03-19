@@ -12,7 +12,7 @@ OrbitingCameraOperator::OrbitingCameraOperator()
       is_pan_active_(false),
       looking_around_sensitivity_(0.1F),
       orbit_sensitivity_(0.32F),
-      pan_sensitivity_(0.004F),
+      pan_sensitivity_(0.016F),
       zoom_sensitivity_(0.4F) {}
 
 void OrbitingCameraOperator::start_rot(eray::math::Vec2f mouse_pos) {

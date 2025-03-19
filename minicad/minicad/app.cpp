@@ -186,6 +186,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                         .grid_sh_prog  = std::move(grid_prog),    //
                         .camera        = std::move(camera),       //
                         .camera_gimbal = std::move(gimbal),       //
+                        .grid_on       = true,                    //
                         .tess_level    = math::Vec2i(16, 16),     //
                         .rad_minor     = 2.F,                     //
                         .rad_major     = 4.F,                     //
@@ -203,13 +204,14 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
-  ImGui::SetNextWindowSizeConstraints(ImVec2(300, 160), ImVec2(300, 160));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(300, 180), ImVec2(300, 180));
   ImGui::Begin("Torus");
   ImGui::Text("FPS: %d", fps_);
   ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
   ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
-  ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, 5.F);
-  ImGui::SliderFloat("Rad Major", &m_.rad_major, 0.1F, 5.F);
+  ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, m_.rad_major);
+  ImGui::SliderFloat("Rad Major", &m_.rad_major, m_.rad_minor, 5.F);
+  ImGui::Checkbox("Grid", &m_.grid_on);
   ImGui::End();
 
   glClearColor(0.09, 0.05, 0.09, 1.F);
@@ -226,19 +228,15 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 
-  //   m_.grid_sh_prog->set_uniform("u_resolution", math::Vec2f(window_->size().x, window_->size().y));
-  //   m_.grid_sh_prog->set_uniform("u_camSize", m_.camera->height());
-  //   m_.grid_sh_prog->set_uniform("u_iV", m_.camera->inverse_view_matrix());
-  //   m_.grid_sh_prog->set_uniform("u_ortho", m_.camera->is_orthographic());
-  //   m_.grid_sh_prog->set_uniform("u_nearPlane", m_.camera->near_plane());
-  //   m_.grid_sh_prog->set_uniform("u_farPlane", m_.camera->far_plane());
-  m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
-  m_.grid_sh_prog->set_uniform("u_pvInvMat", m_.camera->inverse_view_matrix() * m_.camera->inverse_proj_matrix());
-  m_.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
-  m_.grid_sh_prog->bind();
-  m_.plane_vao.bind();
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.plane_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+  if (m_.grid_on) {
+    m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
+    m_.grid_sh_prog->set_uniform("u_pvInvMat", m_.camera->inverse_view_matrix() * m_.camera->inverse_proj_matrix());
+    m_.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
+    m_.grid_sh_prog->bind();
+    m_.plane_vao.bind();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.plane_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+  }
 }
 
 void MiniCadApp::update(Duration delta) {
@@ -291,6 +289,9 @@ bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
   if (ev.key_code() == KeyCode::C) {
     m_.camera_gimbal->set_local_pos(math::Vec3f::filled(0.F));
     return true;
+  }
+  if (ev.key_code() == KeyCode::G) {
+    m_.grid_on = !m_.grid_on;
   }
   return false;
 }

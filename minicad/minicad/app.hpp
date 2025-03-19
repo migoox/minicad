@@ -41,6 +41,8 @@ class MiniCadApp final : public eray::os::Application {
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
+    bool grid_on;
+
     // torus
     eray::math::Vec2i tess_level;
     float rad_minor;
