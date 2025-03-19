@@ -10,9 +10,11 @@
 #include <liberay/res/image.hpp>
 #include <liberay/util/timer.hpp>
 #include <memory>
+#include <minicad/camera/camera.hpp>
+#include <minicad/camera/orbiting_camera_operator.hpp>
 
-#include "minicad/camera/camera.hpp"
-#include "minicad/camera/orbiting_camera_operator.hpp"
+#include "liberay/math/vec_fwd.hpp"
+
 
 namespace mini {
 
@@ -29,10 +31,16 @@ class MiniCadApp final : public eray::os::Application {
  private:
   struct Members {
     eray::driver::gl::VertexArray box_vao;
+    eray::driver::gl::VertexArray patch_vao;
+
+    minicad::OrbitingCameraOperator orbiting_camera_operator;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
-    minicad::OrbitingCameraOperator orbiting_camera_operator;
+
+    // torus tess level
+    eray::math::Vec2i tess_level;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);

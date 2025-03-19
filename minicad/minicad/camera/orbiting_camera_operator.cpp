@@ -1,9 +1,8 @@
+#include <liberay/math/mat.hpp>
 #include <liberay/math/quat.hpp>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/logger.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
-
-#include "liberay/math/mat.hpp"
 
 namespace minicad {
 
