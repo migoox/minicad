@@ -3,11 +3,15 @@
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/math/mat.hpp>
 #include <liberay/math/mat_fwd.hpp>
+#include <liberay/math/transform3.hpp>
 #include <liberay/math/vec.hpp>
 #include <liberay/os/app.hpp>
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/timer.hpp>
+#include <memory>
+
+#include "minicad/camera/camera.hpp"
 
 namespace mini {
 
@@ -23,8 +27,9 @@ class MiniCadApp final : public eray::os::Application {
 
  private:
   struct Members {
-    eray::driver::gl::VertexArray screen_plane_vao;
-    eray::driver::gl::RenderingShaderProgram shader_prog;
+    eray::driver::gl::VertexArray box_vao;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
+    std::unique_ptr<minicad::Camera> camera;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
