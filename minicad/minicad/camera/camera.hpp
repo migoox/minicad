@@ -27,6 +27,7 @@ class Camera {
   eray::math::Mat4f view_matrix() const { return transform.world_to_local_matrix(); }
   eray::math::Mat4f inverse_view_matrix() const { return transform.local_to_world_matrix(); }
   eray::math::Mat4f proj_matrix() const { return projection_; }
+  eray::math::Mat4f inverse_proj_matrix() const { return projection_inv_; }
 
   void recalculate_projection();
 
@@ -38,7 +39,7 @@ class Camera {
   float width_, height_;
   float near_plane_, far_plane_;
 
-  eray::math::Mat4f projection_;
+  eray::math::Mat4f projection_, projection_inv_;
 };
 
 }  // namespace minicad

@@ -33,43 +33,43 @@ using namespace eray::util;
 
 namespace {
 
-gl::VertexArray get_box_vao(float width = 1.f, float height = 1.f, float depth = 1.f) {
+gl::VertexArray get_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
   float vertices[] = {
       // Front Face
-      -0.5f * width, -0.5f * height, -0.5f * depth, 0.0f, 0.0f, -1.0f,  //
-      +0.5f * width, -0.5f * height, -0.5f * depth, 0.0f, 0.0f, -1.0f,  //
-      +0.5f * width, +0.5f * height, -0.5f * depth, 0.0f, 0.0f, -1.0f,  //
-      -0.5f * width, +0.5f * height, -0.5f * depth, 0.0f, 0.0f, -1.0f,  //
+      -0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      +0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      -0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
 
       // Back Face
-      +0.5f * width, -0.5f * height, +0.5f * depth, 0.0f, 0.0f, 1.0f,  //
-      -0.5f * width, -0.5f * height, +0.5f * depth, 0.0f, 0.0f, 1.0f,  //
-      -0.5f * width, +0.5f * height, +0.5f * depth, 0.0f, 0.0f, 1.0f,  //
-      +0.5f * width, +0.5f * height, +0.5f * depth, 0.0f, 0.0f, 1.0f,  //
+      +0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      -0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
 
       // Left Face
-      -0.5f * width, -0.5f * height, +0.5f * depth, -1.0f, 0.0f, 0.0f,  //
-      -0.5f * width, -0.5f * height, -0.5f * depth, -1.0f, 0.0f, 0.0f,  //
-      -0.5f * width, +0.5f * height, -0.5f * depth, -1.0f, 0.0f, 0.0f,  //
-      -0.5f * width, +0.5f * height, +0.5f * depth, -1.0f, 0.0f, 0.0f,  //
+      -0.5F * width, -0.5F * height, +0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, -0.5F * height, -0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, -0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, -1.0F, 0.0F, 0.0F,  //
 
       // Right Face
-      +0.5f * width, -0.5f * height, -0.5f * depth, 1.0f, 0.0f, 0.0f,  //
-      +0.5f * width, -0.5f * height, +0.5f * depth, 1.0f, 0.0f, 0.0f,  //
-      +0.5f * width, +0.5f * height, +0.5f * depth, 1.0f, 0.0f, 0.0f,  //
-      +0.5f * width, +0.5f * height, -0.5f * depth, 1.0f, 0.0f, 0.0f,  //
+      +0.5F * width, -0.5F * height, -0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, +0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 1.0F, 0.0F, 0.0F,  //
 
       // Bottom Face
-      -0.5f * width, -0.5f * height, +0.5f * depth, 0.0f, -1.0f, 0.0f,  //
-      +0.5f * width, -0.5f * height, +0.5f * depth, 0.0f, -1.0f, 0.0f,  //
-      +0.5f * width, -0.5f * height, -0.5f * depth, 0.0f, -1.0f, 0.0f,  //
-      -0.5f * width, -0.5f * height, -0.5f * depth, 0.0f, -1.0f, 0.0f,  //
+      -0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      -0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, -1.0F, 0.0F,  //
 
       // Top Face
-      -0.5f * width, +0.5f * height, -0.5f * depth, 0.0f, 1.0f, 0.0f,  //
-      +0.5f * width, +0.5f * height, -0.5f * depth, 0.0f, 1.0f, 0.0f,  //
-      +0.5f * width, +0.5f * height, +0.5f * depth, 0.0f, 1.0f, 0.0f,  //
-      -0.5f * width, +0.5f * height, +0.5f * depth, 0.0f, 1.0f, 0.0f   //
+      -0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 1.0F, 0.0F   //
 
   };
 
@@ -117,11 +117,39 @@ gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
+gl::VertexArray get_screen_plane_vao() {
+  float vertices[] = {
+      -1.F, 0.F, -1.F,  //
+      1.F,  0.F, -1.F,  //
+      1.F,  0.F, 1.F,   //
+      -1.F, 0.F, 1.F    //
+
+  };
+
+  unsigned int indices[] = {
+      0, 1, 2,  //
+      2, 3, 0   //
+  };
+
+  auto vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute(0, 3, false),
+  });
+  vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
+
+  auto ebo = gl::ElementBuffer::create();
+  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
+
+  return gl::VertexArray::create(std::move(vbo), std::move(ebo));
+}
+
 }  // namespace
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   glPatchParameteri(GL_PATCH_VERTICES, 4);
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   auto manager = GLSLShaderManager();
   auto vert    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.vert"));
@@ -135,6 +163,11 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto param_prog = unwrap_or_panic(gl::RenderingShaderProgram::create(
       "param_shader", std::move(param_vert), std::move(param_frag), std::move(param_tesc), std::move(param_tese)));
 
+  auto grid_vert = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "grid.vert"));
+  auto grid_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "grid.frag"));
+  auto grid_prog =
+      unwrap_or_panic(gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
+
   auto camera = std::make_unique<minicad::Camera>(
       false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
@@ -145,15 +178,17 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
 
   return MiniCadApp(std::move(window),
                     {
-                        .box_vao       = get_box_vao(),          //
-                        .patch_vao     = get_patch_vao(),        //
-                        .shader_prog   = std::move(program),     //
-                        .param_sh_prog = std::move(param_prog),  //
-                        .camera        = std::move(camera),      //
-                        .camera_gimbal = std::move(gimbal),      //
-                        .tess_level    = math::Vec2i(16, 16),    //
-                        .rad_minor     = 2.F,                    //
-                        .rad_major     = 4.F,                    //
+                        .box_vao       = get_box_vao(),           //
+                        .patch_vao     = get_patch_vao(),         //
+                        .plane_vao     = get_screen_plane_vao(),  //
+                        .shader_prog   = std::move(program),      //
+                        .param_sh_prog = std::move(param_prog),   //
+                        .grid_sh_prog  = std::move(grid_prog),    //
+                        .camera        = std::move(camera),       //
+                        .camera_gimbal = std::move(gimbal),       //
+                        .tess_level    = math::Vec2i(16, 16),     //
+                        .rad_minor     = 2.F,                     //
+                        .rad_major     = 4.F,                     //
                     });
 }
 
@@ -178,7 +213,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   ImGui::End();
 
   glClearColor(0.09, 0.05, 0.09, 1.F);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   m_.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
@@ -188,7 +223,22 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.param_sh_prog->set_uniform("majorRad", m_.rad_major);
   m_.param_sh_prog->bind();
   m_.patch_vao.bind();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+
+  //   m_.grid_sh_prog->set_uniform("u_resolution", math::Vec2f(window_->size().x, window_->size().y));
+  //   m_.grid_sh_prog->set_uniform("u_camSize", m_.camera->height());
+  //   m_.grid_sh_prog->set_uniform("u_iV", m_.camera->inverse_view_matrix());
+  //   m_.grid_sh_prog->set_uniform("u_ortho", m_.camera->is_orthographic());
+  //   m_.grid_sh_prog->set_uniform("u_nearPlane", m_.camera->near_plane());
+  //   m_.grid_sh_prog->set_uniform("u_farPlane", m_.camera->far_plane());
+  m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
+  m_.grid_sh_prog->set_uniform("u_pvInvMat", m_.camera->inverse_view_matrix() * m_.camera->inverse_proj_matrix());
+  m_.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
+  m_.grid_sh_prog->bind();
+  m_.plane_vao.bind();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.plane_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 }
 
 void MiniCadApp::update(Duration delta) {
@@ -227,7 +277,8 @@ bool MiniCadApp::on_mouse_released(const MouseButtonReleasedEvent& ev) {
 
 bool MiniCadApp::on_resize(const WindowResizedEvent& ev) {  // NOLINT
   glViewport(0, 0, ev.width(), ev.height());
-
+  m_.camera->set_aspect_ratio(static_cast<float>(ev.width()) / static_cast<float>(ev.height()));
+  m_.camera->recalculate_projection();
   return true;
 }
 

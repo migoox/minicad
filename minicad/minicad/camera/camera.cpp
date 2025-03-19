@@ -42,9 +42,11 @@ void Camera::recalculate_projection() {
   width_             = height_ * aspect_ratio_;
 
   if (is_orthographic_) {
-    projection_ = eray::math::orthographic_gl_rh(-width_, width_, -height_, height_, near_plane_, far_plane_);
+    projection_     = eray::math::orthographic_gl_rh(-width_, width_, -height_, height_, near_plane_, far_plane_);
+    projection_inv_ = eray::math::inv_orthographic_gl_rh(-width_, width_, -height_, height_, near_plane_, far_plane_);
   } else {
-    projection_ = eray::math::perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
+    projection_     = eray::math::perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
+    projection_inv_ = eray::math::inv_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
   }
 }
 

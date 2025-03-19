@@ -14,7 +14,6 @@
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 
-
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -31,10 +30,14 @@ class MiniCadApp final : public eray::os::Application {
   struct Members {
     eray::driver::gl::VertexArray box_vao;
     eray::driver::gl::VertexArray patch_vao;
+    eray::driver::gl::VertexArray plane_vao;
 
-    minicad::OrbitingCameraOperator orbiting_camera_operator;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
+
+    minicad::OrbitingCameraOperator orbiting_camera_operator;
+
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
