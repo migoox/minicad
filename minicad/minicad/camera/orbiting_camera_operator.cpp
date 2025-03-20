@@ -76,7 +76,11 @@ bool OrbitingCameraOperator::update(Camera& camera, eray::math::Transform3f& cam
     eray::math::Vec2f mouse_delta = (mouse_pos - last_mouse_pos_) * pan_sensitivity_;
 
     last_mouse_pos_ = mouse_pos;
-    camera_gimbal.move(camera.transform.local_right() * mouse_delta.x - camera.transform.local_up() * mouse_delta.y);
+    camera_gimbal.move(
+        eray::math::Vec3f(camera.inverse_view_matrix() * eray::math::Vec4f(mouse_delta.x, -mouse_delta.y, 0.F, 0.F)));
+
+    // Alternative equivalent approach:
+    // camera_gimbal.move(camera.transform.local_right() * mouse_delta.x - camera.transform.local_up() * mouse_delta.y);
     return true;
   }
 
