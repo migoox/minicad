@@ -19,20 +19,20 @@
 layout(location = 0) in vec3 a_Pos; 
 
 uniform mat4 u_pvMat;
-uniform mat4 u_pvInvMat;
+uniform mat4 u_vInvMat;
 uniform vec3 u_camWorldPos;
 uniform float u_gridSize = 100.0;
 
 out vec3 fragWorldPos;
-out vec3 rayDir;
+out float camTilt;
 
 void main() {
     vec3 pos = a_Pos * u_gridSize;
-    pos.x += u_camWorldPos.x;
-    pos.z += u_camWorldPos.z;
+    pos.x -= u_camWorldPos.x;
+    pos.z -= u_camWorldPos.z;
 
     gl_Position = u_pvMat*vec4(pos, 1.0);
 
-    rayDir = vec3(normalize(u_pvInvMat*vec4(0.0, 0.0,-1.0, 0.0)));
+    camTilt = abs(vec3(normalize(u_vInvMat*vec4(0.0, 0.0, 1.0, 0.0)))).y;
     fragWorldPos = pos;
 }

@@ -12,7 +12,7 @@ uniform float u_gridSize = 100.0;
 uniform vec3 u_camWorldPos;
 
 in vec3 fragWorldPos;
-in vec3 rayDir;
+in float camTilt;
 
 float log10(float x)
 {
@@ -37,6 +37,9 @@ vec2 satv(vec2 x)
 }
 
 void main() {
+
+
+
    vec2 dvx = vec2(dFdx(fragWorldPos.x), dFdy(fragWorldPos.x));
    vec2 dvy = vec2(dFdx(fragWorldPos.z), dFdy(fragWorldPos.z));
    vec2 dudv = vec2(length(dvx), length(dvy));
@@ -57,7 +60,7 @@ void main() {
    float lod2a = max2(vec2(1.0) - abs(satv(mod_div_dudv) * 2.0 - vec2(1.0)));
 
    float lod_fade = fract(lod);
-   
+
    vec4 col;
    if (lod2a > 0.0) {
         col = u_gridColorThick;
@@ -72,11 +75,17 @@ void main() {
         }
    }
 
-   float opacityFalloff = (1.0 - satf(length(fragWorldPos.xz - u_camWorldPos.xz) / u_gridSize));
+   // Fade out the fragment basing on its distance from the camera
+   float opacityFalloff = (1.0 - satf(length(fragWorldPos.xz + u_camWorldPos.xz) / u_gridSize));
    col.a *= opacityFalloff;
 
-   float angleFalloff = pow(abs(rayDir.y), 0.5);
+   // Fade out the fragment basing on it's vector to the camera
+   float fragAngle = abs(normalize(fragWorldPos + u_camWorldPos).y);
+   float angleFalloff = min(25*fragAngle*fragAngle,  1.0);
    col.a *= angleFalloff;
+
+   // Fade out the fragments basing on the camera tilt
+   col.a *= min(camTilt*camTilt*17 - 0.05, 1.0);
 
    fragColor = col;
 }

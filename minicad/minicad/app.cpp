@@ -230,7 +230,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   if (m_.grid_on) {
     m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
-    m_.grid_sh_prog->set_uniform("u_pvInvMat", m_.camera->inverse_view_matrix() * m_.camera->inverse_proj_matrix());
+    m_.grid_sh_prog->set_uniform("u_vInvMat", m_.camera->inverse_view_matrix());
     m_.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
     m_.grid_sh_prog->bind();
     m_.plane_vao.bind();
