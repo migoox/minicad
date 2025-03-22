@@ -60,13 +60,13 @@ bool OrbitingCameraOperator::update(Camera& camera, eray::math::Transform3f& cam
 
     auto rot     = camera.transform.local_rot();
     auto yaw     = eray::math::Quatf::rotation_y(-mouse_delta.x * dt);
-    auto pitch   = eray::math::Quatf::rotation_axis(-mouse_delta.y * dt, camera.transform.local_right());
-    auto new_rot = eray::math::normalize(yaw * pitch * rot);
+    auto pitch   = eray::math::Quatf::rotation_x(-mouse_delta.y * dt);
+    auto new_rot = eray::math::normalize(yaw * rot * pitch);
 
     float camera_distance = camera.transform.local_pos().length();
 
     camera.transform.set_local_rot(new_rot);
-    camera.transform.set_local_pos(camera.transform.local_front() * camera_distance);
+    camera.transform.set_local_pos(camera.transform.front() * camera_distance);
     camera.recalculate_projection();
     last_mouse_pos_ = mouse_pos;
     return true;
