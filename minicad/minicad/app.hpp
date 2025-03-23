@@ -30,7 +30,6 @@ class MiniCadApp final : public eray::os::Application {
   struct Members {
     eray::driver::gl::VertexArray box_vao;
     eray::driver::gl::VertexArray patch_vao;
-    eray::driver::gl::VertexArray plane_vao;
 
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;

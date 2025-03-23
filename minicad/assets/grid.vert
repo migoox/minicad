@@ -16,7 +16,14 @@
 
 #version 430 core
 
-layout(location = 0) in vec3 a_Pos; 
+const vec3 Pos[4] = vec3[4](
+    vec3(-1.0, 0.0, -1.0),  //
+    vec3(1.0,  0.0, -1.0),  //
+    vec3(1.0,  0.0, 1.0),   //
+    vec3(-1.0, 0.0, 1.0)    //
+);
+
+const int Indices[6] = int[6](2,3,0, 0,1,2);
 
 uniform mat4 u_pvMat;
 uniform mat4 u_vInvMat;
@@ -27,7 +34,7 @@ out vec3 fragWorldPos;
 out float camTilt;
 
 void main() {
-    vec3 pos = a_Pos * u_gridSize;
+    vec3 pos = Pos[Indices[gl_VertexID]] * u_gridSize;
     pos.x -= u_camWorldPos.x;
     pos.z -= u_camWorldPos.z;
 

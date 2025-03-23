@@ -117,31 +117,6 @@ gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
-gl::VertexArray get_screen_plane_vao() {
-  float vertices[] = {
-      -1.F, 0.F, -1.F,  //
-      1.F,  0.F, -1.F,  //
-      1.F,  0.F, 1.F,   //
-      -1.F, 0.F, 1.F    //
-
-  };
-
-  unsigned int indices[] = {
-      0, 1, 2,  //
-      2, 3, 0   //
-  };
-
-  auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(0, 3, false),
-  });
-  vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
-
-  auto ebo = gl::ElementBuffer::create();
-  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
-
-  return gl::VertexArray::create(std::move(vbo), std::move(ebo));
-}
-
 }  // namespace
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
@@ -178,18 +153,17 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
 
   return MiniCadApp(std::move(window),
                     {
-                        .box_vao       = get_box_vao(),           //
-                        .patch_vao     = get_patch_vao(),         //
-                        .plane_vao     = get_screen_plane_vao(),  //
-                        .shader_prog   = std::move(program),      //
-                        .param_sh_prog = std::move(param_prog),   //
-                        .grid_sh_prog  = std::move(grid_prog),    //
-                        .camera        = std::move(camera),       //
-                        .camera_gimbal = std::move(gimbal),       //
-                        .grid_on       = true,                    //
-                        .tess_level    = math::Vec2i(16, 16),     //
-                        .rad_minor     = 2.F,                     //
-                        .rad_major     = 4.F,                     //
+                        .box_vao       = get_box_vao(),          //
+                        .patch_vao     = get_patch_vao(),        //
+                        .shader_prog   = std::move(program),     //
+                        .param_sh_prog = std::move(param_prog),  //
+                        .grid_sh_prog  = std::move(grid_prog),   //
+                        .camera        = std::move(camera),      //
+                        .camera_gimbal = std::move(gimbal),      //
+                        .grid_on       = true,                   //
+                        .tess_level    = math::Vec2i(16, 16),    //
+                        .rad_minor     = 2.F,                    //
+                        .rad_major     = 4.F,                    //
                     });
 }
 
@@ -229,13 +203,12 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 
   if (m_.grid_on) {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
     m_.grid_sh_prog->set_uniform("u_vInvMat", m_.camera->inverse_view_matrix());
     m_.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
     m_.grid_sh_prog->bind();
-    m_.plane_vao.bind();
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_.plane_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
   }
 }
 
