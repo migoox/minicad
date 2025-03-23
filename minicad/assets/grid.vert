@@ -1,18 +1,10 @@
-// glEnable(GL_BLEND);
-// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+// USAGE:
+// 1. Remember to set
+//      glEnable(GL_BLEND);
+//      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 //
-//   float vertices[] = {
-//       -1.F, 0.F, -1.F,  //
-//       1.F,  0.F, -1.F,  //
-//       1.F,  0.F, 1.F,   //
-//       -1.F, 0.F, 1.F    //
-//
-//   };
-//
-//   unsigned int indices[] = {
-//       0, 1, 2,  //
-//       2, 3, 0   //
-//   };
+// 2. To draw the grid, bind the shader, fill the u_pvMat, u_vInvMat and u_camWorldPos uniforms and
+// invoke glDrawArrays(GL_TRIANGLES, 0, 6)
 
 #version 430 core
 
