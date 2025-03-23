@@ -15,7 +15,7 @@ const vec3 Pos[4] = vec3[4](
     vec3(-1.0, 0.0, 1.0)    //
 );
 
-const int Indices[6] = int[6](2,3,0, 0,1,2);
+const int Indices[6] = int[6](2, 3, 0, 0, 1, 2);
 
 uniform mat4 u_pvMat;
 uniform mat4 u_vInvMat;

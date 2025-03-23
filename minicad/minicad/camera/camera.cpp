@@ -37,7 +37,7 @@ void Camera::set_near_plane(float near_plane) {
 void Camera::set_far_plane(float far_plane) { far_plane_ = far_plane; }
 
 void Camera::recalculate_projection() {
-  float focal_length = is_orthographic_ ? eray::math::length(transform.pos()) : near_plane_;
+  float focal_length = is_orthographic_ ? eray::math::length(transform.local_pos()) : near_plane_;
   height_            = focal_length * std::tan(fov_ * 0.5F);
   width_             = height_ * aspect_ratio_;
 

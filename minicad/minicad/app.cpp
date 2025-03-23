@@ -117,15 +117,24 @@ gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
+GLuint get_texture(res::Image& image) {
+  GLuint texture = 0;
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.width(), image.height(), 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8,
+               image.raw());
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  return texture;
+}
+
 }  // namespace
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
   auto manager = GLSLShaderManager();
   auto vert    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.vert"));
   auto frag    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.frag"));
@@ -143,6 +152,13 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto grid_prog =
       unwrap_or_panic(gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
 
+  auto sprite_vert = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite.vert"));
+  auto sprite_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite.frag"));
+  auto sprite_prog = unwrap_or_panic(
+      gl::RenderingShaderProgram::create("billboard_shader", std::move(sprite_vert), std::move(sprite_frag)));
+
+  auto cursor_img = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "cursor.png"));
+
   auto camera = std::make_unique<minicad::Camera>(
       false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
@@ -153,21 +169,29 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
 
   return MiniCadApp(std::move(window),
                     {
-                        .box_vao       = get_box_vao(),          //
-                        .patch_vao     = get_patch_vao(),        //
-                        .shader_prog   = std::move(program),     //
-                        .param_sh_prog = std::move(param_prog),  //
-                        .grid_sh_prog  = std::move(grid_prog),   //
-                        .camera        = std::move(camera),      //
-                        .camera_gimbal = std::move(gimbal),      //
-                        .grid_on       = true,                   //
-                        .tess_level    = math::Vec2i(16, 16),    //
-                        .rad_minor     = 2.F,                    //
-                        .rad_major     = 4.F,                    //
+                        .box_vao        = get_box_vao(),            //
+                        .patch_vao      = get_patch_vao(),          //
+                        .shader_prog    = std::move(program),       //
+                        .param_sh_prog  = std::move(param_prog),    //
+                        .grid_sh_prog   = std::move(grid_prog),     //
+                        .sprite_sh_prog = std::move(sprite_prog),   //
+                        .cursor_txt     = get_texture(cursor_img),  //
+                        .camera         = std::move(camera),        //
+                        .camera_gimbal  = std::move(gimbal),        //
+                        .grid_on        = true,                     //
+                        .tess_level     = math::Vec2i(16, 16),      //
+                        .rad_minor      = 2.F,                      //
+                        .rad_major      = 4.F,                      //
                     });
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Application(std::move(window)), m_(std::move(m)) {
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
   window_->set_event_callback<WindowResizedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_resize));
   window_->set_event_callback<MouseButtonPressedEvent>(
       class_method_as_event_callback(this, &MiniCadApp::on_mouse_pressed));
@@ -186,10 +210,14 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, m_.rad_major);
   ImGui::SliderFloat("Rad Major", &m_.rad_major, m_.rad_minor, 5.F);
   ImGui::Checkbox("Grid", &m_.grid_on);
+  ImGui::Checkbox("Ortho", &m_.use_ortho);
   ImGui::End();
 
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Render Torus
+  m_.camera->set_orthographic(m_.use_ortho);
   m_.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
@@ -202,6 +230,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
 
+  // Render grid
   if (m_.grid_on) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     m_.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
@@ -210,6 +239,21 @@ void MiniCadApp::render(Application::Duration /* delta */) {
     m_.grid_sh_prog->bind();
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
+
+  glDisable(GL_DEPTH_TEST);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, m_.cursor_txt);
+
+  auto pos = math::Vec3f::filled(1.F);
+
+  m_.sprite_sh_prog->set_uniform("u_worldPos", pos);
+  m_.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
+  m_.sprite_sh_prog->set_uniform("u_aspectRatio", m_.camera->aspect_ratio());
+  m_.sprite_sh_prog->set_uniform("u_textureSampler", 0);
+  m_.sprite_sh_prog->bind();
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glEnable(GL_DEPTH_TEST);
 }
 
 void MiniCadApp::update(Duration delta) {
@@ -269,6 +313,6 @@ bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
   return false;
 }
 
-MiniCadApp::~MiniCadApp() {}
+MiniCadApp::~MiniCadApp() { glDeleteTextures(1, &m_.cursor_txt); }
 
 }  // namespace mini

@@ -34,6 +34,9 @@ class MiniCadApp final : public eray::os::Application {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
+
+    GLuint cursor_txt;
 
     minicad::OrbitingCameraOperator orbiting_camera_operator;
 
@@ -41,6 +44,7 @@ class MiniCadApp final : public eray::os::Application {
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
     bool grid_on;
+    bool use_ortho;
 
     // torus
     eray::math::Vec2i tess_level;
