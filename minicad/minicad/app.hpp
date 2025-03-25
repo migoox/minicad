@@ -14,6 +14,8 @@
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 
+#include "cursor/cursor.hpp"
+
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -39,6 +41,8 @@ class MiniCadApp final : public eray::os::Application {
     GLuint cursor_txt;
 
     minicad::OrbitingCameraOperator orbiting_camera_operator;
+
+    std::unique_ptr<minicad::Cursor> cursor;
 
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;

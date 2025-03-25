@@ -162,26 +162,27 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto camera = std::make_unique<minicad::Camera>(
       false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
-  camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, -4.F));
+  camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, 4.F));
 
   auto gimbal = std::make_unique<eray::math::Transform3f>();
   camera->transform.set_parent(*gimbal);
 
   return MiniCadApp(std::move(window),
                     {
-                        .box_vao        = get_box_vao(),            //
-                        .patch_vao      = get_patch_vao(),          //
-                        .shader_prog    = std::move(program),       //
-                        .param_sh_prog  = std::move(param_prog),    //
-                        .grid_sh_prog   = std::move(grid_prog),     //
-                        .sprite_sh_prog = std::move(sprite_prog),   //
-                        .cursor_txt     = get_texture(cursor_img),  //
-                        .camera         = std::move(camera),        //
-                        .camera_gimbal  = std::move(gimbal),        //
-                        .grid_on        = true,                     //
-                        .tess_level     = math::Vec2i(16, 16),      //
-                        .rad_minor      = 2.F,                      //
-                        .rad_major      = 4.F,                      //
+                        .box_vao        = get_box_vao(),                        //
+                        .patch_vao      = get_patch_vao(),                      //
+                        .shader_prog    = std::move(program),                   //
+                        .param_sh_prog  = std::move(param_prog),                //
+                        .grid_sh_prog   = std::move(grid_prog),                 //
+                        .sprite_sh_prog = std::move(sprite_prog),               //
+                        .cursor_txt     = get_texture(cursor_img),              //
+                        .cursor         = std::make_unique<minicad::Cursor>(),  //
+                        .camera         = std::move(camera),                    //
+                        .camera_gimbal  = std::move(gimbal),                    //
+                        .grid_on        = true,                                 //
+                        .tess_level     = math::Vec2i(16, 16),                  //
+                        .rad_minor      = 2.F,                                  //
+                        .rad_major      = 4.F,                                  //
                     });
 }
 
@@ -244,9 +245,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_.cursor_txt);
 
-  auto pos = math::Vec3f::filled(1.F);
-
-  m_.sprite_sh_prog->set_uniform("u_worldPos", pos);
+  m_.sprite_sh_prog->set_uniform("u_worldPos", m_.cursor->transform.pos());
   m_.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
   m_.sprite_sh_prog->set_uniform("u_aspectRatio", m_.camera->aspect_ratio());
   m_.sprite_sh_prog->set_uniform("u_textureSampler", 0);
@@ -259,6 +258,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 void MiniCadApp::update(Duration delta) {
   auto deltaf = std::chrono::duration<float>(delta).count();
   m_.orbiting_camera_operator.update(*m_.camera, *m_.camera_gimbal, math::Vec2f(window_->mouse_pos()), deltaf);
+  m_.cursor->update(*m_.camera, math::Vec2f(window_->mouse_pos_ndc()));
 }
 
 bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) {
@@ -267,7 +267,7 @@ bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) {
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
-    m_.orbiting_camera_operator.start_looking_around(math::Vec2f(ev.x(), ev.y()));
+    m_.cursor->start_movement();
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonMiddle) {
@@ -285,6 +285,7 @@ bool MiniCadApp::on_mouse_released(const MouseButtonReleasedEvent& ev) {
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
     m_.orbiting_camera_operator.stop_looking_around(*m_.camera, *m_.camera_gimbal);
   }
+  m_.cursor->stop_movement();
   m_.orbiting_camera_operator.stop_rot();
   m_.orbiting_camera_operator.stop_pan();
   return true;
