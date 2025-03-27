@@ -202,7 +202,7 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
   window_->set_event_callback<KeyPressedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_pressed));
 }
 
-void MiniCadApp::render_gui(Duration delta) {
+void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::Begin("Torus [TEMP]");
   ImGui::Text("FPS: %d", fps_);
   ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);

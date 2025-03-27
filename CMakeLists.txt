@@ -32,4 +32,5 @@ if(GENERATE_CLANGD_FILE)
 endif()
 
 add_subdirectory(eray)
+add_subdirectory(libminicad)
 add_subdirectory(minicad)
