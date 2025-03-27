@@ -18,9 +18,12 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/timer.hpp>
+#include <liberay/util/variant_match.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
+#include <optional>
 
 namespace mini {
 
@@ -180,6 +183,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                         .camera         = std::move(camera),                    //
                         .camera_gimbal  = std::move(gimbal),                    //
                         .grid_on        = true,                                 //
+                        .scene          = Scene(),                              //
                         .tess_level     = math::Vec2i(16, 16),                  //
                         .rad_minor      = 2.F,                                  //
                         .rad_major      = 4.F,                                  //
@@ -223,6 +227,171 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     auto ndc_pos = m_.cursor->ndc_pos(*m_.camera);
     if (ImGui::DragFloat2("Screen", ndc_pos.raw_ptr(), -0.01F, -1.F, 1.F)) {
       m_.cursor->set_by_ndc_pos(*m_.camera, ndc_pos);
+    }
+  }
+  ImGui::End();
+
+  ImGui::ShowDemoWindow();
+
+  static std::optional<PointListObjectHandle> selected_point_list_obj;
+  static std::optional<SceneObjectHandle> selected_scene_obj;
+
+  ImGui::Begin("Scene objects");
+
+  if (ImGui::Button("Add")) {
+    if (!m_.scene.create_scene_obj({}).has_value()) {
+      Logger::err("Could not add a new point list object");
+    }
+  }
+
+  ImGui::SameLine();
+
+  {
+    bool disable = !selected_scene_obj;
+    if (disable) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Delete")) {
+      m_.scene.delete_obj(*selected_scene_obj);
+      selected_scene_obj = std::nullopt;
+    }
+    if (disable) {
+      ImGui::EndDisabled();
+    }
+  }
+
+  for (const auto& h_p : m_.scene.scene_objs()) {
+    if (auto p = m_.scene.get_obj(h_p)) {
+      ImGui::PushID(h_p.obj_id);
+
+      bool is_selected = selected_scene_obj && selected_scene_obj.value() == h_p;
+      if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
+        selected_scene_obj = h_p;
+      }
+
+      ImGui::PopID();
+    }
+  }
+
+  ImGui::End();
+
+  ImGui::Begin("Selected Scene Object");
+  if (selected_scene_obj) {
+    if (auto scene_obj = m_.scene.get_obj(*selected_scene_obj)) {
+      ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
+
+      std::visit(
+          eray::util::match{
+              [](auto& p) { ImGui::Text("Type: %s", p.type_name().c_str()); },
+          },
+          scene_obj.value()->object);
+
+      auto world_pos = scene_obj.value()->transform.pos();
+      if (ImGui::DragFloat3("World", world_pos.raw_ptr(), -0.1F)) {
+        scene_obj.value()->transform.set_local_pos(world_pos);
+      }
+
+      std::visit(eray::util::match{
+                     [this](Point& p) {
+                       if (!selected_point_list_obj) {
+                         ImGui::BeginDisabled();
+                       }
+                       if (ImGui::Button("Add")) {
+                         if (auto p_h = m_.scene.get_point_handle(*selected_scene_obj)) {
+                           m_.scene.add_point_to_list(p_h.value(), *selected_point_list_obj);
+                         }
+                       }
+                       if (!selected_point_list_obj) {
+                         ImGui::EndDisabled();
+                       }
+
+                       ImGui::Text("Part of the lists:");
+                       for (const auto& p : p.point_lists()) {
+                         if (auto point_list = m_.scene.get_obj(p)) {
+                           ImGui::PushID(point_list.value()->id());
+
+                           bool is_selected = selected_point_list_obj && selected_point_list_obj.value() == p;
+                           if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
+                             selected_point_list_obj = p;
+                           }
+
+                           ImGui::PopID();
+                         }
+                       }
+                     },
+                     [](Torus& p) {},
+                 },
+                 scene_obj.value()->object);
+    }
+  }
+  ImGui::End();
+
+  ImGui::Begin("Point Lists");
+
+  if (ImGui::Button("Add")) {
+    if (!m_.scene.create_list_obj().has_value()) {
+      Logger::err("Could not add a new scene object");
+    }
+  }
+  ImGui::SameLine();
+  {
+    bool disable = !selected_point_list_obj;
+    if (disable) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Delete")) {
+      m_.scene.delete_obj(*selected_point_list_obj);
+      selected_point_list_obj = std::nullopt;
+    }
+    if (disable) {
+      ImGui::EndDisabled();
+    }
+  }
+  for (const auto& h_pl : m_.scene.point_list_objs()) {
+    if (auto pl = m_.scene.get_obj(h_pl)) {
+      ImGui::PushID(h_pl.obj_id);
+
+      bool is_selected = selected_point_list_obj && selected_point_list_obj.value() == h_pl;
+      if (ImGui::Selectable(pl.value()->name.c_str(), is_selected)) {
+        selected_point_list_obj = h_pl;
+      }
+
+      ImGui::PopID();
+    }
+  }
+
+  ImGui::End();
+
+  ImGui::Begin("Selected Point List");
+  if (selected_point_list_obj) {
+    ImGui::Text("Points: ");
+    if (auto obj = m_.scene.get_obj(*selected_point_list_obj)) {
+      bool disable = !selected_scene_obj.has_value() || !obj.value()->contains(*selected_scene_obj);
+      if (disable) {
+        ImGui::BeginDisabled();
+      }
+      if (ImGui::Button("Remove")) {
+        if (auto ph = m_.scene.get_point_handle(*selected_scene_obj)) {
+          m_.scene.remove_point_from_list(*ph, *selected_point_list_obj);
+        }
+      }
+      if (disable) {
+        ImGui::EndDisabled();
+      }
+
+      for (const auto& p : obj.value()->points()) {
+        if (auto p_obj = m_.scene.get_obj(p)) {
+          ImGui::PushID(p.obj_id);
+
+          bool is_selected = selected_scene_obj &&
+                             selected_scene_obj.value() == SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+          if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
+            selected_scene_obj = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+          }
+
+          ImGui::PopID();
+        }
+      }
     }
   }
 

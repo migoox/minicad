@@ -21,11 +21,13 @@ class Scene {
  public:
   Scene();
 
+  ERAY_ENABLE_DEFAULT_MOVE_AND_COPY_CTOR(Scene)
   ERAY_DISABLE_MOVE_AND_COPY_ASSIGN(Scene)
 
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
 
   [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const SceneObjectHandle& handle);
+  [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const PointHandle& handle);
   [[nodiscard]] OptionalObserverPtr<PointListObject> get_obj(const PointListObjectHandle& handle);
 
   [[nodiscard]] bool exists(const SceneObjectHandle& handle) { return is_handle_valid(handle); }
@@ -34,22 +36,15 @@ class Scene {
   bool delete_obj(const SceneObjectHandle& handle);
   bool delete_obj(const PointListObjectHandle& handle);
 
-  [[nodiscard]] std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj();
-  [[nodiscard]] std::expected<PointListObjectHandle, ObjectCreationError> create_list_obj();
+  std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant);
+  std::expected<PointListObjectHandle, ObjectCreationError> create_list_obj();
 
   [[nodiscard]] std::optional<PointHandle> get_point_handle(const SceneObjectHandle& handle);
   bool add_point_to_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle);
   bool remove_point_from_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle);
 
-  auto scene_obj_begin() const { return scene_objects_.begin(); }
-  auto scene_obj_begin() { return scene_objects_.begin(); }
-  auto scene_obj_end() const { return scene_objects_.end(); }
-  auto scene_obj_end() { return scene_objects_.end(); }
-
-  auto list_obj_begin() const { return point_list_objects_.begin(); }
-  auto list_obj_begin() { return point_list_objects_.begin(); }
-  auto list_obj_end() const { return point_list_objects_.end(); }
-  auto list_obj_end() { return point_list_objects_.end(); }
+  const std::list<SceneObjectHandle>& scene_objs() const { return scene_objects_list_; }
+  const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }
 
  private:
   bool is_handle_valid(const PointListObjectHandle& handle);
@@ -67,16 +62,25 @@ class Scene {
   std::uint32_t timestamp();
 
  private:
-  static constexpr std::size_t kMaxSceneObjects = 1000;
+  static constexpr std::size_t kMaxObjects = 1000;
   static std::uint32_t next_signature_;
 
-  const std::uint32_t signature_;
+  std::uint32_t signature_;
   std::uint32_t curr_timestamp_;
 
-  std::vector<std::optional<std::pair<std::unique_ptr<SceneObject>, std::uint32_t>>> scene_objects_;
+  std::uint32_t curr_scene_obj_ind_;
+  std::uint32_t curr_list_obj_ind_;
+
+  std::list<SceneObjectHandle> scene_objects_list_;
+  std::vector<std::optional<
+      std::pair<std::unique_ptr<SceneObject>, std::pair<std::uint32_t, std::list<SceneObjectHandle>::iterator>>>>
+      scene_objects_;
   std::stack<uint32_t> scene_objects_freed_;
 
-  std::vector<std::optional<std::pair<std::unique_ptr<PointListObject>, std::uint32_t>>> point_list_objects_;
+  std::list<PointListObjectHandle> point_list_objects_list_;
+  std::vector<std::optional<std::pair<std::unique_ptr<PointListObject>,
+                                      std::pair<std::uint32_t, std::list<PointListObjectHandle>::iterator>>>>
+      point_list_objects_;
   std::stack<uint32_t> point_list_objects_freed_;
 };
 

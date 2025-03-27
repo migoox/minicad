@@ -10,11 +10,11 @@
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/timer.hpp>
+#include <libminicad/scene/scene.hpp>
 #include <memory>
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
-
 
 namespace mini {
 
@@ -51,6 +51,7 @@ class MiniCadApp final : public eray::os::Application {
     bool grid_on;
     bool use_ortho;
 
+    Scene scene;
     // torus
     eray::math::Vec2i tess_level;
     float rad_minor;

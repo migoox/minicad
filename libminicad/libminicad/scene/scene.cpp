@@ -1,23 +1,33 @@
 #include <expected>
 #include <liberay/util/panic.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
 #include <optional>
 #include <variant>
 
+#include "liberay/util/logger.hpp"
+
 namespace mini {
 
 std::uint32_t Scene::next_signature_ = 0;
 
-Scene::Scene() : signature_(next_signature_++), curr_timestamp_(0) { scene_objects_.resize(kMaxSceneObjects); }
+Scene::Scene() : signature_(next_signature_++), curr_timestamp_(0), curr_scene_obj_ind_(1), curr_list_obj_ind_(1) {
+  scene_objects_.resize(kMaxObjects);
+  point_list_objects_.resize(kMaxObjects);
+  for (size_t i = kMaxObjects; i > 0; --i) {
+    scene_objects_freed_.push(static_cast<uint32_t>(i - 1));
+    point_list_objects_freed_.push(static_cast<uint32_t>(i - 1));
+  }
+}
 
 bool Scene::is_handle_valid(const SceneObjectHandle& handle) {
   if (handle.owner_signature != signature_) {
     return false;
   }
 
-  if (handle.obj_id > kMaxSceneObjects) {
+  if (handle.obj_id > kMaxObjects) {
     return false;
   }
 
@@ -25,7 +35,7 @@ bool Scene::is_handle_valid(const SceneObjectHandle& handle) {
     return false;
   }
 
-  if (scene_objects_[handle.obj_id]->second != handle.timestamp) {
+  if (scene_objects_[handle.obj_id]->second.first != handle.timestamp) {
     return false;
   }
 
@@ -45,7 +55,7 @@ bool Scene::is_handle_valid(const PointListObjectHandle& handle) {
     return false;
   }
 
-  if (handle.obj_id > kMaxSceneObjects) {
+  if (handle.obj_id > kMaxObjects) {
     return false;
   }
 
@@ -53,7 +63,7 @@ bool Scene::is_handle_valid(const PointListObjectHandle& handle) {
     return false;
   }
 
-  if (point_list_objects_[handle.obj_id]->second != handle.timestamp) {
+  if (point_list_objects_[handle.obj_id]->second.first != handle.timestamp) {
     return false;
   }
 
@@ -70,21 +80,37 @@ OptionalObserverPtr<SceneObject> Scene::get_obj(const SceneObjectHandle& handle)
   return OptionalObserverPtr<SceneObject>(*scene_objects_[handle.obj_id]->first);
 }
 
-SceneObjectHandle Scene::create_scene_obj_handle(std::uint32_t obj_id) {
-  if (!scene_objects_[obj_id]) {
-    eray::util::panic("Scene Object with id={} does not exist", obj_id);
+OptionalObserverPtr<SceneObject> Scene::get_obj(const PointHandle& handle) {
+  if (!is_handle_valid(handle)) {
+    return std::nullopt;
   }
-  return SceneObjectHandle(signature_, scene_objects_[obj_id]->second, obj_id);
+
+  return OptionalObserverPtr<SceneObject>(*scene_objects_[handle.obj_id]->first);
 }
 
-std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene_obj() {
+std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene_obj(SceneObjectVariant variant) {
   if (scene_objects_freed_.empty()) {
+    eray::util::Logger::warn("Reached limit of scene objects");
     return std::unexpected(ObjectCreationError::ReachedMaxObjects);
   }
 
-  auto obj_id            = scene_objects_freed_.top();
-  scene_objects_[obj_id] = std::pair(std::make_unique<SceneObject>(obj_id), timestamp());
-  return create_scene_obj_handle(obj_id);
+  auto obj_id = scene_objects_freed_.top();
+  scene_objects_freed_.pop();
+  auto h = SceneObjectHandle(signature_, timestamp(), obj_id);
+  scene_objects_list_.push_back(h);
+  scene_objects_[obj_id] =
+      std::pair(std::make_unique<SceneObject>(obj_id), std::pair(h.timestamp, std::prev(scene_objects_list_.end())));
+
+  auto& obj    = *scene_objects_[obj_id]->first;
+  auto obj_ind = curr_scene_obj_ind_++;
+  std::visit(eray::util::match{
+                 [&obj, obj_ind](Point&) { obj.name = std::format("Point {}", obj_ind); },
+                 [&obj, obj_ind](Torus&) { obj.name = std::format("Torus {}", obj_ind); },
+             },
+             variant);
+  obj.object = std::move(variant);
+
+  return h;
 }
 
 bool Scene::delete_obj(const SceneObjectHandle& handle) {
@@ -98,8 +124,8 @@ bool Scene::delete_obj(const SceneObjectHandle& handle) {
     }
   }
 
+  scene_objects_list_.erase(scene_objects_[handle.obj_id]->second.second);
   scene_objects_[handle.obj_id] = std::nullopt;
-  scene_objects_freed_.pop();
   scene_objects_freed_.push(handle.obj_id);
   return true;
 }
@@ -116,7 +142,7 @@ bool Scene::delete_obj(const PointListObjectHandle& handle) {
   if (!is_handle_valid(handle)) {
     return false;
   }
-
+  point_list_objects_list_.erase(point_list_objects_[handle.obj_id]->second.second);
   point_list_objects_[handle.obj_id] = std::nullopt;
   point_list_objects_freed_.push(handle.obj_id);
   return true;
@@ -124,13 +150,22 @@ bool Scene::delete_obj(const PointListObjectHandle& handle) {
 
 std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_list_obj() {
   if (point_list_objects_.empty()) {
+    eray::util::Logger::warn("Reached limit of scene objects");
     return std::unexpected(ObjectCreationError::ReachedMaxObjects);
   }
 
   auto obj_id = point_list_objects_freed_.top();
   point_list_objects_freed_.pop();
-  point_list_objects_[obj_id] = std::pair(std::make_unique<PointListObject>(obj_id), timestamp());
-  return create_list_obj_handle(obj_id);
+  auto h = PointListObjectHandle(signature_, timestamp(), obj_id);
+  point_list_objects_list_.push_back(h);
+  point_list_objects_[obj_id] = std::pair(std::make_unique<PointListObject>(obj_id),
+                                          std::pair(h.timestamp, std::prev(point_list_objects_list_.end())));
+
+  auto& obj    = *point_list_objects_[obj_id]->first;
+  auto obj_ind = curr_list_obj_ind_++;
+  obj.name     = std::format("Point List {}", obj_ind);
+
+  return h;
 }
 
 std::optional<PointHandle> Scene::get_point_handle(const SceneObjectHandle& handle) {
@@ -170,7 +205,7 @@ bool Scene::remove_point_from_list(const PointHandle& p_handle, const PointListO
   }
 
   if (auto* p = std::get_if<Point>(&scene_objects_[p_handle.obj_id]->first->object)) {
-    if (p->point_lists_.contains(pl_handle)) {
+    if (!p->point_lists_.contains(pl_handle)) {
       return false;
     }
 

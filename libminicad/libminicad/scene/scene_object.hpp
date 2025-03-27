@@ -29,10 +29,9 @@ using AnyObjectHandle = eray::util::AnyObjectHandle;
 
 class Point {
  public:
-  [[nodiscard]] static std::string_view type_name() noexcept { return "Point"; }
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
 
-  auto point_lists_begin() { return point_lists_.begin(); }
-  auto point_lists_end() { return point_lists_.end(); }
+  const std::unordered_set<PointListObjectHandle>& point_lists() const { return point_lists_; }
 
  private:
   friend Scene;
@@ -42,12 +41,14 @@ class Point {
 
 class Torus {
  public:
-  [[nodiscard]] static std::string_view type_name() noexcept { return "Torus"; }
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Torus"; }
 
  public:
   float minor_radius;
   float major_radius;
 };
+
+using SceneObjectVariant = std::variant<Point, Torus>;
 
 class SceneObject {
  public:
@@ -59,7 +60,7 @@ class SceneObject {
  public:
   eray::math::Transform3f transform;
   std::string name;
-  std::variant<Point, Torus> object;
+  SceneObjectVariant object;
 
  private:
   friend Scene;
@@ -72,8 +73,11 @@ class PointListObject {
   PointListObject() = delete;
   explicit PointListObject(PointListObjectId id) : id_(id) {}
 
-  auto begin() { return points_.begin(); }
-  auto end() { return points_.end(); }
+  const std::list<PointHandle>& points() { return points_; }
+  bool contains(const PointHandle& handle) { return points_map_.contains(handle); }
+  bool contains(const SceneObjectHandle& handle) {
+    return points_map_.contains(PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id));
+  }
 
   PointListObjectId id() const { return id_; }
 
