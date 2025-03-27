@@ -8,7 +8,13 @@ namespace minicad {
 
 class Cursor {
  public:
-  void update(const Camera& camera, eray::math::Vec2f mouse_pos_ndc);
+  Cursor() = default;
+
+  bool update(const Camera& camera, eray::math::Vec2f mouse_pos_ndc);
+  eray::math::Vec2f ndc_pos(const Camera& camera);
+  void set_by_ndc_pos(const Camera& camera, eray::math::Vec2f ndc_pos);
+
+  void mark_dirty() { is_ndc_pos_dirty_ = true; }
 
   void start_movement() { is_mouse_move_active_ = true; }
 
@@ -18,9 +24,15 @@ class Cursor {
   eray::math::Transform3f transform;
 
  private:
-  bool is_mouse_move_active_;
-  float start_depth_view_;
-  float start_depth_ndc_;
+  void update_ndc_pos(const Camera& camera);
+
+ private:
+  bool is_ndc_pos_dirty_{true};
+  eray::math::Vec2f ndc_pos_;
+
+  bool is_mouse_move_active_{};
+  float start_depth_view_{};
+  float start_depth_ndc_{};
 };
 
 }  // namespace minicad

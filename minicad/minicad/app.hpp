@@ -13,8 +13,8 @@
 #include <memory>
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
+#include <minicad/cursor/cursor.hpp>
 
-#include "cursor/cursor.hpp"
 
 namespace mini {
 
@@ -26,6 +26,7 @@ class MiniCadApp final : public eray::os::Application {
 
  protected:
   void render(Duration delta) final;
+  void render_gui(Duration delta) final;
   void update(Duration delta) final;
 
  private:

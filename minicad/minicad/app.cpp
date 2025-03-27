@@ -202,9 +202,8 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
   window_->set_event_callback<KeyPressedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_pressed));
 }
 
-void MiniCadApp::render(Application::Duration /* delta */) {
-  ImGui::SetNextWindowSizeConstraints(ImVec2(300, 180), ImVec2(300, 180));
-  ImGui::Begin("Torus");
+void MiniCadApp::render_gui(Duration delta) {
+  ImGui::Begin("Torus [TEMP]");
   ImGui::Text("FPS: %d", fps_);
   ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
   ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
@@ -214,10 +213,27 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   ImGui::Checkbox("Ortho", &m_.use_ortho);
   ImGui::End();
 
+  ImGui::Begin("Cursor");
+  {
+    auto world_pos = m_.cursor->transform.pos();
+    if (ImGui::DragFloat3("World", world_pos.raw_ptr(), -0.1F)) {
+      m_.cursor->transform.set_local_pos(world_pos);
+    }
+
+    auto ndc_pos = m_.cursor->ndc_pos(*m_.camera);
+    if (ImGui::DragFloat2("Screen", ndc_pos.raw_ptr(), -0.01F, -1.F, 1.F)) {
+      m_.cursor->set_by_ndc_pos(*m_.camera, ndc_pos);
+    }
+  }
+
+  ImGui::End();
+}
+
+void MiniCadApp::render(Application::Duration /* delta */) {
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // Render Torus
+  // Render the Torus
   m_.camera->set_orthographic(m_.use_ortho);
   m_.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
@@ -241,10 +257,10 @@ void MiniCadApp::render(Application::Duration /* delta */) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
 
+  // Render the Cursor
   glDisable(GL_DEPTH_TEST);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_.cursor_txt);
-
   m_.sprite_sh_prog->set_uniform("u_worldPos", m_.cursor->transform.pos());
   m_.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
   m_.sprite_sh_prog->set_uniform("u_aspectRatio", m_.camera->aspect_ratio());
@@ -257,7 +273,11 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
 void MiniCadApp::update(Duration delta) {
   auto deltaf = std::chrono::duration<float>(delta).count();
-  m_.orbiting_camera_operator.update(*m_.camera, *m_.camera_gimbal, math::Vec2f(window_->mouse_pos()), deltaf);
+
+  if (m_.orbiting_camera_operator.update(*m_.camera, *m_.camera_gimbal, math::Vec2f(window_->mouse_pos()), deltaf)) {
+    m_.cursor->mark_dirty();
+  }
+
   m_.cursor->update(*m_.camera, math::Vec2f(window_->mouse_pos_ndc()));
 }
 
