@@ -293,18 +293,6 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       std::visit(eray::util::match{
                      [this](Point& p) {
-                       if (!selected_point_list_obj) {
-                         ImGui::BeginDisabled();
-                       }
-                       if (ImGui::Button("Add")) {
-                         if (auto p_h = m_.scene.get_point_handle(*selected_scene_obj)) {
-                           m_.scene.add_point_to_list(p_h.value(), *selected_point_list_obj);
-                         }
-                       }
-                       if (!selected_point_list_obj) {
-                         ImGui::EndDisabled();
-                       }
-
                        ImGui::Text("Part of the lists:");
                        for (const auto& p : p.point_lists()) {
                          if (auto point_list = m_.scene.get_obj(p)) {
@@ -319,7 +307,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                          }
                        }
                      },
-                     [](Torus& p) {},
+                     [](Torus&) {},
                  },
                  scene_obj.value()->object);
     }
@@ -373,6 +361,18 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       if (ImGui::Button("Remove")) {
         if (auto ph = m_.scene.get_point_handle(*selected_scene_obj)) {
           m_.scene.remove_point_from_list(*ph, *selected_point_list_obj);
+        }
+      }
+      if (disable) {
+        ImGui::EndDisabled();
+      }
+      disable = !selected_point_list_obj || !selected_scene_obj;
+      if (disable) {
+        ImGui::BeginDisabled();
+      }
+      if (ImGui::Button("Add")) {
+        if (auto p_h = m_.scene.get_point_handle(*selected_scene_obj)) {
+          m_.scene.add_point_to_list(p_h.value(), *selected_point_list_obj);
         }
       }
       if (disable) {
