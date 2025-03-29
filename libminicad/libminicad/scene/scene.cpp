@@ -1,4 +1,5 @@
 #include <expected>
+#include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/scene/scene.hpp>
@@ -6,8 +7,6 @@
 #include <memory>
 #include <optional>
 #include <variant>
-
-#include "liberay/util/logger.hpp"
 
 namespace mini {
 
@@ -99,7 +98,8 @@ std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene
   auto h = SceneObjectHandle(signature_, timestamp(), obj_id);
   scene_objects_list_.push_back(h);
   scene_objects_[obj_id] =
-      std::pair(std::make_unique<SceneObject>(obj_id), std::pair(h.timestamp, std::prev(scene_objects_list_.end())));
+      std::pair(std::make_unique<SceneObject>(h, *this), std::pair(h.timestamp, std::prev(scene_objects_list_.end())));
+  dirty_scene_objects_.insert(obj_id);
 
   auto& obj    = *scene_objects_[obj_id]->first;
   auto obj_ind = curr_scene_obj_ind_++;
@@ -158,8 +158,9 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
   point_list_objects_freed_.pop();
   auto h = PointListObjectHandle(signature_, timestamp(), obj_id);
   point_list_objects_list_.push_back(h);
-  point_list_objects_[obj_id] = std::pair(std::make_unique<PointListObject>(obj_id),
+  point_list_objects_[obj_id] = std::pair(std::make_unique<PointListObject>(h, *this),
                                           std::pair(h.timestamp, std::prev(point_list_objects_list_.end())));
+  dirty_point_list_objects_.insert(obj_id);
 
   auto& obj    = *point_list_objects_[obj_id]->first;
   auto obj_ind = curr_list_obj_ind_++;
@@ -220,6 +221,23 @@ bool Scene::remove_point_from_list(const PointHandle& p_handle, const PointListO
 
   eray::util::panic("Provided point handle does not refers to a point");
   return false;
+}
+void Scene::visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor) {
+  for (auto id : dirty_scene_objects_) {
+    if (scene_objects_[id]) {
+      visitor(*scene_objects_[id]->first);
+    }
+  }
+  dirty_scene_objects_.clear();
+}
+
+void Scene::visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor) {
+  for (auto id : dirty_point_list_objects_) {
+    if (point_list_objects_[id]) {
+      visitor(*point_list_objects_[id]->first);
+    }
+  }
+  dirty_point_list_objects_.clear();
 }
 
 }  // namespace mini

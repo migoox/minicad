@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
+#include <set>
 #include <stack>
 #include <vector>
 
@@ -46,6 +48,12 @@ class Scene {
   const std::list<SceneObjectHandle>& scene_objs() const { return scene_objects_list_; }
   const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }
 
+  void mark_dirty(const SceneObjectHandle& handle) { dirty_scene_objects_.insert(handle.obj_id); }
+  void mark_dirty(const PointListObjectHandle& handle) { dirty_point_list_objects_.insert(handle.obj_id); }
+
+  void visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor);
+  void visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor);
+
  private:
   bool is_handle_valid(const PointListObjectHandle& handle);
   bool is_handle_valid(const SceneObjectHandle& handle);
@@ -75,13 +83,15 @@ class Scene {
   std::vector<std::optional<
       std::pair<std::unique_ptr<SceneObject>, std::pair<std::uint32_t, std::list<SceneObjectHandle>::iterator>>>>
       scene_objects_;
-  std::stack<uint32_t> scene_objects_freed_;
+  std::stack<SceneObjectId> scene_objects_freed_;
+  std::set<SceneObjectId> dirty_scene_objects_;
 
   std::list<PointListObjectHandle> point_list_objects_list_;
   std::vector<std::optional<std::pair<std::unique_ptr<PointListObject>,
                                       std::pair<std::uint32_t, std::list<PointListObjectHandle>::iterator>>>>
       point_list_objects_;
-  std::stack<uint32_t> point_list_objects_freed_;
+  std::stack<PointListObjectId> point_list_objects_freed_;
+  std::set<PointListObjectId> dirty_point_list_objects_;
 };
 
 }  // namespace mini

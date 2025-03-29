@@ -53,9 +53,12 @@ using SceneObjectVariant = std::variant<Point, Torus>;
 class SceneObject {
  public:
   SceneObject() = delete;
-  explicit SceneObject(SceneObjectId id) : id_(id) {}
+  explicit SceneObject(SceneObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
 
-  SceneObjectId id() const { return id_; }
+  SceneObjectId id() const { return handle_.obj_id; }
+  const SceneObjectHandle& handle() const { return handle_; }
+
+  void mark_dirty();
 
  public:
   eray::math::Transform3f transform;
@@ -65,13 +68,14 @@ class SceneObject {
  private:
   friend Scene;
 
-  SceneObjectId id_;
+  SceneObjectHandle handle_;
+  Scene& scene_;  // NOLINT
 };
 
 class PointListObject {
  public:
   PointListObject() = delete;
-  explicit PointListObject(PointListObjectId id) : id_(id) {}
+  explicit PointListObject(PointListObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
 
   const std::list<PointHandle>& points() { return points_; }
   bool contains(const PointHandle& handle) { return points_map_.contains(handle); }
@@ -79,7 +83,9 @@ class PointListObject {
     return points_map_.contains(PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id));
   }
 
-  PointListObjectId id() const { return id_; }
+  PointListObjectId id() const { return handle_.obj_id; }
+  const PointListObjectHandle& handle() const { return handle_; }
+  void mark_dirty();
 
  public:
   std::string name;
@@ -87,7 +93,8 @@ class PointListObject {
  private:
   friend Scene;
 
-  PointListObjectId id_;
+  PointListObjectHandle handle_;
+  Scene& scene_;  // NOLINT
 
   std::list<PointHandle> points_;
   std::unordered_map<PointHandle, std::list<PointHandle>::iterator> points_map_;
