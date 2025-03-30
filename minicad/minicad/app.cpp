@@ -26,6 +26,8 @@
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <optional>
 
+#include "imgui/modals.hpp"
+
 namespace mini {
 
 // NOLINTBEGIN
@@ -346,6 +348,16 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   if (selected_scene_obj) {
     if (auto scene_obj = m_.scene.get_obj(*selected_scene_obj)) {
       ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
+      ImGui::SameLine();
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = scene_obj.value()->name;
+      }
+
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        scene_obj.value()->name = object_name;
+      }
 
       std::visit(
           eray::util::match{
@@ -422,27 +434,42 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::Begin("Selected Point List");
   if (selected_point_list_obj) {
-    ImGui::Text("Points: ");
     if (auto obj = m_.scene.get_obj(*selected_point_list_obj)) {
-      bool disable = !selected_scene_obj.has_value() || !obj.value()->contains(*selected_scene_obj);
-      if (disable) {
-        ImGui::BeginDisabled();
+      ImGui::Text("Name: %s", obj.value()->name.c_str());
+      ImGui::SameLine();
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = obj.value()->name;
       }
-      if (ImGui::Button("Remove")) {
-        if (auto ph = m_.scene.get_point_handle(*selected_scene_obj)) {
-          m_.scene.remove_point_from_list(*ph, *selected_point_list_obj);
-        }
+
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.value()->name = object_name;
       }
-      if (disable) {
-        ImGui::EndDisabled();
-      }
-      disable = !selected_point_list_obj || !selected_scene_obj;
+
+      ImGui::Text("Points: ");
+      auto disable = !selected_point_list_obj || !selected_scene_obj;
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
         if (auto p_h = m_.scene.get_point_handle(*selected_scene_obj)) {
           m_.scene.add_point_to_list(p_h.value(), *selected_point_list_obj);
+        }
+      }
+      if (disable) {
+        ImGui::EndDisabled();
+      }
+
+      ImGui::SameLine();
+
+      disable = !selected_scene_obj.has_value() || !obj.value()->contains(*selected_scene_obj);
+      if (disable) {
+        ImGui::BeginDisabled();
+      }
+      if (ImGui::Button("Remove")) {
+        if (auto ph = m_.scene.get_point_handle(*selected_scene_obj)) {
+          m_.scene.remove_point_from_list(*ph, *selected_point_list_obj);
         }
       }
       if (disable) {
@@ -511,8 +538,8 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   }
 
   // Render grid
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
   if (m_.grid_on) {
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     m_.rs.grid_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
     m_.rs.grid_sh_prog->set_uniform("u_vInvMat", m_.camera->inverse_view_matrix());
     m_.rs.grid_sh_prog->set_uniform("u_camWorldPos", m_.camera->transform.pos());
