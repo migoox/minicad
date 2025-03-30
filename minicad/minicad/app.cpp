@@ -493,6 +493,16 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
 
   ImGui::End();
+  ImGui::Begin("Tools");
+  bool selected = m_.tool_state == ToolState::Cursor;
+  if (ImGui::Selectable("Cursor", selected)) {
+    on_cursor_state_set();
+  }
+  selected = m_.tool_state == ToolState::Select;
+  if (ImGui::Selectable("Select", selected)) {
+    on_select_state_set();
+  }
+  ImGui::End();
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
@@ -661,13 +671,34 @@ bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handl
   return true;
 }
 
+bool MiniCadApp::on_cursor_state_set() {
+  m_.tool_state = ToolState::Cursor;
+  return true;
+}
+
+bool MiniCadApp::on_select_state_set() {
+  m_.tool_state = ToolState::Select;
+  return true;
+}
+
+bool MiniCadApp::on_tool_action_start() {
+  if (m_.tool_state == ToolState::Cursor) {
+    m_.cursor->start_movement();
+  }
+
+  if (m_.tool_state == ToolState::Select) {
+    // todo
+  }
+  return true;
+}
+
 bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) {
   if (ev.is_on_ui()) {
     return false;
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
-    m_.cursor->start_movement();
+    on_tool_action_start();
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonMiddle) {

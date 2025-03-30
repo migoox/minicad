@@ -22,6 +22,7 @@
 
 namespace mini {
 
+// TODO(migoox): dedicated opengl scene renderer in libminicad
 struct RenderingState {
   eray::driver::gl::VertexArray points_vao;
   eray::driver::gl::VertexArray box_vao;
@@ -54,6 +55,11 @@ class MiniCadApp final : public eray::os::Application {
   void update(Duration delta) final;
 
  private:
+  enum class ToolState : uint8_t {
+    Select = 0,
+    Cursor = 1,
+  };
+
   struct Members {
     minicad::OrbitingCameraOperator orbiting_camera_operator;
 
@@ -66,6 +72,9 @@ class MiniCadApp final : public eray::os::Application {
     bool use_ortho;
 
     Scene scene;
+
+    // TODO(migoox): state machine
+    ToolState tool_state;
 
     // torus
     eray::math::Vec2i tess_level;
@@ -82,6 +91,10 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_point_list_object_added();
   bool on_point_list_object_deleted(const PointListObjectHandle& handle);
+
+  bool on_cursor_state_set();
+  bool on_select_state_set();
+  bool on_tool_action_start();
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
