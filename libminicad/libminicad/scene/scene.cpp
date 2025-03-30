@@ -192,6 +192,7 @@ bool Scene::add_point_to_list(const PointHandle& p_handle, const PointListObject
     auto& pl = *point_list_objects_[pl_handle.obj_id]->first;
     pl.points_.push_back(p_handle);
     pl.points_map_.insert({p_handle, std::prev(pl.points_.end())});
+    mark_dirty(pl_handle);
 
     return true;
   }
@@ -215,6 +216,7 @@ bool Scene::remove_point_from_list(const PointHandle& p_handle, const PointListO
     auto p_it = pl.points_map_.find(p_handle);
     pl.points_.erase(p_it->second);
     pl.points_map_.erase(p_it);
+    mark_dirty(pl_handle);
 
     return true;
   }

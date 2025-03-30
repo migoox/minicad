@@ -37,7 +37,7 @@ using namespace eray::util;
 
 namespace {
 
-gl::VertexArray get_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
+gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
   float vertices[] = {
       // Front Face
       -0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
@@ -98,7 +98,7 @@ gl::VertexArray get_box_vao(float width = 1.F, float height = 1.F, float depth =
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
-gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
+gl::VertexArray create_patch_vao(float width = 1.F, float height = 1.F) {
   float vertices[] = {
       0.5F * width,  0.5F * height,   //
       -0.5F * width, 0.5F * height,   //
@@ -121,7 +121,7 @@ gl::VertexArray get_patch_vao(float width = 1.F, float height = 1.F) {
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
-gl::VertexArray get_points_vao() {
+gl::VertexArray create_points_vao() {
   auto points  = std::array<float, 3 * Scene::kMaxObjects>();
   auto indices = std::array<uint32_t, Scene::kMaxObjects>();
 
@@ -134,11 +134,42 @@ gl::VertexArray get_points_vao() {
   ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
 
   auto vao = gl::VertexArray::create(std::move(vbo), std::move(ebo));
-  //   vao.set_binding_divisor(0, 1);
   return vao;
 }
 
-GLuint get_texture(res::Image& image) {
+std::pair<GLuint, gl::ElementBuffer> create_point_list_vao(const gl::VertexBuffer& vert_buff) {
+  GLuint id = 0;
+  glCreateVertexArrays(1, &id);
+
+  auto ebo = gl::ElementBuffer::create();
+
+  // Bind EBO to VAO
+  glVertexArrayElementBuffer(id, ebo.raw_gl_id());
+
+  // Apply layouts of VBO
+  GLsizei vertex_size = 0;
+
+  for (const auto& attrib : vert_buff.layout()) {
+    glEnableVertexArrayAttrib(id, attrib.index);
+    glVertexArrayAttribFormat(id,                                     //
+                              attrib.index,                           //
+                              static_cast<GLint>(attrib.count),       //
+                              GL_FLOAT,                               //
+                              attrib.normalize ? GL_TRUE : GL_FALSE,  //
+                              vertex_size);                           //
+
+    vertex_size += static_cast<GLint>(sizeof(float) * attrib.count);
+    glVertexArrayAttribBinding(id, attrib.index, 0);
+  }
+
+  glVertexArrayVertexBuffer(id, 0, vert_buff.raw_gl_id(), 0, vertex_size);
+
+  eray::driver::gl::check_gl_errors();
+
+  return {id, std::move(ebo)};
+}
+
+GLuint create_texture(res::Image& image) {
   GLuint texture = 0;
   glGenTextures(1, &texture);
   glBindTexture(GL_TEXTURE_2D, texture);
@@ -157,9 +188,6 @@ GLuint get_texture(res::Image& image) {
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto manager = GLSLShaderManager();
-  auto vert    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.vert"));
-  auto frag    = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "main.frag"));
-  auto program = unwrap_or_panic(gl::RenderingShaderProgram::create("shader", std::move(vert), std::move(frag)));
 
   auto param_vert = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "param.vert"));
   auto param_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "param.frag"));
@@ -172,6 +200,11 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto grid_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "grid.frag"));
   auto grid_prog =
       unwrap_or_panic(gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
+
+  auto polyline_vert = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "polyline.vert"));
+  auto polyline_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "polyline.frag"));
+  auto polyline_prog = unwrap_or_panic(
+      gl::RenderingShaderProgram::create("polyline_shader", std::move(polyline_vert), std::move(polyline_frag)));
 
   auto sprite_vert = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite.vert"));
   auto sprite_frag = unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite.frag"));
@@ -212,14 +245,14 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                         .rad_major     = 4.F,                                  //
                         .rs =
                             {
-                                .points_vao               = get_points_vao(),                  //
-                                .box_vao                  = get_box_vao(),                     //
-                                .patch_vao                = get_patch_vao(),                   //
-                                .cursor_txt               = get_texture(cursor_img),           //
-                                .point_txt                = get_texture(point_img),            //
-                                .shader_prog              = std::move(program),                //
+                                .points_vao               = create_points_vao(),               //
+                                .box_vao                  = create_box_vao(),                  //
+                                .patch_vao                = create_patch_vao(),                //
+                                .cursor_txt               = create_texture(cursor_img),        //
+                                .point_txt                = create_texture(point_img),         //
                                 .param_sh_prog            = std::move(param_prog),             //
                                 .grid_sh_prog             = std::move(grid_prog),              //
+                                .polyline_sh_prog         = std::move(polyline_prog),          //
                                 .sprite_sh_prog           = std::move(sprite_prog),            //
                                 .instanced_sprite_sh_prog = std::move(instanced_sprite_prog),  //
                             }  //
@@ -356,9 +389,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::Begin("Point Lists");
 
   if (ImGui::Button("Add")) {
-    if (!m_.scene.create_list_obj().has_value()) {
-      Logger::err("Could not add a new scene object");
-    }
+    on_point_list_object_added();
   }
   ImGui::SameLine();
   {
@@ -367,7 +398,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Button("Delete")) {
-      m_.scene.delete_obj(*selected_point_list_obj);
+      on_point_list_object_deleted(*selected_point_list_obj);
       selected_point_list_obj = std::nullopt;
     }
     if (disable) {
@@ -443,11 +474,22 @@ void MiniCadApp::render(Application::Duration /* delta */) {
     m_.rs.points_vao.vbo().sub_buffer_data(3 * obj.id(), p.data);
   });
 
+  m_.scene.visit_dirty_point_objects([this](PointListObject& obj) {
+    // TODO(migoox): do it better
+    if (!m_.rs.point_list_vaos.contains(obj.handle())) {
+      return;
+    }
+    auto t = obj.points() | std::views::transform([](const PointHandle& ph) { return ph.obj_id; });
+    std::vector<PointListObjectId> temp_vec(t.begin(), t.end());
+    m_.rs.point_list_vaos.at(obj.handle()).second.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+  });
+
+  m_.camera->set_orthographic(m_.use_ortho);
+
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Render the Torus
-  m_.camera->set_orthographic(m_.use_ortho);
   m_.rs.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.rs.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.rs.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
@@ -459,6 +501,14 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.patch_vao.bind();
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.rs.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+
+  // Render polylines
+  m_.rs.polyline_sh_prog->bind();
+  m_.rs.polyline_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
+  for (auto& point_list : m_.rs.point_list_vaos) {
+    glBindVertexArray(point_list.second.first);
+    glDrawElements(GL_LINE_STRIP, point_list.second.second.count(), GL_UNSIGNED_INT, nullptr);
+  }
 
   // Render grid
   if (m_.grid_on) {
@@ -472,6 +522,8 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   // Render the sprites
   glDisable(GL_DEPTH_TEST);
+
+  // Render points
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_.rs.point_txt);
   m_.rs.instanced_sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
@@ -480,8 +532,9 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.instanced_sprite_sh_prog->set_uniform("u_textureSampler", 0);
   m_.rs.instanced_sprite_sh_prog->bind();
   m_.rs.points_vao.bind();
-  glDrawElements(GL_POINTS, m_.rs.transferred_points_buff.size(), GL_UNSIGNED_INT, 0);
+  glDrawElements(GL_POINTS, m_.rs.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
 
+  // Render cursor
   glBindTexture(GL_TEXTURE_2D, m_.rs.cursor_txt);
   m_.rs.sprite_sh_prog->set_uniform("u_worldPos", m_.cursor->transform.pos());
   m_.rs.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
@@ -560,6 +613,24 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
     util::Logger::info("Deleted scene object \"{}\"", *obj_name);
   }
 
+  return true;
+}
+
+bool MiniCadApp::on_point_list_object_added() {
+  auto handle = m_.scene.create_list_obj();
+  if (!handle) {
+    Logger::err("Could not add a new point list object");
+    return false;
+  }
+  m_.rs.point_list_vaos.insert({*handle, create_point_list_vao(m_.rs.points_vao.vbo())});
+  return true;
+}
+
+bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handle) {
+  auto id = m_.rs.point_list_vaos.at(handle).first;
+  glDeleteVertexArrays(1, &id);
+  m_.rs.point_list_vaos.erase(handle);
+  m_.scene.delete_obj(handle);
   return true;
 }
 

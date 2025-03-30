@@ -1,5 +1,6 @@
 #pragma once
 
+#include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/mat.hpp>
@@ -22,8 +23,6 @@
 namespace mini {
 
 struct RenderingState {
-  std::unordered_map<PointListObjectHandle, eray::driver::gl::VertexArray> point_list_vaos;
-
   eray::driver::gl::VertexArray points_vao;
   eray::driver::gl::VertexArray box_vao;
   eray::driver::gl::VertexArray patch_vao;
@@ -31,12 +30,14 @@ struct RenderingState {
   std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
   std::vector<SceneObjectHandle> transferred_points_buff;
 
+  std::unordered_map<PointListObjectHandle, std::pair<GLuint, eray::driver::gl::ElementBuffer>> point_list_vaos;
+
   GLuint cursor_txt;
   GLuint point_txt;
 
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
 };
@@ -78,6 +79,9 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_scene_object_added();
   bool on_scene_object_deleted(const SceneObjectHandle& handle);
+
+  bool on_point_list_object_added();
+  bool on_point_list_object_deleted(const PointListObjectHandle& handle);
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
