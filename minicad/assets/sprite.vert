@@ -1,6 +1,6 @@
 #version 430 core
 
-// USAGE: Remember to disable depth test. Draw after drawing the scene.
+// USAGE: Remember to disable depth test. Draw after drawing the 3D scene.
 
 const vec3 Pos[4] = vec3[4](
     vec3(-1.0,  -1.0, 0.0),

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <liberay/driver/gl/shader_program.hpp>
+#include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/mat.hpp>
 #include <liberay/math/mat_fwd.hpp>
 #include <liberay/math/transform3.hpp>
@@ -11,12 +12,34 @@
 #include <liberay/res/image.hpp>
 #include <liberay/util/timer.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <memory>
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
+#include <unordered_map>
 
 namespace mini {
+
+struct RenderingState {
+  std::unordered_map<PointListObjectHandle, eray::driver::gl::VertexArray> point_list_vaos;
+
+  eray::driver::gl::VertexArray points_vao;
+  eray::driver::gl::VertexArray box_vao;
+  eray::driver::gl::VertexArray patch_vao;
+
+  std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
+  std::vector<SceneObjectHandle> transferred_points_buff;
+
+  GLuint cursor_txt;
+  GLuint point_txt;
+
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
+};
 
 class MiniCadApp final : public eray::os::Application {
  public:
@@ -31,16 +54,6 @@ class MiniCadApp final : public eray::os::Application {
 
  private:
   struct Members {
-    eray::driver::gl::VertexArray box_vao;
-    eray::driver::gl::VertexArray patch_vao;
-
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> shader_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
-
-    GLuint cursor_txt;
-
     minicad::OrbitingCameraOperator orbiting_camera_operator;
 
     std::unique_ptr<minicad::Cursor> cursor;
@@ -52,13 +65,19 @@ class MiniCadApp final : public eray::os::Application {
     bool use_ortho;
 
     Scene scene;
+
     // torus
     eray::math::Vec2i tess_level;
     float rad_minor;
     float rad_major;
+
+    RenderingState rs;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
+
+  bool on_scene_object_added();
+  bool on_scene_object_deleted(const SceneObjectHandle& handle);
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);

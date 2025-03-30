@@ -54,6 +54,9 @@ class Scene {
   void visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor);
   void visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor);
 
+ public:
+  static constexpr std::size_t kMaxObjects = 100;
+
  private:
   bool is_handle_valid(const PointListObjectHandle& handle);
   bool is_handle_valid(const SceneObjectHandle& handle);
@@ -70,7 +73,6 @@ class Scene {
   std::uint32_t timestamp();
 
  private:
-  static constexpr std::size_t kMaxObjects = 1000;
   static std::uint32_t next_signature_;
 
   std::uint32_t signature_;
