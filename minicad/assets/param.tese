@@ -6,11 +6,9 @@ layout (quads, equal_spacing, ccw) in;
 uniform mat4 vMat;
 uniform mat4 pMat;
 
-uniform float minorRad;
-uniform float majorRad;
-
 in TCS_OUT {
     mat4 worldMat;
+    vec2 radii;
 } tes_in[];
 
 #define PI 3.14159265359
@@ -23,6 +21,8 @@ void main() {
     float x = u * 2 * PI;
     float y = v * 2 * PI;
 
+    float minorRad = tes_in[0].radii.x;
+    float majorRad = tes_in[0].radii.y;
     // torus parametrization
     vec4 p = vec4(cos(x)*(minorRad*cos(y) + majorRad),
                   minorRad*sin(y),

@@ -2,22 +2,25 @@
 
 layout (vertices=4) out;
 
-uniform int tessLevelX;
-uniform int tessLevelY;
-
 in VS_OUT {
     mat4 worldMat;
+    vec2 radii;
+    ivec2 tess_level;
 } tcs_in[];
 
 out TCS_OUT {
     mat4 worldMat;
+    vec2 radii;
 } tcs_out[];
 
 void main()
 {
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
     tcs_out[gl_InvocationID].worldMat = tcs_in[gl_InvocationID].worldMat;
+    tcs_out[gl_InvocationID].radii = tcs_in[gl_InvocationID].radii;
 
+    int tessLevelX = tcs_in[gl_InvocationID].tess_level.x;
+    int tessLevelY = tcs_in[gl_InvocationID].tess_level.y;
     // invocation zero controls tessellation levels for the entire patch
     if (gl_InvocationID == 0)
     {

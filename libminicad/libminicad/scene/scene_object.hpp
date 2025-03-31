@@ -44,9 +44,9 @@ class Torus {
   [[nodiscard]] static zstring_view type_name() noexcept { return "Torus"; }
 
  public:
-  float minor_radius;
-  float major_radius;
-  eray::math::Vec2i tess_level;
+  float minor_radius           = 1.F;
+  float major_radius           = 2.F;
+  eray::math::Vec2i tess_level = eray::math::Vec2i(16, 16);
 };
 
 using SceneObjectVariant = std::variant<Point, Torus>;

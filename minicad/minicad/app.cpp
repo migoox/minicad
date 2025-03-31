@@ -91,10 +91,10 @@ gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float dept
   };
 
   auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(0, 3, false),  // positions
-      gl::VertexBuffer::Attribute(1, 3, false),  // normals
+      gl::VertexBuffer::Attribute::create<float>(0, 3, false),  // positions
+      gl::VertexBuffer::Attribute::create<float>(1, 3, false),  // normals
   });
-  vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
+  vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
   ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
@@ -115,17 +115,19 @@ gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
   };
 
   auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(0, 2, false),
+      gl::VertexBuffer::Attribute::create<float>(0, 2, false),
   });
-  vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
+  vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
 
   auto mat_vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(1, 4, false),
-      gl::VertexBuffer::Attribute(2, 4, false),
-      gl::VertexBuffer::Attribute(3, 4, false),
-      gl::VertexBuffer::Attribute(4, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(1, 2, false),
+      gl::VertexBuffer::Attribute::create<int>(2, 2, false),
+      gl::VertexBuffer::Attribute::create<float>(3, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(4, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(5, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(6, 4, false),
   });
-  auto data    = std::vector<float>(16 * Scene::kMaxObjects, 0.F);
+  auto data    = std::vector<float>(20 * Scene::kMaxObjects, 0.F);
   mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
@@ -146,9 +148,9 @@ gl::VertexArray create_points_vao() {
   auto indices = std::array<uint32_t, Scene::kMaxObjects>();
 
   auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute(0, 3, false),
+      gl::VertexBuffer::Attribute::create<float>(0, 3, false),
   });
-  vbo.buffer_data(points, gl::DataUsage::StaticDraw);
+  vbo.buffer_data<float>(points, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
   ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
@@ -440,11 +442,19 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                          }
                        }
                      },
-                     [&](Torus&) {
-                       ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
-                       ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
-                       ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, m_.rad_major);
-                       ImGui::SliderFloat("Rad Major", &m_.rad_major, m_.rad_minor, 5.F);
+                     [&](Torus& t) {
+                       if (ImGui::SliderInt("Tess Level X", &t.tess_level.x, kMinTessLevel, kMaxTessLevel)) {
+                         scene_obj.value()->mark_dirty();
+                       }
+                       if (ImGui::SliderInt("Tess Level Y", &t.tess_level.y, kMinTessLevel, kMaxTessLevel)) {
+                         scene_obj.value()->mark_dirty();
+                       }
+                       if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, m_.rad_major)) {
+                         scene_obj.value()->mark_dirty();
+                       }
+                       if (ImGui::SliderFloat("Rad Major", &t.major_radius, m_.rad_minor, 5.F)) {
+                         scene_obj.value()->mark_dirty();
+                       }
                      },
                  },
                  scene_obj.value()->object);
@@ -565,15 +575,19 @@ void MiniCadApp::render(Application::Duration /* delta */) {
         util::match{
             [&](Point&) {
               auto p = obj.transform.pos();
-              m_.rs.points_vao.vbo().sub_buffer_data(3 * obj.id(), p.data);
+              m_.rs.points_vao.vbo().sub_buffer_data<float>(3 * obj.id(), p.data);
             },
-            [&](Torus&) {
-              auto ind = m_.rs.transferred_torus_ind.at(obj.handle());
-              auto mat = obj.transform.local_to_world_matrix();
-              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16, std::span<float>(mat[0].raw_ptr(), 4));
-              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+            [&](Torus& t) {
+              auto ind  = m_.rs.transferred_torus_ind.at(obj.handle());
+              auto mat  = obj.transform.local_to_world_matrix();
+              auto r    = math::Vec2f(t.minor_radius, t.major_radius);
+              auto tess = t.tess_level;
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
             }},
         obj.object);
   });
@@ -606,8 +620,6 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
   m_.rs.param_sh_prog->set_uniform("tessLevelX", m_.tess_level.x);
   m_.rs.param_sh_prog->set_uniform("tessLevelY", m_.tess_level.y);
-  m_.rs.param_sh_prog->set_uniform("minorRad", m_.rad_minor);
-  m_.rs.param_sh_prog->set_uniform("majorRad", m_.rad_major);
   m_.rs.param_sh_prog->bind();
   m_.rs.torus_vao.bind();
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -702,8 +714,6 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
                      o.value()->transform.set_local_pos(m_.cursor->transform.pos());
                    },  //
                    [&](Torus&) {
-                     // o.value()->transform.
-                     //                      m_.rs.patch_vao.vbo().sub_buffer_data(ind * 16, );
                      auto ind = m_.rs.transferred_torus_buff.size();
 
                      m_.rs.transferred_torus_ind.insert({*obj_handle, ind});
@@ -764,10 +774,25 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
 
               if (auto o2 = m_.scene.get_obj(m_.rs.transferred_torus_buff[ind])) {
                 auto mat = o2.value()->transform.local_to_world_matrix();
-                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16, std::span<float>(mat[0].raw_ptr(), 4));
-                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+                std::visit(
+                    eray::util::match{
+                        [&](Point&) {},
+                        [&](Torus& t) {
+                          auto r = math::Vec2f(t.minor_radius, t.major_radius);
+                          m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
+                          auto tess = t.tess_level;
+                          m_.rs.torus_vao.vbo("matrices")
+                              .sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
+                        },
+                    },
+                    o2.value()->object);
+                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices")
+                    .sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices")
+                    .sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices")
+                    .sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
               }
               return true;
             }},
