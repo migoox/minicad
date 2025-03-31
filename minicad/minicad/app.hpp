@@ -84,10 +84,8 @@ class MiniCadApp final : public eray::os::Application {
     // TODO(migoox): state machine
     ToolState tool_state;
 
-    // torus
-    eray::math::Vec2i tess_level;
-    float rad_minor;
-    float rad_major;
+    std::optional<PointListObjectHandle> selected_point_list_obj;
+    std::optional<SceneObjectHandle> selected_scene_obj;
 
     RenderingState rs;
   };

@@ -38,7 +38,7 @@ void main() {
     for(int i = 0; i < 4; i++) {
         gl_Position = vec4(billboard_pos(Pos[i]), 1.0);
         texCoord = TexCoords[i];
-        gsprite_id = 1; 
+        gsprite_id = sprite_id[0]; 
         EmitVertex();
     }
 

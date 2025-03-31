@@ -21,6 +21,18 @@ Scene::Scene() : signature_(next_signature_++), curr_timestamp_(0), curr_scene_o
   }
 }
 
+std::optional<SceneObjectHandle> Scene::handle_by_obj_id(SceneObjectId id) {
+  if (id >= kMaxObjects) {
+    return std::nullopt;
+  }
+
+  if (!scene_objects_[id]) {
+    return std::nullopt;
+  }
+
+  return scene_objects_[id]->first->handle();
+}
+
 bool Scene::is_handle_valid(const SceneObjectHandle& handle) {
   if (handle.owner_signature != signature_) {
     return false;

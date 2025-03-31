@@ -9,5 +9,5 @@ flat out int sprite_id;
 
 void main() {
     gl_Position = vec4(a_worldPos, 1.0); 
-    sprite_id = 1;
+    sprite_id = gl_VertexID;
 }

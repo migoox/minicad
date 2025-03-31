@@ -1,13 +1,14 @@
 #version 430 core
+in vec2 texCoord;
+
+flat in int gsprite_id;
 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out int id;
 
-flat in int gsprite_id;
-
-layout (location = 0) in vec3 a_worldPos;
+uniform sampler2D u_textureSampler;
 
 void main() {
-    gl_Position = vec4(a_worldPos, 1.0); 
-    id = 1;
+    fragColor = texture(u_textureSampler, texCoord);
+    id = gsprite_id;
 }

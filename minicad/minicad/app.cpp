@@ -243,7 +243,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto instanced_sprite_vert =
       unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite_instanced.vert"));
   auto instanced_sprite_frag =
-      unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite.frag"));
+      unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite_instanced.frag"));
   auto instanced_sprite_geom =
       unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite_instanced.geom"));
   auto instanced_sprite_prog = unwrap_or_panic(gl::RenderingShaderProgram::create(
@@ -269,9 +269,6 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                         .camera_gimbal = std::move(gimbal),                    //
                         .grid_on       = true,                                 //
                         .scene         = Scene(),                              //
-                        .tess_level    = math::Vec2i(16, 16),                  //
-                        .rad_minor     = 2.F,                                  //
-                        .rad_major     = 4.F,                                  //
                         .rs =
                             {
                                 .points_vao               = create_points_vao(),               //
@@ -331,9 +328,6 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::ShowDemoWindow();
 
-  static std::optional<PointListObjectHandle> selected_point_list_obj;
-  static std::optional<SceneObjectHandle> selected_scene_obj;
-
   ImGui::Begin("Scene objects");
 
   if (ImGui::Button("Add")) {
@@ -367,13 +361,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::SameLine();
 
   {
-    bool disable = !selected_scene_obj;
+    bool disable = !m_.selected_scene_obj;
     if (disable) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Button("Delete")) {
-      on_scene_object_deleted(*selected_scene_obj);
-      selected_scene_obj = std::nullopt;
+      on_scene_object_deleted(*m_.selected_scene_obj);
+      m_.selected_scene_obj = std::nullopt;
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -384,9 +378,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (auto p = m_.scene.get_obj(h_p)) {
       ImGui::PushID(h_p.obj_id);
 
-      bool is_selected = selected_scene_obj && selected_scene_obj.value() == h_p;
+      bool is_selected = m_.selected_scene_obj && m_.selected_scene_obj.value() == h_p;
       if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
-        selected_scene_obj = h_p;
+        m_.selected_scene_obj = h_p;
       }
 
       ImGui::PopID();
@@ -396,8 +390,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::End();
 
   ImGui::Begin("Selected Scene Object");
-  if (selected_scene_obj) {
-    if (auto scene_obj = m_.scene.get_obj(*selected_scene_obj)) {
+  if (m_.selected_scene_obj) {
+    if (auto scene_obj = m_.scene.get_obj(*m_.selected_scene_obj)) {
       ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -433,9 +427,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                          if (auto point_list = m_.scene.get_obj(p)) {
                            ImGui::PushID(point_list.value()->id());
 
-                           bool is_selected = selected_point_list_obj && selected_point_list_obj.value() == p;
+                           bool is_selected = m_.selected_point_list_obj && m_.selected_point_list_obj.value() == p;
                            if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
-                             selected_point_list_obj = p;
+                             m_.selected_point_list_obj = p;
                            }
 
                            ImGui::PopID();
@@ -449,10 +443,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                        if (ImGui::SliderInt("Tess Level Y", &t.tess_level.y, kMinTessLevel, kMaxTessLevel)) {
                          scene_obj.value()->mark_dirty();
                        }
-                       if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, m_.rad_major)) {
+                       if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, t.major_radius)) {
                          scene_obj.value()->mark_dirty();
                        }
-                       if (ImGui::SliderFloat("Rad Major", &t.major_radius, m_.rad_minor, 5.F)) {
+                       if (ImGui::SliderFloat("Rad Major", &t.major_radius, t.minor_radius, 5.F)) {
                          scene_obj.value()->mark_dirty();
                        }
                      },
@@ -469,13 +463,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
   ImGui::SameLine();
   {
-    bool disable = !selected_point_list_obj;
+    bool disable = !m_.selected_point_list_obj;
     if (disable) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Button("Delete")) {
-      on_point_list_object_deleted(*selected_point_list_obj);
-      selected_point_list_obj = std::nullopt;
+      on_point_list_object_deleted(*m_.selected_point_list_obj);
+      m_.selected_point_list_obj = std::nullopt;
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -485,9 +479,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (auto pl = m_.scene.get_obj(h_pl)) {
       ImGui::PushID(h_pl.obj_id);
 
-      bool is_selected = selected_point_list_obj && selected_point_list_obj.value() == h_pl;
+      bool is_selected = m_.selected_point_list_obj && m_.selected_point_list_obj.value() == h_pl;
       if (ImGui::Selectable(pl.value()->name.c_str(), is_selected)) {
-        selected_point_list_obj = h_pl;
+        m_.selected_point_list_obj = h_pl;
       }
 
       ImGui::PopID();
@@ -497,8 +491,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::End();
 
   ImGui::Begin("Selected Point List");
-  if (selected_point_list_obj) {
-    if (auto obj = m_.scene.get_obj(*selected_point_list_obj)) {
+  if (m_.selected_point_list_obj) {
+    if (auto obj = m_.scene.get_obj(*m_.selected_point_list_obj)) {
       ImGui::Text("Name: %s", obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -512,13 +506,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
 
       ImGui::Text("Points: ");
-      auto disable = !selected_point_list_obj || !selected_scene_obj;
+      auto disable = !m_.selected_point_list_obj || !m_.selected_scene_obj;
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
-        if (auto p_h = m_.scene.get_point_handle(*selected_scene_obj)) {
-          m_.scene.add_point_to_list(p_h.value(), *selected_point_list_obj);
+        if (auto p_h = m_.scene.get_point_handle(*m_.selected_scene_obj)) {
+          m_.scene.add_point_to_list(p_h.value(), *m_.selected_point_list_obj);
         }
       }
       if (disable) {
@@ -527,13 +521,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       ImGui::SameLine();
 
-      disable = !selected_scene_obj.has_value() || !obj.value()->contains(*selected_scene_obj);
+      disable = !m_.selected_scene_obj.has_value() || !obj.value()->contains(*m_.selected_scene_obj);
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Remove")) {
-        if (auto ph = m_.scene.get_point_handle(*selected_scene_obj)) {
-          m_.scene.remove_point_from_list(*ph, *selected_point_list_obj);
+        if (auto ph = m_.scene.get_point_handle(*m_.selected_scene_obj)) {
+          m_.scene.remove_point_from_list(*ph, *m_.selected_point_list_obj);
         }
       }
       if (disable) {
@@ -544,10 +538,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         if (auto p_obj = m_.scene.get_obj(p)) {
           ImGui::PushID(p.obj_id);
 
-          bool is_selected = selected_scene_obj &&
-                             selected_scene_obj.value() == SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+          bool is_selected = m_.selected_scene_obj && m_.selected_scene_obj.value() ==
+                                                          SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
           if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
-            selected_scene_obj = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+            m_.selected_scene_obj = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
           }
 
           ImGui::PopID();
@@ -605,7 +599,6 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.camera->set_orthographic(m_.use_ortho);
 
   m_.rs.viewport_fb->bind();
-  m_.rs.viewport_fb->clear();
   glPatchParameteri(GL_PATCH_VERTICES, 4);
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glEnable(GL_DEPTH_TEST);
@@ -618,8 +611,6 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   // Render the Torus
   m_.rs.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.rs.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
-  m_.rs.param_sh_prog->set_uniform("tessLevelX", m_.tess_level.x);
-  m_.rs.param_sh_prog->set_uniform("tessLevelY", m_.tess_level.y);
   m_.rs.param_sh_prog->bind();
   m_.rs.torus_vao.bind();
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -644,10 +635,11 @@ void MiniCadApp::render(Application::Duration /* delta */) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
 
-  // Start sprites rendering
-  glDisable(GL_DEPTH_TEST);
-
   // Render points
+  glClearColor(0.09, 0.05, 0.09, 1.F);
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+
   m_.rs.viewport_fb->begin_pick_render();
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_.rs.point_txt);
@@ -660,6 +652,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glDrawElements(GL_POINTS, m_.rs.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
   m_.rs.viewport_fb->end_pick_render();
 
+  glDisable(GL_DEPTH_TEST);
   // Render cursor
   glBindTexture(GL_TEXTURE_2D, m_.rs.cursor_txt);
   m_.rs.sprite_sh_prog->set_uniform("u_worldPos", m_.cursor->transform.pos());
@@ -845,7 +838,11 @@ bool MiniCadApp::on_tool_action_start() {
     auto m = window_->mouse_pos();
     m_.rs.viewport_fb->bind();
     int id = m_.rs.viewport_fb->sample_mouse_pick(static_cast<size_t>(m.x), static_cast<size_t>(m.y));
-    util::Logger::info("mouse {}, id: {}", m, id);
+    if (id < 0) {
+      return false;
+    }
+
+    m_.selected_scene_obj = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id));
   }
   return true;
 }

@@ -28,6 +28,8 @@ class Scene {
 
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
 
+  std::optional<SceneObjectHandle> handle_by_obj_id(SceneObjectId id);
+
   [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const SceneObjectHandle& handle);
   [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const PointHandle& handle);
   [[nodiscard]] OptionalObserverPtr<PointListObject> get_obj(const PointListObjectHandle& handle);
