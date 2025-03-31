@@ -5,6 +5,9 @@
 
 layout (location = 0) in vec3 a_worldPos;
 
+flat out int sprite_id;
+
 void main() {
     gl_Position = vec4(a_worldPos, 1.0); 
+    sprite_id = 1;
 }

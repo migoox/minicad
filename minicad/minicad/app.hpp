@@ -1,6 +1,7 @@
 #pragma once
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/framebuffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/mat.hpp>
@@ -26,10 +27,14 @@ namespace mini {
 struct RenderingState {
   eray::driver::gl::VertexArray points_vao;
   eray::driver::gl::VertexArray box_vao;
-  eray::driver::gl::VertexArray patch_vao;
+
+  eray::driver::gl::VertexArrays torus_vao;
 
   std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
   std::vector<SceneObjectHandle> transferred_points_buff;
+
+  std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
+  std::vector<SceneObjectHandle> transferred_torus_buff;
 
   std::unordered_map<PointListObjectHandle, std::pair<GLuint, eray::driver::gl::ElementBuffer>> point_list_vaos;
 
@@ -40,7 +45,10 @@ struct RenderingState {
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
+  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
+
+  std::unique_ptr<eray::driver::gl::ViewportFramebuffer> viewport_fb;
 };
 
 class MiniCadApp final : public eray::os::Application {
@@ -86,7 +94,7 @@ class MiniCadApp final : public eray::os::Application {
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
 
-  bool on_scene_object_added();
+  bool on_scene_object_added(SceneObjectVariant variant);
   bool on_scene_object_deleted(const SceneObjectHandle& handle);
 
   bool on_point_list_object_added();

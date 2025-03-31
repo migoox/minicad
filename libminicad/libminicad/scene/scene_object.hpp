@@ -46,6 +46,7 @@ class Torus {
  public:
   float minor_radius;
   float major_radius;
+  eray::math::Vec2i tess_level;
 };
 
 using SceneObjectVariant = std::variant<Point, Torus>;

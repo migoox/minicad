@@ -2,12 +2,16 @@
 
 layout (quads, equal_spacing, ccw) in;
 
-uniform mat4 mMat;
+// uniform mat4 mMat;
 uniform mat4 vMat;
 uniform mat4 pMat;
 
 uniform float minorRad;
 uniform float majorRad;
+
+in TCS_OUT {
+    mat4 worldMat;
+} tes_in[];
 
 #define PI 3.14159265359
 
@@ -25,5 +29,5 @@ void main() {
                   -sin(x)*(minorRad*cos(y) + majorRad), 
                   1.0);
 
-    gl_Position = pMat*vMat*mMat*p;
+    gl_Position = pMat*vMat*tes_in[0].worldMat*p;
 }

@@ -16,6 +16,7 @@
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/os/window/input_codes.hpp>
 #include <liberay/res/image.hpp>
+#include <liberay/util/enum_mapper.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/timer.hpp>
@@ -24,9 +25,10 @@
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
+#include <minicad/imgui/modals.hpp>
 #include <optional>
-
-#include "imgui/modals.hpp"
+#include <variant>
+#include <vector>
 
 namespace mini {
 
@@ -100,7 +102,7 @@ gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float dept
   return gl::VertexArray::create(std::move(vbo), std::move(ebo));
 }
 
-gl::VertexArray create_patch_vao(float width = 1.F, float height = 1.F) {
+gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
   float vertices[] = {
       0.5F * width,  0.5F * height,   //
       -0.5F * width, 0.5F * height,   //
@@ -117,10 +119,26 @@ gl::VertexArray create_patch_vao(float width = 1.F, float height = 1.F) {
   });
   vbo.buffer_data(vertices, gl::DataUsage::StaticDraw);
 
+  auto mat_vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute(1, 4, false),
+      gl::VertexBuffer::Attribute(2, 4, false),
+      gl::VertexBuffer::Attribute(3, 4, false),
+      gl::VertexBuffer::Attribute(4, 4, false),
+  });
+  auto data    = std::vector<float>(16 * Scene::kMaxObjects, 0.F);
+  mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
+
   auto ebo = gl::ElementBuffer::create();
   ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
 
-  return gl::VertexArray::create(std::move(vbo), std::move(ebo));
+  auto m = std::unordered_map<zstring_view, gl::VertexBuffer>();
+  m.emplace("base", std::move(vbo));
+  m.emplace("matrices", std::move(mat_vbo));
+  auto vao = gl::VertexArrays::create(std::move(m), std::move(ebo));
+
+  vao.set_binding_divisor("base", 0);
+  vao.set_binding_divisor("matrices", 1);
+  return vao;
 }
 
 gl::VertexArray create_points_vao() {
@@ -213,6 +231,13 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto sprite_prog = unwrap_or_panic(
       gl::RenderingShaderProgram::create("sprite_shader", std::move(sprite_vert), std::move(sprite_frag)));
 
+  auto screen_quad_vert =
+      unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "screen_quad.vert"));
+  auto screen_quad_frag =
+      unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "screen_quad.frag"));
+  auto screen_quad_prog = unwrap_or_panic(gl::RenderingShaderProgram::create(
+      "screen_quad_shader", std::move(screen_quad_vert), std::move(screen_quad_frag)));
+
   auto instanced_sprite_vert =
       unwrap_or_panic(manager.load_shader(System::executable_dir() / "assets" / "sprite_instanced.vert"));
   auto instanced_sprite_frag =
@@ -225,8 +250,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
 
   auto cursor_img = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "cursor.png"));
   auto point_img  = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "point.png"));
-
-  auto camera = std::make_unique<minicad::Camera>(
+  auto camera     = std::make_unique<minicad::Camera>(
       false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
   camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, 4.F));
@@ -234,6 +258,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto gimbal = std::make_unique<eray::math::Transform3f>();
   camera->transform.set_parent(*gimbal);
 
+  auto win_size = math::Vec2f(static_cast<float>(window->size().x), static_cast<float>(window->size().y));
   return MiniCadApp(std::move(window),
                     {
 
@@ -249,25 +274,23 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                             {
                                 .points_vao               = create_points_vao(),               //
                                 .box_vao                  = create_box_vao(),                  //
-                                .patch_vao                = create_patch_vao(),                //
+                                .torus_vao                = create_torus_vao(),                //
                                 .cursor_txt               = create_texture(cursor_img),        //
                                 .point_txt                = create_texture(point_img),         //
                                 .param_sh_prog            = std::move(param_prog),             //
                                 .grid_sh_prog             = std::move(grid_prog),              //
                                 .polyline_sh_prog         = std::move(polyline_prog),          //
                                 .sprite_sh_prog           = std::move(sprite_prog),            //
+                                .screen_quad_sh_prog      = std::move(screen_quad_prog),       //
                                 .instanced_sprite_sh_prog = std::move(instanced_sprite_prog),  //
+                                .viewport_fb              = std::make_unique<gl::ViewportFramebuffer>(win_size.x,
+                                                                                                      win_size.y),  //
+
                             }  //
                     });
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Application(std::move(window)), m_(std::move(m)) {
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
   window_->set_event_callback<WindowResizedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_resize));
   window_->set_event_callback<MouseButtonPressedEvent>(
       class_method_as_event_callback(this, &MiniCadApp::on_mouse_pressed));
@@ -280,12 +303,10 @@ MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Applicatio
 void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::Begin("Torus [TEMP]");
   ImGui::Text("FPS: %d", fps_);
-  ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
-  ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
-  ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, m_.rad_major);
-  ImGui::SliderFloat("Rad Major", &m_.rad_major, m_.rad_minor, 5.F);
+
   ImGui::Checkbox("Grid", &m_.grid_on);
   ImGui::Checkbox("Ortho", &m_.use_ortho);
+
   ImGui::End();
 
   ImGui::Begin("Cursor");
@@ -299,6 +320,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::DragFloat2("Screen", ndc_pos.raw_ptr(), -0.01F, -1.F, 1.F)) {
       m_.cursor->set_by_ndc_pos(*m_.camera, ndc_pos);
     }
+
+    if (ImGui::Button("Look at cursor")) {
+      m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
+    }
   }
   ImGui::End();
 
@@ -310,7 +335,31 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::Begin("Scene objects");
 
   if (ImGui::Button("Add")) {
-    on_scene_object_added();
+    ImGui::OpenPopup("AddSceneObjectPopup");
+  }
+
+  enum class SceneObjectType : uint8_t {
+    Point  = 0,
+    Torus  = 1,
+    _Count = 2,  // NOLINT
+  };
+
+  static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<SceneObjectType>({
+      {SceneObjectType::Point, "Point"},
+      {SceneObjectType::Torus, "Torus"},
+  });
+
+  if (ImGui::BeginPopup("AddSceneObjectPopup")) {
+    for (const auto [type, name] : kSceneObjectNames) {
+      if (ImGui::Selectable(name.c_str())) {
+        if (type == SceneObjectType::Point) {
+          on_scene_object_added(Point{});
+        } else {
+          on_scene_object_added(Torus{});
+        }
+      }
+    }
+    ImGui::EndPopup();
   }
 
   ImGui::SameLine();
@@ -391,7 +440,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                          }
                        }
                      },
-                     [](Torus&) {},
+                     [&](Torus&) {
+                       ImGui::SliderInt("Tess Level X", &m_.tess_level.x, kMinTessLevel, kMaxTessLevel);
+                       ImGui::SliderInt("Tess Level Y", &m_.tess_level.y, kMinTessLevel, kMaxTessLevel);
+                       ImGui::SliderFloat("Rad Minor", &m_.rad_minor, 0.1F, m_.rad_major);
+                       ImGui::SliderFloat("Rad Major", &m_.rad_major, m_.rad_minor, 5.F);
+                     },
                  },
                  scene_obj.value()->object);
     }
@@ -507,8 +561,21 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
 void MiniCadApp::render(Application::Duration /* delta */) {
   m_.scene.visit_dirty_scene_objects([this](SceneObject& obj) {
-    auto p = obj.transform.pos();
-    m_.rs.points_vao.vbo().sub_buffer_data(3 * obj.id(), p.data);
+    std::visit(
+        util::match{
+            [&](Point&) {
+              auto p = obj.transform.pos();
+              m_.rs.points_vao.vbo().sub_buffer_data(3 * obj.id(), p.data);
+            },
+            [&](Torus&) {
+              auto ind = m_.rs.transferred_torus_ind.at(obj.handle());
+              auto mat = obj.transform.local_to_world_matrix();
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16, std::span<float>(mat[0].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+              m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+            }},
+        obj.object);
   });
 
   m_.scene.visit_dirty_point_objects([this](PointListObject& obj) {
@@ -523,11 +590,18 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   m_.camera->set_orthographic(m_.use_ortho);
 
+  m_.rs.viewport_fb->bind();
+  m_.rs.viewport_fb->clear();
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Render the Torus
-  m_.rs.param_sh_prog->set_uniform("mMat", math::Mat4f::identity());
   m_.rs.param_sh_prog->set_uniform("vMat", m_.camera->view_matrix());
   m_.rs.param_sh_prog->set_uniform("pMat", m_.camera->proj_matrix());
   m_.rs.param_sh_prog->set_uniform("tessLevelX", m_.tess_level.x);
@@ -535,9 +609,10 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.param_sh_prog->set_uniform("minorRad", m_.rad_minor);
   m_.rs.param_sh_prog->set_uniform("majorRad", m_.rad_major);
   m_.rs.param_sh_prog->bind();
-  m_.rs.patch_vao.bind();
+  m_.rs.torus_vao.bind();
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  glDrawElements(GL_PATCHES, static_cast<GLsizei>(m_.rs.patch_vao.ebo().count()), GL_UNSIGNED_INT, nullptr);
+  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(m_.rs.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
+                          m_.rs.transferred_torus_buff.size());
 
   // Render polylines
   m_.rs.polyline_sh_prog->bind();
@@ -557,10 +632,11 @@ void MiniCadApp::render(Application::Duration /* delta */) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
 
-  // Render the sprites
+  // Start sprites rendering
   glDisable(GL_DEPTH_TEST);
 
   // Render points
+  m_.rs.viewport_fb->begin_pick_render();
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, m_.rs.point_txt);
   m_.rs.instanced_sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
@@ -570,6 +646,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.instanced_sprite_sh_prog->bind();
   m_.rs.points_vao.bind();
   glDrawElements(GL_POINTS, m_.rs.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
+  m_.rs.viewport_fb->end_pick_render();
 
   // Render cursor
   glBindTexture(GL_TEXTURE_2D, m_.rs.cursor_txt);
@@ -580,6 +657,16 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.rs.sprite_sh_prog->bind();
   glDrawArrays(GL_TRIANGLES, 0, 6);
   glBindTexture(GL_TEXTURE_2D, 0);
+
+  // Render to the default framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindTexture(GL_TEXTURE_2D, m_.rs.viewport_fb->color_texture());
+  glClearColor(1.0F, 1.0F, 1.0F, 1.0F);
+  glClear(GL_COLOR_BUFFER_BIT);
+  m_.rs.screen_quad_sh_prog->bind();
+  m_.rs.screen_quad_sh_prog->set_uniform("u_textureSampler", 0);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+
   glEnable(GL_DEPTH_TEST);
 }
 
@@ -593,24 +680,40 @@ void MiniCadApp::update(Duration delta) {
   m_.cursor->update(*m_.camera, math::Vec2f(window_->mouse_pos_ndc()));
 }
 
-bool MiniCadApp::on_scene_object_added() {
-  auto obj_handle = m_.scene.create_scene_obj({});
+bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
+  auto obj_handle = m_.scene.create_scene_obj(std::move(variant));
   if (!obj_handle) {
     Logger::err("Could not add a new point list object");
     return false;
   }
 
-  auto i   = obj_handle->obj_id;
-  auto ind = m_.rs.transferred_points_buff.size();
-
-  m_.rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-
-  m_.rs.transferred_point_ind.insert({*obj_handle, ind});
-  m_.rs.transferred_points_buff.push_back(*obj_handle);
-
   if (auto o = m_.scene.get_obj(*obj_handle)) {
+    std::visit(eray::util::match{
+                   //
+                   [&](Point&) {
+                     auto i   = obj_handle->obj_id;
+                     auto ind = m_.rs.transferred_points_buff.size();
+
+                     m_.rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+
+                     m_.rs.transferred_point_ind.insert({*obj_handle, ind});
+                     m_.rs.transferred_points_buff.push_back(*obj_handle);
+
+                     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+                   },  //
+                   [&](Torus&) {
+                     // o.value()->transform.
+                     //                      m_.rs.patch_vao.vbo().sub_buffer_data(ind * 16, );
+                     auto ind = m_.rs.transferred_torus_buff.size();
+
+                     m_.rs.transferred_torus_ind.insert({*obj_handle, ind});
+                     m_.rs.transferred_torus_buff.push_back(*obj_handle);
+
+                     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+                   }  //
+               },
+               o.value()->object);
     util::Logger::info("Added scene object \"{}\"", o.value()->name);
-    o.value()->transform.set_local_pos(m_.cursor->transform.pos());
   } else {
     util::Logger::warn("Despite calling create scene object, the object is not added");
   }
@@ -622,32 +725,59 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   std::optional<std::string> obj_name = std::nullopt;
   if (auto o = m_.scene.get_obj(handle)) {
     obj_name = o.value()->name;
-  }
-  if (!m_.scene.delete_obj(handle)) {
-    util::Logger::warn("Tried to delete a non existing element");
-  }
+    m_.scene.delete_obj(handle);
+    auto result = std::visit(
+        eray::util::match{
+            [&](Point&) {
+              if (m_.rs.transferred_points_buff.size() - 1 == m_.rs.transferred_point_ind[handle]) {
+                m_.rs.transferred_points_buff.pop_back();
+                m_.rs.transferred_point_ind.erase(handle);
+                return true;
+              }
 
-  if (m_.rs.transferred_points_buff.size() - 1 == m_.rs.transferred_point_ind[handle]) {
-    m_.rs.transferred_points_buff.pop_back();
-    m_.rs.transferred_point_ind.erase(handle);
-    if (obj_name) {
+              auto ind = m_.rs.transferred_point_ind[handle];
+              m_.rs.transferred_point_ind.erase(handle);
+              m_.rs.transferred_points_buff[ind] =
+                  m_.rs.transferred_points_buff[m_.rs.transferred_points_buff.size() - 1];
+              m_.rs.transferred_point_ind[m_.rs.transferred_points_buff[ind]] = ind;
+              m_.rs.transferred_points_buff.pop_back();
+
+              auto i = m_.rs.transferred_points_buff[ind].obj_id;
+              m_.rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+              return true;
+            },
+            [&](Torus&) {
+              if (m_.rs.transferred_torus_buff.size() - 1 == m_.rs.transferred_torus_ind.at(handle)) {
+                m_.rs.transferred_torus_buff.pop_back();
+                m_.rs.transferred_torus_ind.erase(handle);
+                if (obj_name) {
+                  util::Logger::info("Deleted scene object \"{}\"", *obj_name);
+                }
+                return true;
+              }
+
+              auto ind = m_.rs.transferred_torus_ind[handle];
+              m_.rs.transferred_torus_ind.erase(handle);
+              m_.rs.transferred_torus_buff[ind] = m_.rs.transferred_torus_buff[m_.rs.transferred_torus_buff.size() - 1];
+              m_.rs.transferred_torus_ind[m_.rs.transferred_torus_buff[ind]] = ind;
+              m_.rs.transferred_torus_buff.pop_back();
+
+              if (auto o2 = m_.scene.get_obj(m_.rs.transferred_torus_buff[ind])) {
+                auto mat = o2.value()->transform.local_to_world_matrix();
+                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16, std::span<float>(mat[0].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+                m_.rs.torus_vao.vbo("matrices").sub_buffer_data(ind * 16 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+              }
+              return true;
+            }},
+        o.value()->object);
+
+    if (obj_name && result) {
       util::Logger::info("Deleted scene object \"{}\"", *obj_name);
     }
-    return true;
-  }
-
-  auto ind = m_.rs.transferred_point_ind[handle];
-  m_.rs.transferred_point_ind.erase(handle);
-  m_.rs.transferred_points_buff[ind] = m_.rs.transferred_points_buff[m_.rs.transferred_points_buff.size() - 1];
-  m_.rs.transferred_point_ind[m_.rs.transferred_points_buff[ind]] = ind;
-  m_.rs.transferred_points_buff.pop_back();
-
-  auto i = m_.rs.transferred_points_buff[ind].obj_id;
-  util::Logger::info("move obj_id = {} to ind = {}", i, ind);
-  m_.rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-
-  if (obj_name) {
-    util::Logger::info("Deleted scene object \"{}\"", *obj_name);
+  } else {
+    util::Logger::warn("Tried to delete a non existing element");
   }
 
   return true;
@@ -687,7 +817,10 @@ bool MiniCadApp::on_tool_action_start() {
   }
 
   if (m_.tool_state == ToolState::Select) {
-    // todo
+    auto m = window_->mouse_pos();
+    m_.rs.viewport_fb->bind();
+    int id = m_.rs.viewport_fb->sample_mouse_pick(static_cast<size_t>(m.x), static_cast<size_t>(m.y));
+    util::Logger::info("mouse {}, id: {}", m, id);
   }
   return true;
 }

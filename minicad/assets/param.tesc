@@ -5,9 +5,18 @@ layout (vertices=4) out;
 uniform int tessLevelX;
 uniform int tessLevelY;
 
+in VS_OUT {
+    mat4 worldMat;
+} tcs_in[];
+
+out TCS_OUT {
+    mat4 worldMat;
+} tcs_out[];
+
 void main()
 {
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
+    tcs_out[gl_InvocationID].worldMat = tcs_in[gl_InvocationID].worldMat;
 
     // invocation zero controls tessellation levels for the entire patch
     if (gl_InvocationID == 0)

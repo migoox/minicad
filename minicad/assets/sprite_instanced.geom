@@ -6,6 +6,9 @@ uniform mat4 u_pvMat;
 uniform float u_aspectRatio;
 uniform float u_scale = 0.04;
 
+flat in int sprite_id[];
+flat out int gsprite_id;
+
 out vec2 texCoord;
 
 const vec3 Pos[4] = vec3[4](
@@ -32,21 +35,13 @@ vec3 billboard_pos(vec3 pos) {
 }
 
 void main() {
-    gl_Position = vec4(billboard_pos(Pos[0]), 1.0);
-    texCoord = TexCoords[0];
-    EmitVertex();
-    
-    gl_Position = vec4(billboard_pos(Pos[1]), 1.0);
-    texCoord = TexCoords[1];
-    EmitVertex();
-    
-    gl_Position = vec4(billboard_pos(Pos[2]), 1.0);
-    texCoord = TexCoords[2];
-    EmitVertex();
-    
-    gl_Position = vec4(billboard_pos(Pos[3]), 1.0);
-    texCoord = TexCoords[3];
-    EmitVertex();
+    for(int i = 0; i < 4; i++) {
+        gl_Position = vec4(billboard_pos(Pos[i]), 1.0);
+        texCoord = TexCoords[i];
+        gsprite_id = 1; 
+        EmitVertex();
+    }
+
     
     EndPrimitive();
 }
