@@ -361,13 +361,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::SameLine();
 
   {
-    bool disable = !m_.selected_scene_obj;
+    bool disable = m_.selected_scene_obj.empty();
     if (disable) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Button("Delete")) {
-      on_scene_object_deleted(*m_.selected_scene_obj);
-      m_.selected_scene_obj = std::nullopt;
+      for (const auto& o : m_.selected_scene_obj) {
+        on_scene_object_deleted(o);
+      }
+      m_.selected_scene_obj.clear();
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -378,9 +380,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (auto p = m_.scene.get_obj(h_p)) {
       ImGui::PushID(h_p.obj_id);
 
-      bool is_selected = m_.selected_scene_obj && m_.selected_scene_obj.value() == h_p;
+      bool is_selected = m_.selected_scene_obj.contains(h_p);
       if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
-        m_.selected_scene_obj = h_p;
+        if (is_selected) {
+          m_.selected_scene_obj.erase(m_.selected_scene_obj.find(h_p));
+        } else {
+          m_.selected_scene_obj.insert(h_p);
+        }
       }
 
       ImGui::PopID();
@@ -389,9 +395,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::End();
 
-  ImGui::Begin("Selected Scene Object");
-  if (m_.selected_scene_obj) {
-    if (auto scene_obj = m_.scene.get_obj(*m_.selected_scene_obj)) {
+  ImGui::Begin("Selection");
+  if (m_.selected_scene_obj.size() == 1) {
+    if (auto scene_obj = m_.scene.get_obj(*m_.selected_scene_obj.begin())) {
       ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -453,6 +459,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                  },
                  scene_obj.value()->object);
     }
+  } else if (m_.selected_scene_obj.size() > 1) {
+    ImGui::Text("Multiselection");
+  } else {
+    ImGui::Text("None");
   }
   ImGui::End();
 
@@ -506,12 +516,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
 
       ImGui::Text("Points: ");
-      auto disable = !m_.selected_point_list_obj || !m_.selected_scene_obj;
+      auto disable = !m_.selected_point_list_obj || m_.selected_scene_obj.size() != 1;
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
-        if (auto p_h = m_.scene.get_point_handle(*m_.selected_scene_obj)) {
+        if (auto p_h = m_.scene.get_point_handle(*m_.selected_scene_obj.begin())) {
           m_.scene.add_point_to_list(p_h.value(), *m_.selected_point_list_obj);
         }
       }
@@ -521,12 +531,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       ImGui::SameLine();
 
-      disable = !m_.selected_scene_obj.has_value() || !obj.value()->contains(*m_.selected_scene_obj);
+      disable = m_.selected_scene_obj.size() != 1 || !obj.value()->contains(*m_.selected_scene_obj.begin());
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Remove")) {
-        if (auto ph = m_.scene.get_point_handle(*m_.selected_scene_obj)) {
+        if (auto ph = m_.scene.get_point_handle(*m_.selected_scene_obj.begin())) {
           m_.scene.remove_point_from_list(*ph, *m_.selected_point_list_obj);
         }
       }
@@ -538,10 +548,14 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         if (auto p_obj = m_.scene.get_obj(p)) {
           ImGui::PushID(p.obj_id);
 
-          bool is_selected = m_.selected_scene_obj && m_.selected_scene_obj.value() ==
-                                                          SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+          auto o_h         = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+          bool is_selected = m_.selected_scene_obj.contains(o_h);
           if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
-            m_.selected_scene_obj = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
+            if (is_selected) {
+              m_.selected_scene_obj.erase(m_.selected_scene_obj.find(o_h));
+            } else {
+              m_.selected_scene_obj.insert(o_h);
+            }
           }
 
           ImGui::PopID();
@@ -717,6 +731,8 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
                },
                o.value()->object);
     util::Logger::info("Added scene object \"{}\"", o.value()->name);
+    m_.selected_scene_obj.clear();
+    m_.selected_scene_obj.insert(*obj_handle);
   } else {
     util::Logger::warn("Despite calling create scene object, the object is not added");
   }
@@ -807,6 +823,7 @@ bool MiniCadApp::on_point_list_object_added() {
     Logger::err("Could not add a new point list object");
     return false;
   }
+  m_.selected_point_list_obj = *handle;
   m_.rs.point_list_vaos.insert({*handle, create_point_list_vao(m_.rs.points_vao.vbo())});
   return true;
 }
@@ -832,19 +849,26 @@ bool MiniCadApp::on_select_state_set() {
 bool MiniCadApp::on_tool_action_start() {
   if (m_.tool_state == ToolState::Cursor) {
     m_.cursor->start_movement();
+    return true;
   }
 
   if (m_.tool_state == ToolState::Select) {
     auto m = window_->mouse_pos();
     m_.rs.viewport_fb->bind();
     int id = m_.rs.viewport_fb->sample_mouse_pick(static_cast<size_t>(m.x), static_cast<size_t>(m.y));
+    m_.selected_scene_obj.clear();
+
     if (id < 0) {
-      return false;
+      return true;
     }
 
-    m_.selected_scene_obj = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id));
+    if (auto o_h = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id))) {
+      m_.selected_scene_obj.insert(*o_h);
+    }
+    return true;
   }
-  return true;
+
+  return false;
 }
 
 bool MiniCadApp::on_mouse_pressed(const MouseButtonPressedEvent& ev) {

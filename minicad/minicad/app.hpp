@@ -85,7 +85,7 @@ class MiniCadApp final : public eray::os::Application {
     ToolState tool_state;
 
     std::optional<PointListObjectHandle> selected_point_list_obj;
-    std::optional<SceneObjectHandle> selected_scene_obj;
+    std::unordered_set<SceneObjectHandle> selected_scene_obj;
 
     RenderingState rs;
   };
