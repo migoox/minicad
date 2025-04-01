@@ -1,6 +1,6 @@
 #include <minicad/camera/camera.hpp>
 
-namespace minicad {
+namespace mini {
 
 Camera::Camera(bool orthographic, float fov, float aspect_ratio, float near_plane, float far_plane)
     : is_orthographic_(orthographic),
@@ -50,4 +50,4 @@ void Camera::recalculate_projection() {
   }
 }
 
-}  // namespace minicad
+}  // namespace mini

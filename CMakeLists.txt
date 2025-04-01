@@ -32,5 +32,6 @@ if(GENERATE_CLANGD_FILE)
 endif()
 
 add_subdirectory(eray)
+add_subdirectory(cmake/dependencies)
 add_subdirectory(libminicad)
 add_subdirectory(minicad)

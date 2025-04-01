@@ -1,5 +1,6 @@
 #include <glad/gl.h>
 #include <imgui/imgui.h>
+#include <imguizmo/ImGuizmo.h>
 
 #include <cstdint>
 #include <liberay/driver/gl/buffer.hpp>
@@ -29,6 +30,8 @@
 #include <optional>
 #include <variant>
 #include <vector>
+
+#include "imgui/transform_gizmo.hpp"
 
 namespace mini {
 
@@ -140,6 +143,7 @@ gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
 
   vao.set_binding_divisor("base", 0);
   vao.set_binding_divisor("matrices", 1);
+
   return vao;
 }
 
@@ -253,9 +257,9 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   auto cursor_img   = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "cursor.png"));
   auto point_img    = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "point.png"));
   auto centroid_img = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "centroid.png"));
-  auto camera       = std::make_unique<minicad::Camera>(
-      false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
-      1000.F);
+  auto camera       = std::make_unique<Camera>(false, math::radians(90.F),
+                                               static_cast<float>(window->size().x) / static_cast<float>(window->size().y),
+                                               0.1F, 1000.F);
   camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, 4.F));
 
   auto gimbal = std::make_unique<eray::math::Transform3f>();
@@ -265,11 +269,11 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
   return MiniCadApp(std::move(window),
                     {
 
-                        .cursor        = std::make_unique<minicad::Cursor>(),  //
-                        .camera        = std::move(camera),                    //
-                        .camera_gimbal = std::move(gimbal),                    //
-                        .grid_on       = true,                                 //
-                        .scene         = Scene(),                              //
+                        .cursor        = std::make_unique<Cursor>(),  //
+                        .camera        = std::move(camera),           //
+                        .camera_gimbal = std::move(gimbal),           //
+                        .grid_on       = true,                        //
+                        .scene         = Scene(),                     //
                         .rs =
                             {
                                 .points_vao               = create_points_vao(),               //
@@ -292,6 +296,8 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<Window> window, Members&& m) : Application(std::move(window)), m_(std::move(m)) {
+  ImGui::mini::gizmo::SetImGuiContext(ImGui::GetCurrentContext());
+
   window_->set_event_callback<WindowResizedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_resize));
   window_->set_event_callback<MouseButtonPressedEvent>(
       class_method_as_event_callback(this, &MiniCadApp::on_mouse_pressed));
@@ -577,6 +583,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     on_select_state_set();
   }
   ImGui::End();
+
+  //   ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
+  //   ImGuizmo::SetRect(0, 0, window_->size().x, window_->size().y);
+  //   static auto m = math::Transform3f();
+  //   m.set_local_pos(m_.selection.centroid());
+  //   ImGui::mini::gizmo::Transform(m, *m_.camera, ImGui::mini::gizmo::Mode::World,
+  //                                 ImGui::mini::gizmo::Operation::Translation);
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {

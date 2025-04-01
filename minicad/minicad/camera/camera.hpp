@@ -2,7 +2,7 @@
 
 #include <liberay/math/transform3.hpp>
 
-namespace minicad {
+namespace mini {
 
 class Camera {
  public:
@@ -42,4 +42,4 @@ class Camera {
   eray::math::Mat4f projection_, projection_inv_;
 };
 
-}  // namespace minicad
+}  // namespace mini

@@ -4,7 +4,7 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <minicad/camera/camera.hpp>
 
-namespace minicad {
+namespace mini {
 
 class Cursor {
  public:
@@ -35,4 +35,4 @@ class Cursor {
   float start_depth_ndc_{};
 };
 
-}  // namespace minicad
+}  // namespace mini

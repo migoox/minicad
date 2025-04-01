@@ -4,7 +4,7 @@
 #include <liberay/math/vec.hpp>
 #include <minicad/camera/camera.hpp>
 
-namespace minicad {
+namespace mini {
 
 class OrbitingCameraOperator {
  public:
@@ -40,4 +40,4 @@ class OrbitingCameraOperator {
   float zoom_sensitivity_;
 };
 
-}  // namespace minicad
+}  // namespace mini

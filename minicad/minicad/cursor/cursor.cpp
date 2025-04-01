@@ -2,7 +2,7 @@
 #include <liberay/util/logger.hpp>
 #include <minicad/cursor/cursor.hpp>
 
-namespace minicad {
+namespace mini {
 
 bool Cursor::update(const Camera& camera, eray::math::Vec2f mouse_pos_ndc) {
   if (is_mouse_move_active_) {
@@ -42,4 +42,4 @@ void Cursor::set_by_ndc_pos(const Camera& camera, eray::math::Vec2f ndc_pos) {
   transform.set_local_pos(eray::math::Vec3f(pos_world));
 }
 
-}  // namespace minicad
+}  // namespace mini

@@ -4,7 +4,7 @@
 #include <liberay/util/logger.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 
-namespace minicad {
+namespace mini {
 
 OrbitingCameraOperator::OrbitingCameraOperator()
     : last_mouse_pos_(eray::math::Vec2f::filled(0.0F)),
@@ -100,4 +100,4 @@ bool OrbitingCameraOperator::update(Camera& camera, eray::math::Transform3f& cam
   return false;
 }
 
-}  // namespace minicad
+}  // namespace mini

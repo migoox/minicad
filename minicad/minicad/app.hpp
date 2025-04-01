@@ -19,9 +19,8 @@
 #include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
+#include <minicad/selection/selection.hpp>
 #include <unordered_map>
-
-#include "selection/selection.hpp"
 
 namespace mini {
 
@@ -72,11 +71,11 @@ class MiniCadApp final : public eray::os::Application {
   };
 
   struct Members {
-    minicad::OrbitingCameraOperator orbiting_camera_operator;
+    mini::OrbitingCameraOperator orbiting_camera_operator;
 
-    std::unique_ptr<minicad::Cursor> cursor;
+    std::unique_ptr<mini::Cursor> cursor;
 
-    std::unique_ptr<minicad::Camera> camera;
+    std::unique_ptr<mini::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
     bool show_centroid;
