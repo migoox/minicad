@@ -60,9 +60,9 @@ class Scene {
   static constexpr std::size_t kMaxObjects = 100;
 
  private:
-  bool is_handle_valid(const PointListObjectHandle& handle);
-  bool is_handle_valid(const SceneObjectHandle& handle);
-  bool is_handle_valid(const PointHandle& handle);
+  bool is_handle_valid(const PointListObjectHandle& handle) const;
+  bool is_handle_valid(const SceneObjectHandle& handle) const;
+  bool is_handle_valid(const PointHandle& handle) const;
 
   SceneObjectHandle create_scene_obj_handle(std::uint32_t obj_id);
   PointListObjectHandle create_list_obj_handle(std::uint32_t obj_id);

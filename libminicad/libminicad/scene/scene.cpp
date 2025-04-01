@@ -33,7 +33,7 @@ std::optional<SceneObjectHandle> Scene::handle_by_obj_id(SceneObjectId id) {
   return scene_objects_[id]->first->handle();
 }
 
-bool Scene::is_handle_valid(const SceneObjectHandle& handle) {
+bool Scene::is_handle_valid(const SceneObjectHandle& handle) const {
   if (handle.owner_signature != signature_) {
     return false;
   }
@@ -53,7 +53,7 @@ bool Scene::is_handle_valid(const SceneObjectHandle& handle) {
   return true;
 }
 
-bool Scene::is_handle_valid(const PointHandle& handle) {
+bool Scene::is_handle_valid(const PointHandle& handle) const {
   if (!is_handle_valid(SceneObjectHandle(handle.owner_signature, handle.timestamp, handle.obj_id))) {
     return false;
   }
@@ -61,7 +61,7 @@ bool Scene::is_handle_valid(const PointHandle& handle) {
   return std::holds_alternative<Point>(scene_objects_[handle.obj_id]->first->object);
 }
 
-bool Scene::is_handle_valid(const PointListObjectHandle& handle) {
+bool Scene::is_handle_valid(const PointListObjectHandle& handle) const {
   if (handle.owner_signature != signature_) {
     return false;
   }

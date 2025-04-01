@@ -250,9 +250,10 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
       "instanced_sprite_shader", std::move(instanced_sprite_vert), std::move(instanced_sprite_frag), std::nullopt,
       std::nullopt, std::move(instanced_sprite_geom)));
 
-  auto cursor_img = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "cursor.png"));
-  auto point_img  = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "point.png"));
-  auto camera     = std::make_unique<minicad::Camera>(
+  auto cursor_img   = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "cursor.png"));
+  auto point_img    = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "point.png"));
+  auto centroid_img = unwrap_or_panic(res::Image::load_from_path(System::executable_dir() / "assets" / "centroid.png"));
+  auto camera       = std::make_unique<minicad::Camera>(
       false, math::radians(90.F), static_cast<float>(window->size().x) / static_cast<float>(window->size().y), 0.1F,
       1000.F);
   camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, 4.F));
@@ -276,6 +277,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<Window> window) {
                                 .torus_vao                = create_torus_vao(),                //
                                 .cursor_txt               = create_texture(cursor_img),        //
                                 .point_txt                = create_texture(point_img),         //
+                                .centroid_txt             = create_texture(centroid_img),      //
                                 .param_sh_prog            = std::move(param_prog),             //
                                 .grid_sh_prog             = std::move(grid_prog),              //
                                 .polyline_sh_prog         = std::move(polyline_prog),          //
@@ -361,15 +363,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::SameLine();
 
   {
-    bool disable = m_.selected_scene_obj.empty();
+    bool disable = m_.selection.is_empty();
     if (disable) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Button("Delete")) {
-      for (const auto& o : m_.selected_scene_obj) {
+      for (const auto& o : m_.selection) {
         on_scene_object_deleted(o);
       }
-      m_.selected_scene_obj.clear();
+      m_.selection.clear();
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -380,12 +382,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (auto p = m_.scene.get_obj(h_p)) {
       ImGui::PushID(h_p.obj_id);
 
-      bool is_selected = m_.selected_scene_obj.contains(h_p);
+      bool is_selected = m_.selection.contains(h_p);
       if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
         if (is_selected) {
-          m_.selected_scene_obj.erase(m_.selected_scene_obj.find(h_p));
+          m_.selection.remove(m_.scene, h_p);
         } else {
-          m_.selected_scene_obj.insert(h_p);
+          m_.selection.add(m_.scene, h_p);
         }
       }
 
@@ -396,8 +398,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::End();
 
   ImGui::Begin("Selection");
-  if (m_.selected_scene_obj.size() == 1) {
-    if (auto scene_obj = m_.scene.get_obj(*m_.selected_scene_obj.begin())) {
+  if (m_.selection.is_single_selection()) {
+    if (auto scene_obj = m_.scene.get_obj(m_.selection.first())) {
       ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -459,7 +461,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                  },
                  scene_obj.value()->object);
     }
-  } else if (m_.selected_scene_obj.size() > 1) {
+  } else if (m_.selection.is_multi_selection()) {
     ImGui::Text("Multiselection");
   } else {
     ImGui::Text("None");
@@ -516,12 +518,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
 
       ImGui::Text("Points: ");
-      auto disable = !m_.selected_point_list_obj || m_.selected_scene_obj.size() != 1;
+      auto disable = !m_.selected_point_list_obj || !m_.selection.is_single_selection();
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
-        if (auto p_h = m_.scene.get_point_handle(*m_.selected_scene_obj.begin())) {
+        if (auto p_h = m_.scene.get_point_handle(m_.selection.first())) {
           m_.scene.add_point_to_list(p_h.value(), *m_.selected_point_list_obj);
         }
       }
@@ -531,12 +533,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       ImGui::SameLine();
 
-      disable = m_.selected_scene_obj.size() != 1 || !obj.value()->contains(*m_.selected_scene_obj.begin());
+      disable = !m_.selection.is_single_selection() || !obj.value()->contains(m_.selection.first());
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Remove")) {
-        if (auto ph = m_.scene.get_point_handle(*m_.selected_scene_obj.begin())) {
+        if (auto ph = m_.scene.get_point_handle(m_.selection.first())) {
           m_.scene.remove_point_from_list(*ph, *m_.selected_point_list_obj);
         }
       }
@@ -549,12 +551,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
           ImGui::PushID(p.obj_id);
 
           auto o_h         = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
-          bool is_selected = m_.selected_scene_obj.contains(o_h);
+          bool is_selected = m_.selection.contains(o_h);
           if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
             if (is_selected) {
-              m_.selected_scene_obj.erase(m_.selected_scene_obj.find(o_h));
+              m_.selection.remove(m_.scene, o_h);
             } else {
-              m_.selected_scene_obj.insert(o_h);
+              m_.selection.add(m_.scene, o_h);
             }
           }
 
@@ -666,8 +668,20 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   glDrawElements(GL_POINTS, m_.rs.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
   m_.rs.viewport_fb->end_pick_render();
 
-  glDisable(GL_DEPTH_TEST);
+  // Render centroid
+  if (m_.selection.is_multi_selection()) {
+    glBindTexture(GL_TEXTURE_2D, m_.rs.centroid_txt);
+    m_.rs.sprite_sh_prog->set_uniform("u_worldPos", m_.selection.centroid());
+    m_.rs.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
+    m_.rs.sprite_sh_prog->set_uniform("u_aspectRatio", m_.camera->aspect_ratio());
+    m_.rs.sprite_sh_prog->set_uniform("u_textureSampler", 0);
+    m_.rs.sprite_sh_prog->bind();
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  }
+
   // Render cursor
+  glDisable(GL_DEPTH_TEST);
   glBindTexture(GL_TEXTURE_2D, m_.rs.cursor_txt);
   m_.rs.sprite_sh_prog->set_uniform("u_worldPos", m_.cursor->transform.pos());
   m_.rs.sprite_sh_prog->set_uniform("u_pvMat", m_.camera->proj_matrix() * m_.camera->view_matrix());
@@ -731,8 +745,8 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
                },
                o.value()->object);
     util::Logger::info("Added scene object \"{}\"", o.value()->name);
-    m_.selected_scene_obj.clear();
-    m_.selected_scene_obj.insert(*obj_handle);
+    m_.selection.clear();
+    m_.selection.add(m_.scene, *obj_handle);
   } else {
     util::Logger::warn("Despite calling create scene object, the object is not added");
   }
@@ -743,8 +757,7 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
 bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   std::optional<std::string> obj_name = std::nullopt;
   if (auto o = m_.scene.get_obj(handle)) {
-    obj_name = o.value()->name;
-    m_.scene.delete_obj(handle);
+    obj_name    = o.value()->name;
     auto result = std::visit(
         eray::util::match{
             [&](Point&) {
@@ -807,6 +820,7 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
             }},
         o.value()->object);
 
+    m_.scene.delete_obj(handle);
     if (obj_name && result) {
       util::Logger::info("Deleted scene object \"{}\"", *obj_name);
     }
@@ -856,14 +870,14 @@ bool MiniCadApp::on_tool_action_start() {
     auto m = window_->mouse_pos();
     m_.rs.viewport_fb->bind();
     int id = m_.rs.viewport_fb->sample_mouse_pick(static_cast<size_t>(m.x), static_cast<size_t>(m.y));
-    m_.selected_scene_obj.clear();
+    m_.selection.clear();
 
     if (id < 0) {
       return true;
     }
 
     if (auto o_h = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id))) {
-      m_.selected_scene_obj.insert(*o_h);
+      m_.selection.add(m_.scene, *o_h);
     }
     return true;
   }
@@ -927,6 +941,7 @@ bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
 MiniCadApp::~MiniCadApp() {
   glDeleteTextures(1, &m_.rs.cursor_txt);
   glDeleteTextures(1, &m_.rs.point_txt);
+  glDeleteTextures(1, &m_.rs.centroid_txt);
 }
 
 }  // namespace mini

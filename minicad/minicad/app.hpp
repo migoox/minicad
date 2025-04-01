@@ -21,6 +21,8 @@
 #include <minicad/cursor/cursor.hpp>
 #include <unordered_map>
 
+#include "selection/selection.hpp"
+
 namespace mini {
 
 // TODO(migoox): dedicated opengl scene renderer in libminicad
@@ -40,6 +42,7 @@ struct RenderingState {
 
   GLuint cursor_txt;
   GLuint point_txt;
+  GLuint centroid_txt;
 
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
   std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
@@ -76,6 +79,8 @@ class MiniCadApp final : public eray::os::Application {
     std::unique_ptr<minicad::Camera> camera;
     std::unique_ptr<eray::math::Transform3f> camera_gimbal;
 
+    bool show_centroid;
+
     bool grid_on;
     bool use_ortho;
 
@@ -85,7 +90,7 @@ class MiniCadApp final : public eray::os::Application {
     ToolState tool_state;
 
     std::optional<PointListObjectHandle> selected_point_list_obj;
-    std::unordered_set<SceneObjectHandle> selected_scene_obj;
+    Selection selection;
 
     RenderingState rs;
   };
