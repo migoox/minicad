@@ -36,8 +36,9 @@ class MiniCadApp final : public eray::os::Application {
 
  private:
   enum class ToolState : uint8_t {
-    Select = 0,
-    Cursor = 1,
+    Select    = 0,
+    Cursor    = 1,
+    Transform = 2,
   };
 
   struct Members {
@@ -53,13 +54,15 @@ class MiniCadApp final : public eray::os::Application {
     bool grid_on;
     bool use_ortho;
 
+    bool is_gizmo_used;
+
     Scene scene;
 
     // TODO(migoox): state machine
     ToolState tool_state;
 
     std::optional<PointListObjectHandle> selected_point_list_obj;
-    Selection selection;
+    std::unique_ptr<Selection> selection;
 
     SceneRenderer scene_renderer;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad_sh_prog;
@@ -76,6 +79,7 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_cursor_state_set();
   bool on_select_state_set();
+  bool on_transform_state_set();
   bool on_tool_action_start();
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);

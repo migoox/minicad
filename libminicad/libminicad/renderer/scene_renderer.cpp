@@ -7,11 +7,11 @@
 
 namespace mini {
 
-// NOLINTBEGIN
-using namespace eray;
-using namespace eray::driver;
-using namespace eray::util;
-// NOLINTEND
+namespace driver = eray::driver;
+namespace gl     = eray::driver::gl;
+namespace util   = eray::util;
+namespace res    = eray::res;
+namespace math   = eray::math;
 
 namespace {
 gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
@@ -183,7 +183,7 @@ gl::TextureHandle create_texture(const res::Image& image) {
 
 std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRenderer::create(
     const std::filesystem::path& assets_path) {
-  auto manager = GLSLShaderManager();
+  auto manager = driver::GLSLShaderManager();
 
   // NOLINTBEGIN
 #define TRY_UNWRAP_ASSET(var, expr) \
