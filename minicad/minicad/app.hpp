@@ -13,45 +13,15 @@
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/timer.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
-#include <minicad/camera/camera.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/selection/selection.hpp>
-#include <unordered_map>
 
 namespace mini {
-
-// TODO(migoox): dedicated opengl scene renderer in libminicad
-struct RenderingState {
-  eray::driver::gl::VertexArray points_vao;
-  eray::driver::gl::VertexArray box_vao;
-
-  eray::driver::gl::VertexArrays torus_vao;
-
-  std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
-  std::vector<SceneObjectHandle> transferred_points_buff;
-
-  std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
-  std::vector<SceneObjectHandle> transferred_torus_buff;
-
-  std::unordered_map<PointListObjectHandle, std::pair<GLuint, eray::driver::gl::ElementBuffer>> point_list_vaos;
-
-  GLuint cursor_txt;
-  GLuint point_txt;
-  GLuint centroid_txt;
-
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline_sh_prog;
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad_sh_prog;
-  std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
-
-  std::unique_ptr<eray::driver::gl::ViewportFramebuffer> viewport_fb;
-};
 
 class MiniCadApp final : public eray::os::Application {
  public:
@@ -91,7 +61,9 @@ class MiniCadApp final : public eray::os::Application {
     std::optional<PointListObjectHandle> selected_point_list_obj;
     Selection selection;
 
-    RenderingState rs;
+    SceneRenderer scene_renderer;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad_sh_prog;
+    std::unique_ptr<eray::driver::gl::ViewportFramebuffer> viewport_fb;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);

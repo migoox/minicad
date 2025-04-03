@@ -2,7 +2,7 @@
 
 #include <liberay/math/transform3.hpp>
 #include <liberay/math/vec_fwd.hpp>
-#include <minicad/camera/camera.hpp>
+#include <libminicad/camera/camera.hpp>
 
 namespace mini {
 

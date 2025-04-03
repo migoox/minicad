@@ -1,0 +1,431 @@
+#include <liberay/res/image.hpp>
+#include <liberay/util/try.hpp>
+#include <liberay/util/variant_match.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
+#include <libminicad/scene/scene.hpp>
+#include <variant>
+
+namespace mini {
+
+// NOLINTBEGIN
+using namespace eray;
+using namespace eray::driver;
+using namespace eray::util;
+// NOLINTEND
+
+namespace {
+gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
+  float vertices[] = {
+      // Front Face
+      -0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      +0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+      -0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 0.0F, -1.0F,  //
+
+      // Back Face
+      +0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      -0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 0.0F, 1.0F,  //
+
+      // Left Face
+      -0.5F * width, -0.5F * height, +0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, -0.5F * height, -0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, -0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, -1.0F, 0.0F, 0.0F,  //
+
+      // Right Face
+      +0.5F * width, -0.5F * height, -0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, +0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 1.0F, 0.0F, 0.0F,  //
+
+      // Bottom Face
+      -0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, +0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      +0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+      -0.5F * width, -0.5F * height, -0.5F * depth, 0.0F, -1.0F, 0.0F,  //
+
+      // Top Face
+      -0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, -0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      +0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 1.0F, 0.0F,  //
+      -0.5F * width, +0.5F * height, +0.5F * depth, 0.0F, 1.0F, 0.0F   //
+
+  };
+
+  unsigned int indices[] = {
+      0,  2,  1,  0,  3,  2,   //
+      4,  6,  5,  4,  7,  6,   //
+      8,  10, 9,  8,  11, 10,  //
+      12, 14, 13, 12, 15, 14,  //
+      16, 18, 17, 16, 19, 18,  //
+      20, 22, 21, 20, 23, 22   //
+  };
+
+  auto vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute::create<float>(0, 3, false),  // positions
+      gl::VertexBuffer::Attribute::create<float>(1, 3, false),  // normals
+  });
+  vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
+
+  auto ebo = gl::ElementBuffer::create();
+  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
+
+  return gl::VertexArray::create(std::move(vbo), std::move(ebo));
+}
+
+gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
+  float vertices[] = {
+      0.5F * width,  0.5F * height,   //
+      -0.5F * width, 0.5F * height,   //
+      0.5F * width,  -0.5F * height,  //
+      -0.5F * width, -0.5F * height,  //
+  };
+
+  unsigned int indices[] = {
+      0, 1, 2, 3  //
+  };
+
+  auto vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute::create<float>(0, 2, false),
+  });
+  vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
+
+  auto mat_vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute::create<float>(1, 2, false),
+      gl::VertexBuffer::Attribute::create<int>(2, 2, false),
+      gl::VertexBuffer::Attribute::create<float>(3, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(4, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(5, 4, false),
+      gl::VertexBuffer::Attribute::create<float>(6, 4, false),
+  });
+  auto data    = std::vector<float>(20 * Scene::kMaxObjects, 0.F);
+  mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
+
+  auto ebo = gl::ElementBuffer::create();
+  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
+
+  auto m = std::unordered_map<zstring_view, gl::VertexBuffer>();
+  m.emplace("base", std::move(vbo));
+  m.emplace("matrices", std::move(mat_vbo));
+  auto vao = gl::VertexArrays::create(std::move(m), std::move(ebo));
+
+  vao.set_binding_divisor("base", 0);
+  vao.set_binding_divisor("matrices", 1);
+
+  return vao;
+}
+
+gl::VertexArray create_points_vao() {
+  auto points  = std::array<float, 3 * Scene::kMaxObjects>();
+  auto indices = std::array<uint32_t, Scene::kMaxObjects>();
+
+  auto vbo = gl::VertexBuffer::create({
+      gl::VertexBuffer::Attribute::create<float>(0, 3, false),
+  });
+  vbo.buffer_data<float>(points, gl::DataUsage::StaticDraw);
+
+  auto ebo = gl::ElementBuffer::create();
+  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
+
+  auto vao = gl::VertexArray::create(std::move(vbo), std::move(ebo));
+  return vao;
+}
+
+std::pair<gl::VertexArrayHandle, gl::ElementBuffer> create_point_list_vao(const gl::VertexBuffer& vert_buff) {
+  GLuint id = 0;
+  glCreateVertexArrays(1, &id);
+
+  auto ebo = gl::ElementBuffer::create();
+
+  // Bind EBO to VAO
+  glVertexArrayElementBuffer(id, ebo.raw_gl_id());
+
+  // Apply layouts of VBO
+  GLsizei vertex_size = 0;
+
+  for (const auto& attrib : vert_buff.layout()) {
+    glEnableVertexArrayAttrib(id, attrib.index);
+    glVertexArrayAttribFormat(id,                                     //
+                              attrib.index,                           //
+                              static_cast<GLint>(attrib.count),       //
+                              GL_FLOAT,                               //
+                              attrib.normalize ? GL_TRUE : GL_FALSE,  //
+                              vertex_size);                           //
+
+    vertex_size += static_cast<GLint>(sizeof(float) * attrib.count);
+    glVertexArrayAttribBinding(id, attrib.index, 0);
+  }
+
+  glVertexArrayVertexBuffer(id, 0, vert_buff.raw_gl_id(), 0, vertex_size);
+
+  eray::driver::gl::check_gl_errors();
+
+  return {gl::VertexArrayHandle(id), std::move(ebo)};
+}
+
+gl::TextureHandle create_texture(const res::Image& image) {
+  GLuint texture = 0;
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.width(), image.height(), 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8,
+               image.raw());
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  return gl::TextureHandle(texture);
+}
+}  // namespace
+
+std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRenderer::create(
+    const std::filesystem::path& assets_path) {
+  auto manager = GLSLShaderManager();
+
+  // NOLINTBEGIN
+#define TRY_UNWRAP_ASSET(var, expr) \
+  TRY_UNWRAP_DEFINE_TRANSFORM_ERR(var, expr, SceneRendererCreationError::AssetsLoadingFailed)
+
+#define TRY_UNWRAP_PROGRAM(var, expr) \
+  TRY_UNWRAP_DEFINE_TRANSFORM_ERR(var, expr, SceneRendererCreationError::ShaderProgramCreationFailed)
+  // NOLINTEND
+
+  TRY_UNWRAP_ASSET(param_vert, manager.load_shader(assets_path / "param.vert"));
+  TRY_UNWRAP_ASSET(param_frag, manager.load_shader(assets_path / "param.frag"));
+  TRY_UNWRAP_ASSET(param_tesc, manager.load_shader(assets_path / "param.tesc"));
+  TRY_UNWRAP_ASSET(param_tese, manager.load_shader(assets_path / "param.tese"));
+  TRY_UNWRAP_PROGRAM(param_prog,
+                     gl::RenderingShaderProgram::create("param_shader", std::move(param_vert), std::move(param_frag),
+                                                        std::move(param_tesc), std::move(param_tese)));
+
+  TRY_UNWRAP_ASSET(grid_vert, manager.load_shader(assets_path / "grid.vert"));
+  TRY_UNWRAP_ASSET(grid_frag, manager.load_shader(assets_path / "grid.frag"));
+  TRY_UNWRAP_PROGRAM(grid_prog,
+                     gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
+
+  TRY_UNWRAP_ASSET(polyline_vert, manager.load_shader(assets_path / "polyline.vert"));
+  TRY_UNWRAP_ASSET(polyline_frag, manager.load_shader(assets_path / "polyline.frag"));
+  TRY_UNWRAP_PROGRAM(polyline_prog, gl::RenderingShaderProgram::create("polyline_shader", std::move(polyline_vert),
+                                                                       std::move(polyline_frag)));
+  TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(assets_path / "sprite.vert"));
+  TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(assets_path / "sprite.frag"));
+  TRY_UNWRAP_PROGRAM(
+      sprite_prog, gl::RenderingShaderProgram::create("sprite_shader", std::move(sprite_vert), std::move(sprite_frag)));
+
+  TRY_UNWRAP_ASSET(instanced_sprite_vert, manager.load_shader(assets_path / "sprite_instanced.vert"));
+  TRY_UNWRAP_ASSET(instanced_sprite_frag, manager.load_shader(assets_path / "sprite_instanced.frag"));
+  TRY_UNWRAP_ASSET(instanced_sprite_geom, manager.load_shader(assets_path / "sprite_instanced.geom"));
+  TRY_UNWRAP_PROGRAM(instanced_sprite_prog,
+                     gl::RenderingShaderProgram::create("instanced_sprite_shader", std::move(instanced_sprite_vert),
+                                                        std::move(instanced_sprite_frag), std::nullopt, std::nullopt,
+                                                        std::move(instanced_sprite_geom)));
+
+  TRY_UNWRAP_ASSET(point_img, eray::res::Image::load_from_path(assets_path / "point.png"));
+  return SceneRenderer({
+      .points_vao               = create_points_vao(),               //
+      .box_vao                  = create_box_vao(),                  //
+      .torus_vao                = create_torus_vao(),                //
+      .point_txt                = create_texture(point_img),         //
+      .param_sh_prog            = std::move(param_prog),             //
+      .grid_sh_prog             = std::move(grid_prog),              //
+      .polyline_sh_prog         = std::move(polyline_prog),          //
+      .sprite_sh_prog           = std::move(sprite_prog),            //
+      .instanced_sprite_sh_prog = std::move(instanced_sprite_prog),  //
+  });
+}
+SceneRenderer::SceneRenderer(SceneRenderer::RenderingState&& rs) : rs_(std::move(rs)) {}
+
+void SceneRenderer::update_scene_object(const SceneObject& obj) {
+  std::visit(
+      util::match{
+          [&](const Point&) {
+            auto p = obj.transform.pos();
+            rs_.points_vao.vbo().sub_buffer_data<float>(3 * obj.id(), p.data);
+          },
+          [&](const Torus& t) {
+            auto ind  = rs_.transferred_torus_ind.at(obj.handle());
+            auto mat  = obj.transform.local_to_world_matrix();
+            auto r    = math::Vec2f(t.minor_radius, t.major_radius);
+            auto tess = t.tess_level;
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+          }},
+      obj.object);
+}
+void SceneRenderer::add_scene_object(const SceneObject& obj) {
+  std::visit(eray::util::match{
+                 [&](const Point&) {
+                   auto i   = obj.id();
+                   auto ind = rs_.transferred_points_buff.size();
+                   rs_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+                   rs_.transferred_point_ind.insert({obj.handle(), ind});
+                   rs_.transferred_points_buff.push_back(obj.handle());
+                 },  //
+                 [&](const Torus&) {
+                   auto ind = rs_.transferred_torus_buff.size();
+                   rs_.transferred_torus_ind.insert({obj.handle(), ind});
+                   rs_.transferred_torus_buff.push_back(obj.handle());
+                 }  //
+             },
+             obj.object);
+}
+
+void SceneRenderer::add_point_list_object(const PointListObject& obj) {
+  rs_.point_list_vaos.insert({obj.handle(), create_point_list_vao(rs_.points_vao.vbo())});
+}
+
+void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
+  std::visit(
+      eray::util::match{
+          [&](const Point&) {
+            if (rs_.transferred_points_buff.size() - 1 == rs_.transferred_point_ind.at(obj.handle())) {
+              rs_.transferred_points_buff.pop_back();
+              rs_.transferred_point_ind.erase(obj.handle());
+              return;
+            }
+
+            auto ind = rs_.transferred_point_ind.at(obj.handle());
+            rs_.transferred_point_ind.erase(obj.handle());
+            rs_.transferred_points_buff[ind] = rs_.transferred_points_buff[rs_.transferred_points_buff.size() - 1];
+            rs_.transferred_point_ind[rs_.transferred_points_buff[ind]] = ind;
+            rs_.transferred_points_buff.pop_back();
+
+            auto i = rs_.transferred_points_buff[ind].obj_id;
+            rs_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+          },
+          [&](const Torus&) {
+            if (rs_.transferred_torus_buff.size() - 1 == rs_.transferred_torus_ind.at(obj.handle())) {
+              rs_.transferred_torus_buff.pop_back();
+              rs_.transferred_torus_ind.erase(obj.handle());
+              return;
+            }
+
+            auto ind = rs_.transferred_torus_ind[obj.handle()];
+            rs_.transferred_torus_ind.erase(obj.handle());
+            rs_.transferred_torus_buff[ind] = rs_.transferred_torus_buff[rs_.transferred_torus_buff.size() - 1];
+            rs_.transferred_torus_ind[rs_.transferred_torus_buff[ind]] = ind;
+            rs_.transferred_torus_buff.pop_back();
+
+            if (auto o2 = scene.get_obj(rs_.transferred_torus_buff[ind])) {
+              auto mat = o2.value()->transform.local_to_world_matrix();
+              std::visit(
+                  eray::util::match{
+                      [&](const Point&) {},
+                      [&](const Torus& t) {
+                        auto r = math::Vec2f(t.minor_radius, t.major_radius);
+                        rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
+                        auto tess = t.tess_level;
+                        rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
+                      },
+                  },
+                  o2.value()->object);
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+            }
+          }},
+      obj.object);
+}
+
+void SceneRenderer::delete_point_list_object(const PointListObject& obj) { rs_.point_list_vaos.erase(obj.handle()); }
+
+void SceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
+  auto txt = create_texture(img);
+  rs_.billboards.insert({name, Billboard(std::move(txt))});
+}
+
+Billboard& SceneRenderer::billboard(zstring_view name) { return rs_.billboards.at(name); }
+
+void SceneRenderer::update_point_list_object(const PointListObject& obj) {
+  // TODO(migoox): do it better
+  if (!rs_.point_list_vaos.contains(obj.handle())) {
+    return;
+  }
+  auto t = obj.points() | std::views::transform([](const PointHandle& ph) { return ph.obj_id; });
+  std::vector<PointListObjectId> temp_vec(t.begin(), t.end());
+  rs_.point_list_vaos.at(obj.handle()).second.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+}
+
+void SceneRenderer::render(eray::driver::gl::ViewportFramebuffer& fb, Camera& camera) {
+  fb.bind();
+
+  // Prepare the framebuffer
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glClearColor(0.09, 0.05, 0.09, 1.F);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Render a torus
+  rs_.param_sh_prog->set_uniform("vMat", camera.view_matrix());
+  rs_.param_sh_prog->set_uniform("pMat", camera.proj_matrix());
+  rs_.param_sh_prog->bind();
+  rs_.torus_vao.bind();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
+                          static_cast<GLsizei>(rs_.transferred_torus_buff.size()));
+
+  // Render point lists
+  rs_.polyline_sh_prog->bind();
+  rs_.polyline_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  for (auto& point_list : rs_.point_list_vaos) {
+    glBindVertexArray(point_list.second.first.get());
+    glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.second.count()), GL_UNSIGNED_INT, nullptr);
+  }
+
+  // Render grid
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  if (rs_.show_grid) {
+    rs_.grid_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    rs_.grid_sh_prog->set_uniform("u_vInvMat", camera.inverse_view_matrix());
+    rs_.grid_sh_prog->set_uniform("u_camWorldPos", camera.transform.pos());
+    rs_.grid_sh_prog->bind();
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+  }
+
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+
+  // Render points
+  fb.begin_pick_render();
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, rs_.point_txt.get());
+  rs_.instanced_sprite_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  rs_.instanced_sprite_sh_prog->set_uniform("u_scale", 0.03F);
+  rs_.instanced_sprite_sh_prog->set_uniform("u_aspectRatio", camera.aspect_ratio());
+  rs_.instanced_sprite_sh_prog->set_uniform("u_textureSampler", 0);
+  rs_.instanced_sprite_sh_prog->bind();
+  rs_.points_vao.bind();
+  glDrawElements(GL_POINTS, rs_.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
+  fb.end_pick_render();
+
+  // Render billboards
+  glDisable(GL_DEPTH_TEST);
+  for (auto& [name, billboard] : rs_.billboards) {
+    if (!billboard.show) {
+      continue;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, billboard.texture.get());
+    rs_.sprite_sh_prog->set_uniform("u_worldPos", billboard.position);
+    rs_.sprite_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    rs_.sprite_sh_prog->set_uniform("u_aspectRatio", camera.aspect_ratio());
+    rs_.sprite_sh_prog->set_uniform("u_scale", billboard.scale);
+    rs_.sprite_sh_prog->set_uniform("u_textureSampler", 0);
+    rs_.sprite_sh_prog->bind();
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+  }
+  glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+}  // namespace mini

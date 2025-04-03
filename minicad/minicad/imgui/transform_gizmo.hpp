@@ -4,7 +4,7 @@
 
 #include <cstdint>
 #include <liberay/math/transform3.hpp>
-#include <minicad/camera/camera.hpp>
+#include <libminicad/camera/camera.hpp>
 
 namespace ImGui {  // NOLINT
 

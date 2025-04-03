@@ -1,4 +1,4 @@
-#include <minicad/camera/camera.hpp>
+#include <libminicad/camera/camera.hpp>
 
 namespace mini {
 

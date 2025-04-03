@@ -2,7 +2,7 @@
 
 #include <liberay/math/quat_fwd.hpp>
 #include <liberay/math/vec.hpp>
-#include <minicad/camera/camera.hpp>
+#include <libminicad/camera/camera.hpp>
 
 namespace mini {
 

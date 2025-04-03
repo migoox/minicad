@@ -78,7 +78,7 @@ class PointListObject {
   PointListObject() = delete;
   explicit PointListObject(PointListObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
 
-  const std::list<PointHandle>& points() { return points_; }
+  const std::list<PointHandle>& points() const { return points_; }
   bool contains(const PointHandle& handle) { return points_map_.contains(handle); }
   bool contains(const SceneObjectHandle& handle) {
     return points_map_.contains(PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id));
