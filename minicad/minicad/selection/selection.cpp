@@ -27,7 +27,37 @@ void Selection::clear(Scene& scene) {
   transform.reset_local(eray::math::Vec3f::filled(0.F));
 }
 
-void Selection::mark_transform_dirty(Scene& scene) {
+void Selection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
+  if (use_custom_origin_) {
+    detach_all(scene);
+    transform.reset_local(vec);
+  }
+
+  custom_origin_ = vec;
+}
+
+void Selection::use_custom_origin(Scene& scene, bool use_custom_origin) {
+  if (use_custom_origin == use_custom_origin_) {
+    return;
+  }
+
+  detach_all(scene);
+
+  use_custom_origin_ = use_custom_origin;
+  if (!use_custom_origin_) {
+    transform.reset_local(centroid_);
+  }
+}
+
+void Selection::update_transforms(Scene& scene, Cursor& cursor) {
+  if (use_custom_origin_) {
+    update_centroid(scene);
+    cursor.transform.set_local_pos(transform.pos());
+    cursor.mark_dirty();
+  } else {
+    centroid_ = transform.pos();
+  }
+
   for (const auto& handle : objs_) {
     if (auto o = scene.get_obj(handle)) {
       o.value()->mark_dirty();
@@ -60,21 +90,26 @@ void Selection::detach_all(Scene& scene) {
 }
 
 void Selection::update_centroid(Scene& scene) {
-  auto centroid = eray::math::Vec3f::filled(0.F);
+  centroid_ = eray::math::Vec3f::filled(0.F);
   if (is_empty()) {
-    transform.reset_local(centroid);
+    if (!use_custom_origin_) {
+      transform.reset_local(centroid_);
+    }
     return;
   }
 
   int count = 0;
   for (const auto& obj : objs_) {
     if (auto o = scene.get_obj(obj)) {
-      centroid += o.value()->transform.pos();
+      centroid_ += o.value()->transform.pos();
       count++;
     }
   }
-  centroid /= static_cast<float>(count);
-  transform.reset_local(centroid);
+
+  centroid_ /= static_cast<float>(count);
+  if (!use_custom_origin_) {
+    transform.reset_local(centroid_);
+  }
 }
 
 }  // namespace mini

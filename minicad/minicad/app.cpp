@@ -247,6 +247,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   } else if (m_.selection->is_multi_selection()) {
     ImGui::Text("Multiselection");
+
   } else {
     ImGui::Text("None");
   }
@@ -418,6 +419,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         }
         ImGui::EndCombo();
       }
+      bool cursor_as_origin = m_.selection->is_using_custom_origin();
+      if (ImGui::Checkbox("Use cursor as origin", &cursor_as_origin)) {
+        m_.selection->use_custom_origin(m_.scene, cursor_as_origin);
+        if (cursor_as_origin) {
+          m_.selection->set_custom_origin(m_.scene, m_.cursor->transform.pos());
+        }
+      }
     }
   }
   ImGui::End();
@@ -426,13 +434,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
 
-    if (m_.selection->is_multi_selection()) {
+    if (m_.selection->is_multi_selection() || m_.selection->is_using_custom_origin()) {
       m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
       ImGui::mini::gizmo::Transform(m_.selection->transform, *m_.camera, mode, operation,
-                                    [&]() { m_.selection->mark_transform_dirty(m_.scene); });
-    }
-
-    if (m_.selection->is_single_selection()) {
+                                    [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); });
+    } else if (m_.selection->is_single_selection()) {
       m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
       if (auto o = m_.scene.get_obj(m_.selection->first())) {
         ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,

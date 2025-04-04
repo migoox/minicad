@@ -7,6 +7,8 @@
 #include <liberay/util/enum_mapper.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
 
+#include "liberay/util/logger.hpp"
+
 namespace ImGui {  // NOLINT
 
 namespace mini {
@@ -40,11 +42,12 @@ bool IsUsingTransform() { return ImGuizmo::IsUsing(); }
 bool Transform(eray::math::Transform3f& trans, const ::mini::Camera& camera, Mode mode, Operation operation,
                const std::function<void()>& on_use) {
   static auto old_scale  = eray::math::Vec3f::filled(1.F);
+  static auto old_mat    = eray::math::Mat4f::identity();
   static bool is_scaling = false;
 
   auto view  = camera.view_matrix();
   auto proj  = camera.proj_matrix();
-  auto mat   = trans.local_to_world_matrix();
+  auto mat   = is_scaling ? old_mat : trans.local_to_world_matrix();
   auto delta = eray::math::Mat4f::identity();
 
   auto result = false;
@@ -59,11 +62,13 @@ bool Transform(eray::math::Transform3f& trans, const ::mini::Camera& camera, Mod
       trans.rotate_local(q);
     } else if (operation == Operation::Scale) {
       auto scale_vec = eray::math::Vec3f(delta[0][0], delta[1][1], delta[2][2]);
-      if (is_scaling) {
+      if (!is_scaling) {
         old_scale = trans.scale();
+        old_mat   = trans.local_to_world_matrix();
       }
-      if (std::abs(eray::math::length(old_scale * scale_vec)) > 0.1F) {
-        trans.set_local_scale(old_scale * scale_vec);
+      auto new_scale = old_scale * scale_vec;
+      if (std::abs(eray::math::length(new_scale)) > 0.1F) {
+        trans.set_local_scale(new_scale);
       }
     }
     result = true;
