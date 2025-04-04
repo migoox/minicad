@@ -14,6 +14,13 @@ class Selection {
   void add(Scene& scene, const SceneObjectHandle& handle);
   void clear(Scene& scene);
 
+  template <std::input_iterator Iterator>
+  void add_many(Scene& scene, Iterator begin, Iterator end) {
+    detach_all(scene);
+    objs_.insert(begin, end);
+    update_centroid(scene);
+  }
+
   bool is_multi_selection() const { return objs_.size() > 1; }
   bool is_single_selection() const { return objs_.size() == 1; }
   bool is_empty() const { return objs_.empty(); }

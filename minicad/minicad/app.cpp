@@ -31,6 +31,7 @@
 #include <minicad/imgui/modals.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
 #include <optional>
+#include <ranges>
 #include <variant>
 
 namespace mini {
@@ -430,6 +431,21 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
   ImGui::End();
 
+  if (m_.tool_state == ToolState::Select && m_.select_tool.is_box_select_active()) {
+    auto rect   = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGui::Begin("##BoxSelect", nullptr,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
+                     ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRect(ImVec2(rect.pos.x, rect.pos.y), ImVec2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y),
+                       IM_COL32(56, 123, 203, 255), 0.0f, ImDrawFlags_None, 2.0f);
+
+    ImGui::End();
+  }
   if (m_.tool_state == ToolState::Transform) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
@@ -559,18 +575,34 @@ bool MiniCadApp::on_tool_action_start() {
   }
 
   if (m_.tool_state == ToolState::Select) {
-    auto m = window_->mouse_pos();
+    m_.select_tool.start_box_select(math::Vec2f(window_->mouse_pos()));
+    return true;
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_tool_action_end() {
+  if (m_.tool_state == ToolState::Select) {
+    m_.select_tool.end_box_select();
+    auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
+
     m_.viewport_fb->bind();
-    int id = m_.viewport_fb->sample_mouse_pick(static_cast<size_t>(m.x), static_cast<size_t>(m.y));
+    auto ids = m_.viewport_fb->sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
+                                                     static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
     m_.selection->clear(m_.scene);
 
-    if (id < 0) {
+    if (ids.empty()) {
       return true;
     }
 
-    if (auto o_h = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id))) {
-      m_.selection->add(m_.scene, *o_h);
+    auto handles = std::vector<SceneObjectHandle>();
+    for (auto id : ids) {
+      if (auto h = m_.scene.handle_by_obj_id(static_cast<SceneObjectId>(id))) {
+        handles.push_back(*h);
+      }
     }
+    m_.selection->add_many(m_.scene, handles.begin(), handles.end());
     return true;
   }
 
@@ -598,12 +630,20 @@ bool MiniCadApp::on_mouse_pressed(const os::MouseButtonPressedEvent& ev) {
 }
 
 bool MiniCadApp::on_mouse_released(const os::MouseButtonReleasedEvent& ev) {
-  if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonLeft) {
+  if (ev.mouse_btn_code() == os::MouseBtnCode::MouseButtonLeft) {
     m_.orbiting_camera_operator.stop_looking_around(*m_.camera, *m_.camera_gimbal);
   }
   m_.cursor->stop_movement();
   m_.orbiting_camera_operator.stop_rot();
   m_.orbiting_camera_operator.stop_pan();
+
+  if (ev.is_on_ui()) {
+    return true;
+  }
+
+  if (ev.mouse_btn_code() == os::MouseBtnCode::MouseButtonLeft) {
+    on_tool_action_end();
+  }
   return true;
 }
 

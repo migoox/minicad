@@ -21,6 +21,9 @@
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/selection/selection.hpp>
 
+#include "tools/select_tool.hpp"
+
+
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -56,6 +59,7 @@ class MiniCadApp final : public eray::os::Application {
 
     bool is_gizmo_used;
 
+    SelectTool select_tool;
     Scene scene;
 
     // TODO(migoox): state machine
@@ -81,6 +85,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_select_state_set();
   bool on_transform_state_set();
   bool on_tool_action_start();
+  bool on_tool_action_end();
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
