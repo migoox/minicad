@@ -4,7 +4,7 @@ layout(location = 1) out int lid;
 
 uniform vec4 u_color = vec4(1, 0.54, 0.42, 1.0);
 
-out int id;
+flat in int id;
 
 uniform bool u_fill = false;
 

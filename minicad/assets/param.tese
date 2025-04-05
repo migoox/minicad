@@ -6,14 +6,13 @@ layout (quads, equal_spacing, ccw) in;
 uniform mat4 u_vMat;
 uniform mat4 u_pMat;
 
-
 in TCS_OUT {
     mat4 worldMat;
     vec2 radii;
     int id;
 } tes_in[];
 
-out int id;
+flat out int id;
 
 #define PI 3.14159265359
 
