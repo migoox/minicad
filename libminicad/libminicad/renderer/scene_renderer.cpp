@@ -5,6 +5,8 @@
 #include <libminicad/scene/scene.hpp>
 #include <variant>
 
+#include "liberay/util/logger.hpp"
+
 namespace mini {
 
 namespace driver = eray::driver;
@@ -99,8 +101,9 @@ gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
       gl::VertexBuffer::Attribute::create<float>(4, 4, false),
       gl::VertexBuffer::Attribute::create<float>(5, 4, false),
       gl::VertexBuffer::Attribute::create<float>(6, 4, false),
+      gl::VertexBuffer::Attribute::create<int>(7, 1, false),
   });
-  auto data    = std::vector<float>(20 * Scene::kMaxObjects, 0.F);
+  auto data    = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
   mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
@@ -250,12 +253,14 @@ void SceneRenderer::update_scene_object(const SceneObject& obj) {
             auto mat  = obj.transform.local_to_world_matrix();
             auto r    = math::Vec2f(t.minor_radius, t.major_radius);
             auto tess = t.tess_level;
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+            auto id   = static_cast<int>(obj.handle().obj_id);
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 21, std::span<float>(r.raw_ptr(), 2));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 21, std::span<int>(tess.raw_ptr(), 2));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21, std::span<float>(mat[0].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 16, std::span<int>(&id, 1));
           }},
       obj.object);
 }
@@ -312,6 +317,7 @@ void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
             rs_.transferred_torus_buff[ind] = rs_.transferred_torus_buff[rs_.transferred_torus_buff.size() - 1];
             rs_.transferred_torus_ind[rs_.transferred_torus_buff[ind]] = ind;
             rs_.transferred_torus_buff.pop_back();
+            auto id = static_cast<int>(obj.handle().obj_id);
 
             if (auto o2 = scene.get_obj(rs_.transferred_torus_buff[ind])) {
               auto mat = o2.value()->transform.local_to_world_matrix();
@@ -320,16 +326,17 @@ void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
                       [&](const Point&) {},
                       [&](const Torus& t) {
                         auto r = math::Vec2f(t.minor_radius, t.major_radius);
-                        rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 20, std::span<float>(r.raw_ptr(), 2));
+                        rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 21, std::span<float>(r.raw_ptr(), 2));
                         auto tess = t.tess_level;
-                        rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 20, std::span<int>(tess.raw_ptr(), 2));
+                        rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 21, std::span<int>(tess.raw_ptr(), 2));
                       },
                   },
                   o2.value()->object);
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20, std::span<float>(mat[0].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 20 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21, std::span<float>(mat[0].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 4, std::span<float>(mat[1].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 8, std::span<float>(mat[2].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 12, std::span<float>(mat[3].raw_ptr(), 4));
+              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 16, std::span<int>(&id, 1));
             }
           }},
       obj.object);
@@ -356,6 +363,7 @@ void SceneRenderer::update_point_list_object(const PointListObject& obj) {
 
 void SceneRenderer::render(eray::driver::gl::ViewportFramebuffer& fb, Camera& camera) {
   fb.bind();
+  fb.clear_pick_render();
 
   // Prepare the framebuffer
   glPatchParameteri(GL_PATCH_VERTICES, 4);
@@ -366,11 +374,22 @@ void SceneRenderer::render(eray::driver::gl::ViewportFramebuffer& fb, Camera& ca
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // Render a torus
-  rs_.param_sh_prog->set_uniform("vMat", camera.view_matrix());
-  rs_.param_sh_prog->set_uniform("pMat", camera.proj_matrix());
+  // Render toruses
+  rs_.param_sh_prog->set_uniform("u_vMat", camera.view_matrix());
+  rs_.param_sh_prog->set_uniform("u_pMat", camera.proj_matrix());
   rs_.param_sh_prog->bind();
   rs_.torus_vao.bind();
+
+  fb.begin_pick_render();
+  glDepthMask(GL_FALSE);
+  rs_.param_sh_prog->set_uniform("u_fill", true);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
+                          static_cast<GLsizei>(rs_.transferred_torus_buff.size()));
+  glDepthMask(GL_TRUE);
+  fb.end_pick_render();
+
+  rs_.param_sh_prog->set_uniform("u_fill", false);
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
                           static_cast<GLsizei>(rs_.transferred_torus_buff.size()));

@@ -99,7 +99,7 @@ MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
 }
 
 void MiniCadApp::render_gui(Duration /* delta */) {
-  ImGui::Begin("Torus [TEMP]");
+  ImGui::Begin("MiNI CAD");
   ImGui::Text("FPS: %d", fps_);
 
   ImGui::Checkbox("Grid", &m_.grid_on);
