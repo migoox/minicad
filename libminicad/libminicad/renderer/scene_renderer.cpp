@@ -103,6 +103,7 @@ gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
   mat_vbo_layout.add_attribute<float>("worldMat2", 5, 4);
   mat_vbo_layout.add_attribute<float>("worldMat3", 6, 4);
   mat_vbo_layout.add_attribute<int>("id", 7, 1);
+  mat_vbo_layout.add_attribute<int>("state", 8, 1);
   auto mat_vbo = gl::VertexBuffer::create(std::move(mat_vbo_layout));
 
   auto data = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
@@ -262,9 +263,26 @@ void SceneRenderer::update_scene_object(const SceneObject& obj) {
                            rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
                            rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
                            rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
+
+                           if (rs_.visibility_states.contains(obj.handle())) {
+                             auto vs = static_cast<int>(rs_.visibility_states.at(obj.handle()));
+                             rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
+                           } else {
+                             auto vs = 0;
+                             rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
+                           }
                          }},
              obj.object);
 }
+
+void SceneRenderer::update_visibility_state(const SceneObjectHandle& handle, VisibilityState state) {
+  if (!rs_.visibility_states.contains(handle)) {
+    rs_.visibility_states.insert({handle, state});
+  } else {
+    rs_.visibility_states.at(handle) = state;
+  }
+}
+
 void SceneRenderer::add_scene_object(const SceneObject& obj) {
   std::visit(eray::util::match{
                  [&](const Point&) {

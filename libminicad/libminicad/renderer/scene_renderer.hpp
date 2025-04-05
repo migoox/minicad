@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <liberay/driver/gl/framebuffer.hpp>
@@ -23,6 +24,12 @@ struct Billboard {
   eray::driver::gl::TextureHandle texture;
 };
 
+enum class VisibilityState : uint8_t {
+  Visible   = 0,
+  Selected  = 1,
+  Invisible = 2,
+};
+
 class SceneRenderer {
  public:
   SceneRenderer() = delete;
@@ -42,6 +49,8 @@ class SceneRenderer {
 
   void delete_scene_object(const SceneObject& obj, Scene& scene);
   void delete_point_list_object(const PointListObject& obj);
+
+  void update_visibility_state(const SceneObjectHandle& handle, VisibilityState state);
 
   void render(eray::driver::gl::ViewportFramebuffer& fb, Camera& camera);
 
@@ -71,6 +80,8 @@ class SceneRenderer {
     eray::driver::gl::TextureHandle point_txt;
 
     std::unordered_map<zstring_view, Billboard> billboards;
+
+    std::unordered_map<SceneObjectHandle, VisibilityState> visibility_states;
 
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;

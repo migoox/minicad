@@ -156,7 +156,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       for (const auto& o : *m_.selection) {
         on_scene_object_deleted(o);
       }
-      m_.selection->clear(m_.scene);
+      on_selection_clear();
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -170,9 +170,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       bool is_selected = m_.selection->contains(h_p);
       if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
         if (is_selected) {
-          m_.selection->remove(m_.scene, h_p);
+          on_selection_remove(h_p);
         } else {
-          m_.selection->add(m_.scene, h_p);
+          on_selection_add(h_p);
         }
       }
 
@@ -340,9 +340,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
           bool is_selected = m_.selection->contains(o_h);
           if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
             if (is_selected) {
-              m_.selection->remove(m_.scene, o_h);
+              on_selection_remove(o_h);
             } else {
-              m_.selection->add(m_.scene, o_h);
+              on_selection_add(o_h);
             }
           }
 
@@ -507,8 +507,8 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     m_.scene_renderer.add_scene_object(*o.value());
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
-    m_.selection->clear(m_.scene);
-    m_.selection->add(m_.scene, *obj_handle);
+    on_selection_clear();
+    on_selection_add(*obj_handle);
     util::Logger::info("Added scene object \"{}\"", o.value()->name);
   } else {
     util::Logger::warn("Despite calling create scene object, the object has not been added");
@@ -522,6 +522,7 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
     m_.scene_renderer.delete_scene_object(*o.value(), m_.scene);
     util::Logger::info("Deleted scene object \"{}\"", o.value()->name);
     m_.scene.delete_obj(handle);
+    m_.scene_renderer.update_visibility_state(handle, VisibilityState::Visible);
   } else {
     util::Logger::warn("Tried to delete a non existing element");
   }
@@ -551,6 +552,35 @@ bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handl
   }
 
   return false;
+}
+
+bool MiniCadApp::on_selection_add(const SceneObjectHandle& handle) {
+  m_.selection->add(m_.scene, handle);
+  m_.scene_renderer.update_visibility_state(handle, VisibilityState::Selected);
+  if (auto o = m_.scene.get_obj(handle)) {
+    o.value()->mark_dirty();
+  }
+  return true;
+}
+
+bool MiniCadApp::on_selection_remove(const SceneObjectHandle& handle) {
+  m_.selection->remove(m_.scene, handle);
+  m_.scene_renderer.update_visibility_state(handle, VisibilityState::Visible);
+  if (auto o = m_.scene.get_obj(handle)) {
+    o.value()->mark_dirty();
+  }
+  return true;
+}
+
+bool MiniCadApp::on_selection_clear() {
+  for (const auto& handle : *m_.selection) {
+    m_.scene_renderer.update_visibility_state(handle, VisibilityState::Visible);
+    if (auto o = m_.scene.get_obj(handle)) {
+      o.value()->mark_dirty();
+    }
+  }
+  m_.selection->clear(m_.scene);
+  return true;
 }
 
 bool MiniCadApp::on_cursor_state_set() {
@@ -590,7 +620,7 @@ bool MiniCadApp::on_tool_action_end() {
     m_.viewport_fb->bind();
     auto ids = m_.viewport_fb->sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
                                                      static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
-    m_.selection->clear(m_.scene);
+    on_selection_clear();
 
     if (ids.empty()) {
       return true;
@@ -602,7 +632,7 @@ bool MiniCadApp::on_tool_action_end() {
         handles.push_back(*h);
       }
     }
-    m_.selection->add_many(m_.scene, handles.begin(), handles.end());
+    on_selection_add_many(handles.begin(), handles.end());
     return true;
   }
 

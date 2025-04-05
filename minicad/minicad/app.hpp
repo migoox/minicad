@@ -12,6 +12,7 @@
 #include <liberay/os/app.hpp>
 #include <liberay/os/window/events/event.hpp>
 #include <liberay/res/image.hpp>
+#include <liberay/util/iterator.hpp>
 #include <liberay/util/timer.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
@@ -20,9 +21,10 @@
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/selection/selection.hpp>
+#include <type_traits>
+#include <variant>
 
 #include "tools/select_tool.hpp"
-
 
 namespace mini {
 
@@ -86,6 +88,23 @@ class MiniCadApp final : public eray::os::Application {
   bool on_transform_state_set();
   bool on_tool_action_start();
   bool on_tool_action_end();
+
+  bool on_selection_add(const SceneObjectHandle& handle);
+
+  template <eray::util::Iterator<SceneObjectHandle> It>
+  bool on_selection_add_many(It begin, It end) {
+    for (const auto& handle : std::ranges::subrange(begin, end)) {
+      m_.scene_renderer.update_visibility_state(handle, VisibilityState::Selected);
+      if (auto o = m_.scene.get_obj(handle)) {
+        o.value()->mark_dirty();
+      }
+    }
+    m_.selection->add_many(m_.scene, begin, end);
+    return true;
+  }
+
+  bool on_selection_remove(const SceneObjectHandle& handle);
+  bool on_selection_clear();
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
