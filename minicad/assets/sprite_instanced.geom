@@ -7,7 +7,10 @@ uniform float u_aspectRatio;
 uniform float u_scale = 0.04;
 
 flat in int sprite_id[];
+flat in int state[];
+
 flat out int gsprite_id;
+flat out int gstate;
 
 out vec2 texCoord;
 
@@ -39,6 +42,7 @@ void main() {
         gl_Position = vec4(billboard_pos(Pos[i]), 1.0);
         texCoord = TexCoords[i];
         gsprite_id = sprite_id[0]; 
+        gstate = state[0]; 
         EmitVertex();
     }
 

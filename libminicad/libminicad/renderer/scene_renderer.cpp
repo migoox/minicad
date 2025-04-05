@@ -129,6 +129,7 @@ gl::VertexArray create_points_vao() {
 
   auto vbo_layout = gl::VertexBuffer::Layout();
   vbo_layout.add_attribute<float>("pos", 0, 3);
+  vbo_layout.add_attribute<int>("state", 1, 1);
   auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
 
   vbo.buffer_data<float>(points, gl::DataUsage::StaticDraw);
@@ -248,7 +249,15 @@ SceneRenderer::SceneRenderer(SceneRenderer::RenderingState&& rs) : rs_(std::move
 void SceneRenderer::update_scene_object(const SceneObject& obj) {
   std::visit(util::match{[&](const Point&) {
                            auto p = obj.transform.pos();
-                           rs_.points_vao.vbo().sub_buffer_data(obj.id(), p.data, 3);
+                           rs_.points_vao.vbo().set_attribute_value(obj.id(), "pos", p.raw_ptr());
+
+                           if (rs_.visibility_states.contains(obj.handle())) {
+                             auto vs = static_cast<int>(rs_.visibility_states.at(obj.handle()));
+                             rs_.points_vao.vbo().set_attribute_value(obj.id(), "state", &vs);
+                           } else {
+                             auto vs = 0;
+                             rs_.points_vao.vbo().set_attribute_value(obj.id(), "state", &vs);
+                           }
                          },
                          [&](const Torus& t) {
                            auto ind  = rs_.transferred_torus_ind.at(obj.handle());
