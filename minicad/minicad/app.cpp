@@ -115,27 +115,28 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::ShowDemoWindow();
 
-  ImGui::Begin("Scene objects");
-
+  ImGui::Begin("Objects");
   if (ImGui::Button("Add")) {
     ImGui::OpenPopup("AddSceneObjectPopup");
   }
 
-  enum class SceneObjectType : uint8_t {
-    Point  = 0,
-    Torus  = 1,
-    _Count = 2,  // NOLINT
+  enum class ObjectType : uint8_t {
+    Point     = 0,
+    Torus     = 1,
+    PointList = 2,
+    _Count    = 3,  // NOLINT
   };
 
-  static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<SceneObjectType>({
-      {SceneObjectType::Point, "Point"},
-      {SceneObjectType::Torus, "Torus"},
+  static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<ObjectType>({
+      {ObjectType::Point, "Point"},
+      {ObjectType::Torus, "Torus"},
+      {ObjectType::PointList, "Point List"},
   });
 
   if (ImGui::BeginPopup("AddSceneObjectPopup")) {
     for (const auto [type, name] : kSceneObjectNames) {
       if (ImGui::Selectable(name.c_str())) {
-        if (type == SceneObjectType::Point) {
+        if (type == ObjectType::Point) {
           on_scene_object_added(Point{});
         } else {
           on_scene_object_added(Torus{});
@@ -163,6 +164,18 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   }
 
+  for (const auto& test : m_.scene.objs()) {
+    std::visit(eray::util::match{[&](const auto& handle) {
+                 if (auto o = m_.scene.get_obj(handle)) {
+                   ImGui::Text("%d, %s", o.value()->order_ind(), o.value()->name.c_str());
+                 }
+               }},
+               test);
+  }
+  ImGui::End();
+
+  ImGui::Begin("Scene objects");
+
   for (const auto& h_p : m_.scene.scene_objs()) {
     if (auto p = m_.scene.get_obj(h_p)) {
       ImGui::PushID(h_p.obj_id);
@@ -179,7 +192,6 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       ImGui::PopID();
     }
   }
-
   ImGui::End();
 
   ImGui::Begin("Selection");

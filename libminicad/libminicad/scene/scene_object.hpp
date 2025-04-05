@@ -25,7 +25,7 @@ using PointHandle = eray::util::Handle<Point>;
 class PointListObject;
 using PointListObjectHandle = eray::util::Handle<PointListObject>;
 
-using AnyObjectHandle = eray::util::AnyObjectHandle;
+using ObjectHandle = std::variant<SceneObjectHandle, PointListObjectHandle>;
 
 class Point {
  public:
@@ -61,6 +61,8 @@ class SceneObject {
 
   void mark_dirty();
 
+  size_t order_ind() const { return order_ind_; }
+
  public:
   eray::math::Transform3f transform;
   std::string name;
@@ -68,6 +70,8 @@ class SceneObject {
 
  private:
   friend Scene;
+
+  size_t order_ind_{0};
 
   SceneObjectHandle handle_;
   Scene& scene_;  // NOLINT
@@ -88,6 +92,8 @@ class PointListObject {
   const PointListObjectHandle& handle() const { return handle_; }
   void mark_dirty();
 
+  size_t order_ind() const { return order_ind_; }
+
  public:
   std::string name;
 
@@ -96,6 +102,8 @@ class PointListObject {
 
   PointListObjectHandle handle_;
   Scene& scene_;  // NOLINT
+
+  size_t order_ind_{0};
 
   std::list<PointHandle> points_;
   std::unordered_map<PointHandle, std::list<PointHandle>::iterator> points_map_;

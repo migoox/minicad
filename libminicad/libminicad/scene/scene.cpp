@@ -122,7 +122,30 @@ std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene
              variant);
   obj.object = std::move(variant);
 
+  add_to_order(obj);
+
   return h;
+}
+
+void Scene::add_to_order(SceneObject& obj) {
+  obj.order_ind_ = objects_order_.size();
+  objects_order_.emplace_back(obj.handle());
+}
+
+void Scene::add_to_order(PointListObject& obj) {
+  obj.order_ind_ = objects_order_.size();
+  objects_order_.emplace_back(obj.handle());
+}
+
+void Scene::remove_from_order(size_t ind) {
+  for (size_t i = ind + 1; i < objects_order_.size(); ++i) {
+    std::visit(
+        eray::util::match{
+            [&](const SceneObjectHandle& handle) { scene_objects_.at(handle.obj_id)->first->order_ind_--; },
+            [&](const PointListObjectHandle& handle) { point_list_objects_.at(handle.obj_id)->first->order_ind_--; }},
+        objects_order_[i]);
+  }
+  objects_order_.erase(objects_order_.begin() + ind);
 }
 
 bool Scene::delete_obj(const SceneObjectHandle& handle) {
@@ -136,6 +159,8 @@ bool Scene::delete_obj(const SceneObjectHandle& handle) {
     }
   }
 
+  auto& obj = *scene_objects_[handle.obj_id]->first;
+  remove_from_order(obj.order_ind_);
   scene_objects_list_.erase(scene_objects_[handle.obj_id]->second.second);
   scene_objects_[handle.obj_id] = std::nullopt;
   scene_objects_freed_.push(handle.obj_id);
@@ -154,6 +179,9 @@ bool Scene::delete_obj(const PointListObjectHandle& handle) {
   if (!is_handle_valid(handle)) {
     return false;
   }
+
+  auto& obj = *point_list_objects_[handle.obj_id]->first;
+  remove_from_order(obj.order_ind_);
   point_list_objects_list_.erase(point_list_objects_[handle.obj_id]->second.second);
   point_list_objects_[handle.obj_id] = std::nullopt;
   point_list_objects_freed_.push(handle.obj_id);
@@ -177,6 +205,8 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
   auto& obj    = *point_list_objects_[obj_id]->first;
   auto obj_ind = curr_list_obj_ind_++;
   obj.name     = std::format("Point List {}", obj_ind);
+
+  add_to_order(obj);
 
   return h;
 }

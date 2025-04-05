@@ -9,6 +9,7 @@
 #include <memory>
 #include <set>
 #include <stack>
+#include <variant>
 #include <vector>
 
 namespace mini {
@@ -49,6 +50,7 @@ class Scene {
 
   const std::list<SceneObjectHandle>& scene_objs() const { return scene_objects_list_; }
   const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }
+  const std::vector<ObjectHandle>& objs() const { return objects_order_; }
 
   void mark_dirty(const SceneObjectHandle& handle) { dirty_scene_objects_.insert(handle.obj_id); }
   void mark_dirty(const PointListObjectHandle& handle) { dirty_point_list_objects_.insert(handle.obj_id); }
@@ -66,6 +68,10 @@ class Scene {
 
   SceneObjectHandle create_scene_obj_handle(std::uint32_t obj_id);
   PointListObjectHandle create_list_obj_handle(std::uint32_t obj_id);
+
+  void remove_from_order(size_t ind);
+  void add_to_order(SceneObject& obj);
+  void add_to_order(PointListObject& obj);
 
   /**
    * @brief Returns an incrementing timestamp, wrapping around after UINT32_MAX.
@@ -88,14 +94,16 @@ class Scene {
       std::pair<std::unique_ptr<SceneObject>, std::pair<std::uint32_t, std::list<SceneObjectHandle>::iterator>>>>
       scene_objects_;
   std::stack<SceneObjectId> scene_objects_freed_;
-  std::set<SceneObjectId> dirty_scene_objects_;
+  std::unordered_set<SceneObjectId> dirty_scene_objects_;
 
   std::list<PointListObjectHandle> point_list_objects_list_;
   std::vector<std::optional<std::pair<std::unique_ptr<PointListObject>,
                                       std::pair<std::uint32_t, std::list<PointListObjectHandle>::iterator>>>>
       point_list_objects_;
   std::stack<PointListObjectId> point_list_objects_freed_;
-  std::set<PointListObjectId> dirty_point_list_objects_;
+  std::unordered_set<PointListObjectId> dirty_point_list_objects_;
+
+  std::vector<ObjectHandle> objects_order_;
 };
 
 }  // namespace mini
