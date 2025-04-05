@@ -1,11 +1,11 @@
+#include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <variant>
-
-#include "liberay/util/logger.hpp"
 
 namespace mini {
 
@@ -65,10 +65,11 @@ gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float dept
       20, 22, 21, 20, 23, 22   //
   };
 
-  auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute::create<float>(0, 3, false),  // positions
-      gl::VertexBuffer::Attribute::create<float>(1, 3, false),  // normals
-  });
+  auto vbo_layout = gl::VertexBuffer::Layout();
+  vbo_layout.add_attribute<float>("pos", 0, 3);
+  vbo_layout.add_attribute<float>("normal", 0, 3);
+  auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
+
   vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
@@ -89,21 +90,22 @@ gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
       0, 1, 2, 3  //
   };
 
-  auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute::create<float>(0, 2, false),
-  });
+  auto vbo_layout = gl::VertexBuffer::Layout();
+  vbo_layout.add_attribute<float>("patchPos", 0, 2);
+  auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
   vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
 
-  auto mat_vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute::create<float>(1, 2, false),
-      gl::VertexBuffer::Attribute::create<int>(2, 2, false),
-      gl::VertexBuffer::Attribute::create<float>(3, 4, false),
-      gl::VertexBuffer::Attribute::create<float>(4, 4, false),
-      gl::VertexBuffer::Attribute::create<float>(5, 4, false),
-      gl::VertexBuffer::Attribute::create<float>(6, 4, false),
-      gl::VertexBuffer::Attribute::create<int>(7, 1, false),
-  });
-  auto data    = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
+  auto mat_vbo_layout = gl::VertexBuffer::Layout();
+  mat_vbo_layout.add_attribute<float>("radii", 1, 2);
+  mat_vbo_layout.add_attribute<int>("tessLevel", 2, 2);
+  mat_vbo_layout.add_attribute<float>("worldMat", 3, 4);
+  mat_vbo_layout.add_attribute<float>("worldMat1", 4, 4);
+  mat_vbo_layout.add_attribute<float>("worldMat2", 5, 4);
+  mat_vbo_layout.add_attribute<float>("worldMat3", 6, 4);
+  mat_vbo_layout.add_attribute<int>("id", 7, 1);
+  auto mat_vbo = gl::VertexBuffer::create(std::move(mat_vbo_layout));
+
+  auto data = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
   mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
@@ -124,9 +126,10 @@ gl::VertexArray create_points_vao() {
   auto points  = std::array<float, 3 * Scene::kMaxObjects>();
   auto indices = std::array<uint32_t, Scene::kMaxObjects>();
 
-  auto vbo = gl::VertexBuffer::create({
-      gl::VertexBuffer::Attribute::create<float>(0, 3, false),
-  });
+  auto vbo_layout = gl::VertexBuffer::Layout();
+  vbo_layout.add_attribute<float>("pos", 0, 3);
+  auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
+
   vbo.buffer_data<float>(points, gl::DataUsage::StaticDraw);
 
   auto ebo = gl::ElementBuffer::create();
@@ -149,16 +152,16 @@ std::pair<gl::VertexArrayHandle, gl::ElementBuffer> create_point_list_vao(const 
   GLsizei vertex_size = 0;
 
   for (const auto& attrib : vert_buff.layout()) {
-    glEnableVertexArrayAttrib(id, attrib.index);
+    glEnableVertexArrayAttrib(id, attrib.location);
     glVertexArrayAttribFormat(id,                                     //
-                              attrib.index,                           //
+                              attrib.location,                        //
                               static_cast<GLint>(attrib.count),       //
                               GL_FLOAT,                               //
                               attrib.normalize ? GL_TRUE : GL_FALSE,  //
                               vertex_size);                           //
 
     vertex_size += static_cast<GLint>(sizeof(float) * attrib.count);
-    glVertexArrayAttribBinding(id, attrib.index, 0);
+    glVertexArrayAttribBinding(id, attrib.location, 0);
   }
 
   glVertexArrayVertexBuffer(id, 0, vert_buff.raw_gl_id(), 0, vertex_size);
@@ -242,27 +245,25 @@ std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRen
 SceneRenderer::SceneRenderer(SceneRenderer::RenderingState&& rs) : rs_(std::move(rs)) {}
 
 void SceneRenderer::update_scene_object(const SceneObject& obj) {
-  std::visit(
-      util::match{
-          [&](const Point&) {
-            auto p = obj.transform.pos();
-            rs_.points_vao.vbo().sub_buffer_data<float>(3 * obj.id(), p.data);
-          },
-          [&](const Torus& t) {
-            auto ind  = rs_.transferred_torus_ind.at(obj.handle());
-            auto mat  = obj.transform.local_to_world_matrix();
-            auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-            auto tess = t.tess_level;
-            auto id   = static_cast<int>(obj.handle().obj_id);
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 21, std::span<float>(r.raw_ptr(), 2));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 21, std::span<int>(tess.raw_ptr(), 2));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21, std::span<float>(mat[0].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 12, std::span<float>(mat[3].raw_ptr(), 4));
-            rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 16, std::span<int>(&id, 1));
-          }},
-      obj.object);
+  std::visit(util::match{[&](const Point&) {
+                           auto p = obj.transform.pos();
+                           rs_.points_vao.vbo().sub_buffer_data(obj.id(), p.data, 3);
+                         },
+                         [&](const Torus& t) {
+                           auto ind  = rs_.transferred_torus_ind.at(obj.handle());
+                           auto mat  = obj.transform.local_to_world_matrix();
+                           auto r    = math::Vec2f(t.minor_radius, t.major_radius);
+                           auto tess = t.tess_level;
+                           auto id   = static_cast<int>(obj.handle().obj_id);
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
+                           rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
+                         }},
+             obj.object);
 }
 void SceneRenderer::add_scene_object(const SceneObject& obj) {
   std::visit(eray::util::match{
@@ -321,22 +322,21 @@ void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
 
             if (auto o2 = scene.get_obj(rs_.transferred_torus_buff[ind])) {
               auto mat = o2.value()->transform.local_to_world_matrix();
-              std::visit(
-                  eray::util::match{
-                      [&](const Point&) {},
-                      [&](const Torus& t) {
-                        auto r = math::Vec2f(t.minor_radius, t.major_radius);
-                        rs_.torus_vao.vbo("matrices").sub_buffer_data(ind * 21, std::span<float>(r.raw_ptr(), 2));
-                        auto tess = t.tess_level;
-                        rs_.torus_vao.vbo("matrices").sub_buffer_data(2 + ind * 21, std::span<int>(tess.raw_ptr(), 2));
-                      },
-                  },
-                  o2.value()->object);
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21, std::span<float>(mat[0].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 4, std::span<float>(mat[1].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 8, std::span<float>(mat[2].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 12, std::span<float>(mat[3].raw_ptr(), 4));
-              rs_.torus_vao.vbo("matrices").sub_buffer_data(4 + ind * 21 + 16, std::span<int>(&id, 1));
+              std::visit(eray::util::match{
+                             [&](const Point&) {},
+                             [&](const Torus& t) {
+                               auto r    = math::Vec2f(t.minor_radius, t.major_radius);
+                               auto tess = t.tess_level;
+                               rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
+                               rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
+                             },
+                         },
+                         o2.value()->object);
+              rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
+              rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
+              rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
+              rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
+              rs_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
             }
           }},
       obj.object);
