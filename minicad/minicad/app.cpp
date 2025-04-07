@@ -243,19 +243,19 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       std::visit(eray::util::match{
                      [this](Point& p) {
-                       ImGui::Text("Part of the lists:");
-                       for (const auto& p : p.point_lists()) {
-                         if (auto point_list = m_.scene.get_obj(p)) {
-                           ImGui::PushID(point_list.value()->id());
+                       //    ImGui::Text("Part of the lists:");
+                       //    for (const auto& p : p()) {
+                       //      if (auto point_list = m_.scene.get_obj(p)) {
+                       //        ImGui::PushID(point_list.value()->id());
 
-                           bool is_selected = m_.point_list_selection->contains(point_list.value()->handle());
-                           if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
-                             m_.point_list_selection->add(point_list.value()->handle());
-                           }
+                       //        bool is_selected = m_.point_list_selection->contains(point_list.value()->handle());
+                       //        if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
+                       //          m_.point_list_selection->add(point_list.value()->handle());
+                       //        }
 
-                           ImGui::PopID();
-                         }
-                       }
+                       //        ImGui::PopID();
+                       //      }
+                       //    }
                      },
                      [&](Torus& t) {
                        if (ImGui::SliderInt("Tess Level X", &t.tess_level.x, kMinTessLevel, kMaxTessLevel)) {
@@ -298,14 +298,14 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
 
       ImGui::Text("Points: ");
-      auto disable = !m_.point_list_selection->is_single_selection() || !m_.selection->is_single_selection();
+      m_.selection->is_single_selection();
+
+      auto disable = !m_.selection->is_single_selection() || !m_.point_list_selection->is_single_selection();
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
-        if (auto p_h = m_.scene.get_point_handle(m_.selection->first())) {
-          m_.scene.add_point_to_list(p_h.value(), m_.point_list_selection->first());
-        }
+        m_.scene.add_to_list(m_.selection->first(), m_.point_list_selection->first());
       }
       if (disable) {
         ImGui::EndDisabled();
@@ -318,30 +318,25 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Remove")) {
-        if (auto ph = m_.scene.get_point_handle(m_.selection->first())) {
-          m_.scene.remove_point_from_list(*ph, m_.point_list_selection->first());
-        }
+        m_.scene.remove_from_list(m_.selection->first(), m_.point_list_selection->first());
       }
       if (disable) {
         ImGui::EndDisabled();
       }
 
-      for (const auto& p : obj.value()->points()) {
-        if (auto p_obj = m_.scene.get_obj(p)) {
-          ImGui::PushID(p.obj_id);
+      for (auto& p : obj.value()->points()) {
+        ImGui::PushID(p.id());
 
-          auto o_h         = SceneObjectHandle(p.owner_signature, p.timestamp, p.obj_id);
-          bool is_selected = m_.selection->contains(o_h);
-          if (ImGui::Selectable(p_obj.value()->name.c_str(), is_selected)) {
-            if (is_selected) {
-              on_selection_remove(o_h);
-            } else {
-              on_selection_add(o_h);
-            }
+        bool is_selected = m_.selection->contains(p.handle());
+        if (ImGui::Selectable(p.name.c_str(), is_selected)) {
+          if (is_selected) {
+            on_selection_remove(p.handle());
+          } else {
+            on_selection_add(p.handle());
           }
-
-          ImGui::PopID();
         }
+
+        ImGui::PopID();
       }
     }
   }
@@ -579,7 +574,8 @@ bool MiniCadApp::on_selection_clear() {
 
 bool MiniCadApp::on_point_list_selection_add(const PointListObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
-    on_selection_add_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+    auto handles = o.value()->handles();
+    on_selection_add_many(handles.begin(), handles.end());
   }
   m_.point_list_selection->add(handle);
   return true;
@@ -587,7 +583,8 @@ bool MiniCadApp::on_point_list_selection_add(const PointListObjectHandle& handle
 
 bool MiniCadApp::on_point_list_selection_remove(const PointListObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
-    on_selection_remove_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+    auto handles = o.value()->handles();
+    on_selection_remove_many(handles.begin(), handles.end());
   }
   m_.point_list_selection->remove(handle);
   return true;
@@ -596,7 +593,8 @@ bool MiniCadApp::on_point_list_selection_remove(const PointListObjectHandle& han
 bool MiniCadApp::on_point_list_selection_clear() {
   for (const auto& pl : *m_.point_list_selection) {
     if (auto o = m_.scene.get_obj(pl)) {
-      on_selection_remove_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+      auto handles = o.value()->handles();
+      on_selection_remove_many(handles.begin(), handles.end());
     }
   }
   m_.point_list_selection->clear();

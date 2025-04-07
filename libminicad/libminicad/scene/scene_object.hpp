@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <liberay/math/transform3.hpp>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/zstring_view.hpp>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -19,24 +21,16 @@ class Scene;
 class SceneObject;
 using SceneObjectHandle = eray::util::Handle<SceneObject>;
 
-class Point;
-using PointHandle = eray::util::Handle<Point>;
-
 class PointListObject;
 using PointListObjectHandle = eray::util::Handle<PointListObject>;
 
 using ObjectHandle = std::variant<SceneObjectHandle, PointListObjectHandle>;
 
+class PointListObject;
+
 class Point {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
-
-  const std::unordered_set<PointListObjectHandle>& point_lists() const { return point_lists_; }
-
- private:
-  friend Scene;
-
-  std::unordered_set<PointListObjectHandle> point_lists_;
 };
 
 class Torus {
@@ -55,12 +49,12 @@ class SceneObject {
  public:
   SceneObject() = delete;
   explicit SceneObject(SceneObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
+  ~SceneObject();
 
   SceneObjectId id() const { return handle_.obj_id; }
   const SceneObjectHandle& handle() const { return handle_; }
 
   void mark_dirty();
-
   size_t order_ind() const { return order_ind_; }
 
  public:
@@ -70,8 +64,11 @@ class SceneObject {
 
  private:
   friend Scene;
+  friend PointListObject;
 
   size_t order_ind_{0};
+
+  std::unordered_set<PointListObjectHandle> point_lists_;
 
   SceneObjectHandle handle_;
   Scene& scene_;  // NOLINT
@@ -81,16 +78,28 @@ class PointListObject {
  public:
   PointListObject() = delete;
   explicit PointListObject(PointListObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
+  ~PointListObject();
 
-  const std::list<PointHandle>& points() const { return points_; }
-  const std::list<SceneObjectHandle>& scene_objs() const {
-    return *(
-        reinterpret_cast<const std::list<SceneObjectHandle>*>(&points_));  // TODO(migoox): do better handle system...
+  auto points() {
+    return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
   }
-  bool contains(const PointHandle& handle) { return points_map_.contains(handle); }
-  bool contains(const SceneObjectHandle& handle) {
-    return points_map_.contains(PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id));
+
+  const auto points() const {
+    return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
   }
+
+  auto handles() { return points_map_ | std::views::keys; }
+
+  bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
+
+  enum class SceneObjectError : uint8_t {
+    NotAPoint        = 0,
+    HandleIsNotValid = 1,
+    NotFound         = 2,
+  };
+
+  std::expected<void, SceneObjectError> add(const SceneObjectHandle& handle);
+  std::expected<void, SceneObjectError> remove(const SceneObjectHandle& handle);
 
   PointListObjectId id() const { return handle_.obj_id; }
   const PointListObjectHandle& handle() const { return handle_; }
@@ -109,8 +118,8 @@ class PointListObject {
 
   size_t order_ind_{0};
 
-  std::list<PointHandle> points_;
-  std::unordered_map<PointHandle, std::list<PointHandle>::iterator> points_map_;
+  std::vector<std::reference_wrapper<SceneObject>> points_;
+  std::unordered_map<SceneObjectHandle, size_t> points_map_;
 };
 
 }  // namespace mini

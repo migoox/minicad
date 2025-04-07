@@ -7,6 +7,8 @@
 #include <libminicad/scene/scene.hpp>
 #include <variant>
 
+#include "libminicad/scene/scene_object.hpp"
+
 namespace mini {
 
 namespace driver = eray::driver;
@@ -383,8 +385,8 @@ void SceneRenderer::update_point_list_object(const PointListObject& obj) {
   if (!rs_.point_list_vaos.contains(obj.handle())) {
     return;
   }
-  auto t = obj.points() | std::views::transform([](const PointHandle& ph) { return ph.obj_id; });
-  std::vector<PointListObjectId> temp_vec(t.begin(), t.end());
+  auto t = obj.points() | std::views::transform([](const SceneObject& ph) { return ph.id(); });
+  std::vector<SceneObjectId> temp_vec(t.begin(), t.end());
   rs_.point_list_vaos.at(obj.handle()).second.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
 }
 

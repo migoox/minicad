@@ -2,6 +2,7 @@
 
 #include <liberay/math/transform3_fwd.hpp>
 #include <liberay/math/vec.hpp>
+#include <liberay/util/iterator.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <optional>
@@ -49,20 +50,20 @@ class SceneObjectsSelection {
   void add(Scene& scene, const SceneObjectHandle& handle);
   void clear(Scene& scene);
 
-  template <std::input_iterator Iterator>
-  void add_many(Scene& scene, Iterator begin, Iterator end) {
+  template <eray::util::Iterator<SceneObjectHandle> It>
+  void add_many(Scene& scene, It begin, It end) {
     detach_all(scene);
     objs_.insert(begin, end);
     update_centroid(scene);
   }
 
-  template <std::input_iterator Iterator>
-  void remove_many(Scene& scene, Iterator begin, Iterator end) {
+  template <eray::util::Iterator<SceneObjectHandle> It>
+  void remove_many(Scene& scene, It begin, It end) {
     detach_all(scene);
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       auto f = objs_.find(handle);
       if (f != objs_.end()) {
-        objs_.erase(begin, end);
+        objs_.erase(f);
       }
     }
     update_centroid(scene);
@@ -77,6 +78,12 @@ class SceneObjectsSelection {
   auto centroid() const { return centroid_; }
 
   const SceneObjectHandle& first() { return *objs_.begin(); }
+  std::optional<SceneObjectHandle> single() {
+    if (is_single_selection()) {
+      return *objs_.begin();
+    }
+    return std::nullopt;
+  }
 
   void update_transforms(Scene& scene, Cursor& cursor);
 

@@ -53,14 +53,6 @@ bool Scene::is_handle_valid(const SceneObjectHandle& handle) const {
   return true;
 }
 
-bool Scene::is_handle_valid(const PointHandle& handle) const {
-  if (!is_handle_valid(SceneObjectHandle(handle.owner_signature, handle.timestamp, handle.obj_id))) {
-    return false;
-  }
-
-  return std::holds_alternative<Point>(scene_objects_[handle.obj_id]->first->object);
-}
-
 bool Scene::is_handle_valid(const PointListObjectHandle& handle) const {
   if (handle.owner_signature != signature_) {
     return false;
@@ -91,12 +83,28 @@ OptionalObserverPtr<SceneObject> Scene::get_obj(const SceneObjectHandle& handle)
   return OptionalObserverPtr<SceneObject>(*scene_objects_[handle.obj_id]->first);
 }
 
-OptionalObserverPtr<SceneObject> Scene::get_obj(const PointHandle& handle) {
-  if (!is_handle_valid(handle)) {
-    return std::nullopt;
+bool Scene::add_to_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle) {
+  if (!is_handle_valid(pl_handle)) {
+    return false;
   }
 
-  return OptionalObserverPtr<SceneObject>(*scene_objects_[handle.obj_id]->first);
+  if (std::holds_alternative<Point>(scene_objects_[p_handle.obj_id]->first->object)) {
+    return point_list_objects_[pl_handle.obj_id]->first->add(p_handle).has_value();
+  }
+
+  return false;
+}
+
+bool Scene::remove_from_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle) {
+  if (!is_handle_valid(pl_handle)) {
+    return false;
+  }
+
+  if (std::holds_alternative<Point>(scene_objects_[p_handle.obj_id]->first->object)) {
+    return point_list_objects_[pl_handle.obj_id]->first->remove(p_handle).has_value();
+  }
+
+  return false;
 }
 
 std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene_obj(SceneObjectVariant variant) {
@@ -153,12 +161,6 @@ bool Scene::delete_obj(const SceneObjectHandle& handle) {
     return false;
   }
 
-  if (auto* p = std::get_if<Point>(&scene_objects_[handle.obj_id]->first->object)) {
-    for (const auto& pl : p->point_lists_) {
-      remove_point_from_list(PointHandle(pl.owner_signature, pl.timestamp, pl.obj_id), pl);
-    }
-  }
-
   auto& obj = *scene_objects_[handle.obj_id]->first;
   remove_from_order(obj.order_ind_);
   scene_objects_list_.erase(scene_objects_[handle.obj_id]->second.second);
@@ -211,61 +213,6 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
   return h;
 }
 
-std::optional<PointHandle> Scene::get_point_handle(const SceneObjectHandle& handle) {
-  auto p = PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id);
-  if (!is_handle_valid(p)) {
-    return std::nullopt;
-  }
-
-  return p;
-}
-
-bool Scene::add_point_to_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle) {
-  if (!is_handle_valid(p_handle) || !is_handle_valid(pl_handle)) {
-    return false;
-  }
-
-  if (auto* p = std::get_if<Point>(&scene_objects_[p_handle.obj_id]->first->object)) {
-    if (p->point_lists_.contains(pl_handle)) {
-      return false;
-    }
-
-    p->point_lists_.insert(pl_handle);
-    auto& pl = *point_list_objects_[pl_handle.obj_id]->first;
-    pl.points_.push_back(p_handle);
-    pl.points_map_.insert({p_handle, std::prev(pl.points_.end())});
-    mark_dirty(pl_handle);
-
-    return true;
-  }
-
-  eray::util::panic("Provided point handle does not refers to a point");
-  return false;
-}
-
-bool Scene::remove_point_from_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle) {
-  if (!is_handle_valid(p_handle) || !is_handle_valid(pl_handle)) {
-    return false;
-  }
-
-  if (auto* p = std::get_if<Point>(&scene_objects_[p_handle.obj_id]->first->object)) {
-    if (!p->point_lists_.contains(pl_handle)) {
-      return false;
-    }
-
-    p->point_lists_.erase(pl_handle);
-    auto& pl  = *point_list_objects_[pl_handle.obj_id]->first;
-    auto p_it = pl.points_map_.find(p_handle);
-    pl.points_.erase(p_it->second);
-    pl.points_map_.erase(p_it);
-    mark_dirty(pl_handle);
-
-    return true;
-  }
-
-  eray::util::panic("Provided point handle does not refers to a point");
-  return false;
-}
 void Scene::visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor) {
   for (auto id : dirty_scene_objects_) {
     if (scene_objects_[id]) {

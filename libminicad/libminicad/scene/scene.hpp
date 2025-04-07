@@ -7,7 +7,7 @@
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
-#include <set>
+#include <optional>
 #include <stack>
 #include <variant>
 #include <vector>
@@ -32,8 +32,23 @@ class Scene {
   std::optional<SceneObjectHandle> handle_by_obj_id(SceneObjectId id);
 
   [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const SceneObjectHandle& handle);
-  [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj(const PointHandle& handle);
   [[nodiscard]] OptionalObserverPtr<PointListObject> get_obj(const PointListObjectHandle& handle);
+
+  template <typename Type>
+  [[nodiscard]] OptionalObserverPtr<SceneObject> get_obj_that_holds(const SceneObjectHandle& handle) {
+    if (!is_handle_valid(handle)) {
+      return std::nullopt;
+    }
+
+    if (!std::holds_alternative<Type>(scene_objects_[handle.obj_id]->first->object)) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<SceneObject>(*scene_objects_[handle.obj_id]->first);
+  }
+
+  bool add_to_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle);
+  bool remove_from_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle);
 
   [[nodiscard]] bool exists(const SceneObjectHandle& handle) { return is_handle_valid(handle); }
   [[nodiscard]] bool exists(const PointListObjectHandle& handle) { return is_handle_valid(handle); }
@@ -43,10 +58,6 @@ class Scene {
 
   std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant);
   std::expected<PointListObjectHandle, ObjectCreationError> create_list_obj();
-
-  [[nodiscard]] std::optional<PointHandle> get_point_handle(const SceneObjectHandle& handle);
-  bool add_point_to_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle);
-  bool remove_point_from_list(const PointHandle& p_handle, const PointListObjectHandle& pl_handle);
 
   const std::list<SceneObjectHandle>& scene_objs() const { return scene_objects_list_; }
   const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }
@@ -58,14 +69,13 @@ class Scene {
   void visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor);
   void visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor);
 
+  bool is_handle_valid(const PointListObjectHandle& handle) const;
+  bool is_handle_valid(const SceneObjectHandle& handle) const;
+
  public:
   static constexpr std::size_t kMaxObjects = 100;
 
  private:
-  bool is_handle_valid(const PointListObjectHandle& handle) const;
-  bool is_handle_valid(const SceneObjectHandle& handle) const;
-  bool is_handle_valid(const PointHandle& handle) const;
-
   SceneObjectHandle create_scene_obj_handle(std::uint32_t obj_id);
   PointListObjectHandle create_list_obj_handle(std::uint32_t obj_id);
 
@@ -81,6 +91,8 @@ class Scene {
   std::uint32_t timestamp();
 
  private:
+  friend PointListObject;
+
   static std::uint32_t next_signature_;
 
   std::uint32_t signature_;
