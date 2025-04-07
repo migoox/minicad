@@ -13,8 +13,11 @@ namespace util = eray::util;
 SceneObject::~SceneObject() {
   for (const auto& pl_h : point_lists_) {
     if (auto pl = scene_.get_obj(pl_h)) {
-      if (!pl.value()->remove(handle_)) {
-        util::Logger::warn("Could not remove {} from list object.", pl.value()->name);
+      auto it = pl.value()->points_map_.find(handle_);
+      if (it != pl.value()->points_map_.end()) {
+        auto ind = it->second;
+        pl.value()->points_map_.erase(it);
+        pl.value()->points_.erase(pl.value()->points_.begin() + ind);
       }
     }
   }

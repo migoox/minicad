@@ -112,6 +112,7 @@ class PointListObject {
 
  private:
   friend Scene;
+  friend SceneObject;
 
   PointListObjectHandle handle_;
   Scene& scene_;  // NOLINT
