@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <expected>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
@@ -93,6 +94,68 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
   }
 
   return std::unexpected(SceneObjectError::NotAPoint);
+}
+std::expected<void, PointListObject::SceneObjectError> PointListObject::move_before(const SceneObjectHandle& dest,
+                                                                                    const SceneObjectHandle& obj) {
+  if (!scene_.is_handle_valid(dest) || !scene_.is_handle_valid(obj)) {
+    return std::unexpected(SceneObjectError::HandleIsNotValid);
+  }
+
+  if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
+    return std::unexpected(SceneObjectError::NotFound);
+  }
+
+  size_t dest_idx = points_map_[dest];
+  size_t obj_idx  = points_map_[obj];
+
+  if (obj_idx == dest_idx) {
+    return {};
+  }
+  SceneObject& obj_ref = points_[obj_idx].get();
+  points_.erase(points_.begin() + obj_idx);
+  if (obj_idx < dest_idx && dest_idx > 0) {
+    dest_idx--;
+  }
+  points_.insert(points_.begin() + dest_idx, std::ref(obj_ref));
+  update_indices_from(std::min(dest_idx, obj_idx));
+
+  return {};
+}
+
+std::expected<void, PointListObject::SceneObjectError> PointListObject::move_after(const SceneObjectHandle& dest,
+                                                                                   const SceneObjectHandle& obj) {
+  if (!scene_.is_handle_valid(dest) || !scene_.is_handle_valid(obj)) {
+    return std::unexpected(SceneObjectError::HandleIsNotValid);
+  }
+
+  if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
+    return std::unexpected(SceneObjectError::NotFound);
+  }
+
+  size_t dest_idx = points_map_[dest];
+  size_t obj_idx  = points_map_[obj];
+
+  if (obj_idx == dest_idx + 1) {
+    return {};
+  }
+
+  SceneObject& obj_ref = points_[obj_idx].get();
+  points_.erase(points_.begin() + obj_idx);
+  size_t insert_pos = dest_idx + 1;
+  if (obj_idx > dest_idx && insert_pos > 0) {
+    insert_pos--;
+  }
+  insert_pos = std::min(insert_pos, points_.size());
+  points_.insert(points_.begin() + insert_pos, std::ref(obj_ref));
+  update_indices_from(std::min(insert_pos, obj_idx));
+
+  return {};
+}
+
+void PointListObject::update_indices_from(size_t start_idx) {
+  for (size_t i = start_idx; i < points_.size(); ++i) {
+    points_map_[points_[i].get().handle()] = i;
+  }
 }
 
 }  // namespace mini

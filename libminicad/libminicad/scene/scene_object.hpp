@@ -100,12 +100,17 @@ class PointListObject {
 
   std::expected<void, SceneObjectError> add(const SceneObjectHandle& handle);
   std::expected<void, SceneObjectError> remove(const SceneObjectHandle& handle);
+  std::expected<void, SceneObjectError> move_before(const SceneObjectHandle& dest, const SceneObjectHandle& obj);
+  std::expected<void, SceneObjectError> move_after(const SceneObjectHandle& dest, const SceneObjectHandle& obj);
 
   PointListObjectId id() const { return handle_.obj_id; }
   const PointListObjectHandle& handle() const { return handle_; }
   void mark_dirty();
 
   size_t order_ind() const { return order_ind_; }
+
+ private:
+  void update_indices_from(size_t start_idx);
 
  public:
   std::string name;

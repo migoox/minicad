@@ -35,6 +35,8 @@
 #include <ranges>
 #include <variant>
 
+#include "imgui/reorder_dnd.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -289,6 +291,8 @@ void MiniCadApp::gui_selection_window() {
 void MiniCadApp::gui_point_list_window() {
   ImGui::Begin("Selected Point List");
   if (m_.point_list_selection->is_single_selection()) {
+    static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
+    auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
     if (auto obj = m_.scene.get_obj(m_.point_list_selection->first())) {
       ImGui::Text("Name: %s", obj.value()->name.c_str());
       ImGui::SameLine();
@@ -331,10 +335,13 @@ void MiniCadApp::gui_point_list_window() {
             on_selection_add(p.handle());
           }
         }
+        reorder_dnd.drag_and_drop_component(p, true);
 
         ImGui::PopID();
       }
     }
+    on_points_reorder(m_.point_list_selection->first(), reorder_dnd.source, reorder_dnd.before_dest,
+                      reorder_dnd.after_dest);
   }
   ImGui::End();
 }
@@ -575,6 +582,29 @@ bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handl
     Logger::info("Deleted point list object \"{}\"", o.value()->name);
     m_.scene.delete_obj(handle);
     return true;
+  }
+
+  return false;
+}
+bool MiniCadApp::on_points_reorder(const PointListObjectHandle& handle, const std::optional<SceneObjectHandle>& source,
+                                   const std::optional<SceneObjectHandle>& before_dest,
+                                   const std::optional<SceneObjectHandle>& after_dest) {
+  if (auto obj = m_.scene.get_obj(handle)) {
+    if (source && before_dest) {
+      if (!obj.value()->move_before(*before_dest, *source)) {
+        util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
+      }
+      obj.value()->mark_dirty();
+      return true;
+    }
+
+    if (source && after_dest) {
+      if (!obj.value()->move_after(*after_dest, *source)) {
+        util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
+      }
+      obj.value()->mark_dirty();
+      return true;
+    }
   }
 
   return false;

@@ -50,8 +50,8 @@ class Scene {
   bool add_to_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle);
   bool remove_from_list(const SceneObjectHandle& p_handle, const PointListObjectHandle& pl_handle);
 
-  [[nodiscard]] bool exists(const SceneObjectHandle& handle) { return is_handle_valid(handle); }
-  [[nodiscard]] bool exists(const PointListObjectHandle& handle) { return is_handle_valid(handle); }
+  [[nodiscard]] bool exists(const SceneObjectHandle& handle) const { return is_handle_valid(handle); }
+  [[nodiscard]] bool exists(const PointListObjectHandle& handle) const { return is_handle_valid(handle); }
 
   bool delete_obj(const SceneObjectHandle& handle);
   bool delete_obj(const PointListObjectHandle& handle);
