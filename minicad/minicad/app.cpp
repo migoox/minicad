@@ -36,6 +36,7 @@
 #include <variant>
 
 #include "imgui/reorder_dnd.hpp"
+#include "minicad/imgui/transform.hpp"
 
 namespace mini {
 
@@ -240,11 +241,7 @@ void MiniCadApp::gui_selection_window() {
           },
           scene_obj.value()->object);
 
-      auto world_pos = scene_obj.value()->transform.pos();
-      if (ImGui::DragFloat3("World", world_pos.raw_ptr(), -0.1F)) {
-        scene_obj.value()->transform.set_local_pos(world_pos);
-        scene_obj.value()->mark_dirty();
-      }
+      ImGui::mini::Transform(scene_obj.value()->transform, [&]() { scene_obj.value()->mark_dirty(); });
 
       std::visit(eray::util::match{
                      [this](Point& p) {
@@ -281,7 +278,7 @@ void MiniCadApp::gui_selection_window() {
     }
   } else if (m_.selection->is_multi_selection()) {
     ImGui::Text("Multiselection");
-
+    ImGui::mini::Transform(m_.selection->transform, [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); });
   } else {
     ImGui::Text("None");
   }
@@ -586,6 +583,7 @@ bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handl
 
   return false;
 }
+
 bool MiniCadApp::on_points_reorder(const PointListObjectHandle& handle, const std::optional<SceneObjectHandle>& source,
                                    const std::optional<SceneObjectHandle>& before_dest,
                                    const std::optional<SceneObjectHandle>& after_dest) {

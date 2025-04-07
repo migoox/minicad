@@ -84,7 +84,7 @@ class PointListObject {
     return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
   }
 
-  const auto points() const {
+  auto points() const {
     return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
   }
 
