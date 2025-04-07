@@ -83,6 +83,10 @@ class PointListObject {
   explicit PointListObject(PointListObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
 
   const std::list<PointHandle>& points() const { return points_; }
+  const std::list<SceneObjectHandle>& scene_objs() const {
+    return *(
+        reinterpret_cast<const std::list<SceneObjectHandle>*>(&points_));  // TODO(migoox): do better handle system...
+  }
   bool contains(const PointHandle& handle) { return points_map_.contains(handle); }
   bool contains(const SceneObjectHandle& handle) {
     return points_map_.contains(PointHandle(handle.owner_signature, handle.timestamp, handle.obj_id));

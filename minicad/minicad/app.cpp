@@ -30,6 +30,7 @@
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/imgui/modals.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
+#include <minicad/selection/selection.hpp>
 #include <optional>
 #include <ranges>
 #include <variant>
@@ -72,16 +73,17 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
 
   return MiniCadApp(std::move(window),
                     {
-                        .cursor              = std::make_unique<Cursor>(),     //
-                        .camera              = std::move(camera),              //
-                        .camera_gimbal       = std::move(gimbal),              //
-                        .grid_on             = true,                           //
-                        .scene               = Scene(),                        //
-                        .selection           = std::make_unique<Selection>(),  //
-                        .scene_renderer      = std::move(sr),                  //
-                        .screen_quad_sh_prog = std::move(screen_quad_prog),    //
-                        .viewport_fb         = std::make_unique<gl::ViewportFramebuffer>(win_size.x,
-                                                                                         win_size.y),  //
+                        .cursor               = std::make_unique<Cursor>(),                     //
+                        .camera               = std::move(camera),                              //
+                        .camera_gimbal        = std::move(gimbal),                              //
+                        .grid_on              = true,                                           //
+                        .scene                = Scene(),                                        //
+                        .selection            = std::make_unique<SceneObjectsSelection>(),      //
+                        .point_list_selection = std::make_unique<PointListObjectsSelection>(),  //
+                        .scene_renderer       = std::move(sr),                                  //
+                        .screen_quad_sh_prog  = std::move(screen_quad_prog),                    //
+                        .viewport_fb          = std::make_unique<gl::ViewportFramebuffer>(win_size.x,
+                                                                                          win_size.y),  //
                     });
 }
 
@@ -136,10 +138,18 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   if (ImGui::BeginPopup("AddSceneObjectPopup")) {
     for (const auto [type, name] : kSceneObjectNames) {
       if (ImGui::Selectable(name.c_str())) {
-        if (type == ObjectType::Point) {
-          on_scene_object_added(Point{});
-        } else {
-          on_scene_object_added(Torus{});
+        switch (type) {
+          case ObjectType::Point:
+            on_scene_object_added(Point{});
+            break;
+          case ObjectType::Torus:
+            on_scene_object_added(Torus{});
+            break;
+          case ObjectType::PointList:
+            on_point_list_object_added();
+            break;
+          case ObjectType::_Count:
+            util::panic("AddSceneObjectPopup failed with object unexpected type");
         }
       }
     }
@@ -149,7 +159,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::SameLine();
 
   {
-    bool disable = m_.selection->is_empty();
+    bool disable = m_.selection->is_empty() && m_.point_list_selection->is_empty();
     if (disable) {
       ImGui::BeginDisabled();
     }
@@ -157,7 +167,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       for (const auto& o : *m_.selection) {
         on_scene_object_deleted(o);
       }
+      for (const auto& o : *m_.point_list_selection) {
+        on_point_list_object_deleted(o);
+      }
       on_selection_clear();
+      on_point_list_selection_clear();
     }
     if (disable) {
       ImGui::EndDisabled();
@@ -165,32 +179,34 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
 
   for (const auto& test : m_.scene.objs()) {
-    std::visit(eray::util::match{[&](const auto& handle) {
-                 if (auto o = m_.scene.get_obj(handle)) {
-                   ImGui::Text("%d, %s", o.value()->order_ind(), o.value()->name.c_str());
-                 }
-               }},
-               test);
-  }
-  ImGui::End();
-
-  ImGui::Begin("Scene objects");
-
-  for (const auto& h_p : m_.scene.scene_objs()) {
-    if (auto p = m_.scene.get_obj(h_p)) {
-      ImGui::PushID(h_p.obj_id);
-
-      bool is_selected = m_.selection->contains(h_p);
-      if (ImGui::Selectable(p.value()->name.c_str(), is_selected)) {
-        if (is_selected) {
-          on_selection_remove(h_p);
-        } else {
-          on_selection_add(h_p);
-        }
-      }
-
-      ImGui::PopID();
-    }
+    std::visit(eray::util::match{
+                   [&](const SceneObjectHandle& handle) {
+                     if (auto o = m_.scene.get_obj(handle)) {
+                       bool is_selected = m_.selection->contains(handle);
+                       if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
+                         if (is_selected) {
+                           on_selection_remove(handle);
+                         } else {
+                           on_selection_add(handle);
+                         }
+                       }
+                     }
+                   },
+                   [&](const PointListObjectHandle& handle) {
+                     if (auto o = m_.scene.get_obj(handle)) {
+                       bool is_selected = m_.point_list_selection->contains(handle);
+                       if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
+                         if (is_selected) {
+                           on_point_list_selection_remove(handle);
+                         } else {
+                           on_point_list_selection_add(handle);
+                         }
+                       }
+                     }
+                   },
+               },
+               test  //
+    );
   }
   ImGui::End();
 
@@ -232,9 +248,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                          if (auto point_list = m_.scene.get_obj(p)) {
                            ImGui::PushID(point_list.value()->id());
 
-                           bool is_selected = m_.selected_point_list_obj && m_.selected_point_list_obj.value() == p;
+                           bool is_selected = m_.point_list_selection->contains(point_list.value()->handle());
                            if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
-                             m_.selected_point_list_obj = p;
+                             m_.point_list_selection->add(point_list.value()->handle());
                            }
 
                            ImGui::PopID();
@@ -266,43 +282,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
   ImGui::End();
 
-  ImGui::Begin("Point Lists");
-
-  if (ImGui::Button("Add")) {
-    on_point_list_object_added();
-  }
-  ImGui::SameLine();
-  {
-    bool disable = !m_.selected_point_list_obj;
-    if (disable) {
-      ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("Delete")) {
-      on_point_list_object_deleted(*m_.selected_point_list_obj);
-      m_.selected_point_list_obj = std::nullopt;
-    }
-    if (disable) {
-      ImGui::EndDisabled();
-    }
-  }
-  for (const auto& h_pl : m_.scene.point_list_objs()) {
-    if (auto pl = m_.scene.get_obj(h_pl)) {
-      ImGui::PushID(h_pl.obj_id);
-
-      bool is_selected = m_.selected_point_list_obj && m_.selected_point_list_obj.value() == h_pl;
-      if (ImGui::Selectable(pl.value()->name.c_str(), is_selected)) {
-        m_.selected_point_list_obj = h_pl;
-      }
-
-      ImGui::PopID();
-    }
-  }
-
-  ImGui::End();
-
   ImGui::Begin("Selected Point List");
-  if (m_.selected_point_list_obj) {
-    if (auto obj = m_.scene.get_obj(*m_.selected_point_list_obj)) {
+  if (m_.point_list_selection->is_single_selection()) {
+    if (auto obj = m_.scene.get_obj(m_.point_list_selection->first())) {
       ImGui::Text("Name: %s", obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -316,13 +298,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
 
       ImGui::Text("Points: ");
-      auto disable = !m_.selected_point_list_obj || !m_.selection->is_single_selection();
+      auto disable = !m_.point_list_selection->is_single_selection() || !m_.selection->is_single_selection();
       if (disable) {
         ImGui::BeginDisabled();
       }
       if (ImGui::Button("Add")) {
         if (auto p_h = m_.scene.get_point_handle(m_.selection->first())) {
-          m_.scene.add_point_to_list(p_h.value(), *m_.selected_point_list_obj);
+          m_.scene.add_point_to_list(p_h.value(), m_.point_list_selection->first());
         }
       }
       if (disable) {
@@ -337,7 +319,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
       if (ImGui::Button("Remove")) {
         if (auto ph = m_.scene.get_point_handle(m_.selection->first())) {
-          m_.scene.remove_point_from_list(*ph, *m_.selected_point_list_obj);
+          m_.scene.remove_point_from_list(*ph, m_.point_list_selection->first());
         }
       }
       if (disable) {
@@ -544,7 +526,7 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
 
 bool MiniCadApp::on_point_list_object_added() {
   if (auto handle = m_.scene.create_list_obj()) {
-    m_.selected_point_list_obj = *handle;
+    m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
       m_.scene_renderer.add_point_list_object(*o.value());
       Logger::info("Added point list object \"{}\"", o.value()->name);
@@ -592,6 +574,32 @@ bool MiniCadApp::on_selection_clear() {
     }
   }
   m_.selection->clear(m_.scene);
+  return true;
+}
+
+bool MiniCadApp::on_point_list_selection_add(const PointListObjectHandle& handle) {
+  if (auto o = m_.scene.get_obj(handle)) {
+    on_selection_add_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+  }
+  m_.point_list_selection->add(handle);
+  return true;
+}
+
+bool MiniCadApp::on_point_list_selection_remove(const PointListObjectHandle& handle) {
+  if (auto o = m_.scene.get_obj(handle)) {
+    on_selection_remove_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+  }
+  m_.point_list_selection->remove(handle);
+  return true;
+}
+
+bool MiniCadApp::on_point_list_selection_clear() {
+  for (const auto& pl : *m_.point_list_selection) {
+    if (auto o = m_.scene.get_obj(pl)) {
+      on_selection_remove_many(o.value()->scene_objs().begin(), o.value()->scene_objs().end());
+    }
+  }
+  m_.point_list_selection->clear();
   return true;
 }
 

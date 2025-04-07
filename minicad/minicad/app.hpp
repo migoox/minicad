@@ -21,10 +21,7 @@
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/selection/selection.hpp>
-#include <type_traits>
-#include <variant>
-
-#include "tools/select_tool.hpp"
+#include <minicad/tools/select_tool.hpp>
 
 namespace mini {
 
@@ -67,8 +64,8 @@ class MiniCadApp final : public eray::os::Application {
     // TODO(migoox): state machine
     ToolState tool_state;
 
-    std::optional<PointListObjectHandle> selected_point_list_obj;
-    std::unique_ptr<Selection> selection;
+    std::unique_ptr<SceneObjectsSelection> selection;
+    std::unique_ptr<PointListObjectsSelection> point_list_selection;
 
     SceneRenderer scene_renderer;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad_sh_prog;
@@ -103,8 +100,24 @@ class MiniCadApp final : public eray::os::Application {
     return true;
   }
 
+  template <eray::util::Iterator<SceneObjectHandle> It>
+  bool on_selection_remove_many(It begin, It end) {
+    for (const auto& handle : std::ranges::subrange(begin, end)) {
+      m_.scene_renderer.update_visibility_state(handle, VisibilityState::Visible);
+      if (auto o = m_.scene.get_obj(handle)) {
+        o.value()->mark_dirty();
+      }
+    }
+    m_.selection->remove_many(m_.scene, begin, end);
+    return true;
+  }
+
   bool on_selection_remove(const SceneObjectHandle& handle);
   bool on_selection_clear();
+
+  bool on_point_list_selection_add(const PointListObjectHandle& handle);
+  bool on_point_list_selection_remove(const PointListObjectHandle& handle);
+  bool on_point_list_selection_clear();
 
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);

@@ -4,11 +4,46 @@
 #include <liberay/math/vec.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <minicad/cursor/cursor.hpp>
+#include <optional>
 #include <unordered_set>
 
 namespace mini {
 
-class Selection {
+class PointListObjectsSelection {
+ public:
+  void remove(const PointListObjectHandle& handle) {
+    auto f = objs_.find(handle);
+    if (f != objs_.end()) {
+      objs_.erase(f);
+    }
+  }
+  void add(const PointListObjectHandle& handle) { objs_.insert(handle); }
+  void clear() { objs_.clear(); }
+
+  bool contains(const PointListObjectHandle& handle) const { return objs_.contains(handle); }
+  bool is_multi_selection() const { return objs_.size() > 1; }
+  bool is_single_selection() const { return objs_.size() == 1; }
+  bool is_empty() const { return objs_.empty(); }
+
+  std::optional<PointListObjectHandle> single() {
+    if (is_single_selection()) {
+      return *objs_.begin();
+    }
+    return std::nullopt;
+  }
+
+  const PointListObjectHandle& first() { return *objs_.begin(); }
+
+  auto begin() { return objs_.begin(); }
+  auto begin() const { return objs_.begin(); }
+  auto end() { return objs_.end(); }
+  auto end() const { return objs_.end(); }
+
+ private:
+  std::unordered_set<PointListObjectHandle> objs_;
+};
+
+class SceneObjectsSelection {
  public:
   void remove(Scene& scene, const SceneObjectHandle& handle);
   void add(Scene& scene, const SceneObjectHandle& handle);
@@ -21,14 +56,27 @@ class Selection {
     update_centroid(scene);
   }
 
+  template <std::input_iterator Iterator>
+  void remove_many(Scene& scene, Iterator begin, Iterator end) {
+    detach_all(scene);
+    for (const auto& handle : std::ranges::subrange(begin, end)) {
+      auto f = objs_.find(handle);
+      if (f != objs_.end()) {
+        objs_.erase(begin, end);
+      }
+    }
+    update_centroid(scene);
+  }
+
   bool is_multi_selection() const { return objs_.size() > 1; }
   bool is_single_selection() const { return objs_.size() == 1; }
   bool is_empty() const { return objs_.empty(); }
+
   bool contains(const SceneObjectHandle& handle) const { return objs_.contains(handle); }
 
   auto centroid() const { return centroid_; }
 
-  SceneObjectHandle first() { return *objs_.begin(); }
+  const SceneObjectHandle& first() { return *objs_.begin(); }
 
   void update_transforms(Scene& scene, Cursor& cursor);
 

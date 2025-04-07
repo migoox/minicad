@@ -6,28 +6,32 @@ namespace mini {
 
 using Vec3f = eray::math::Vec3f;
 
-void Selection::remove(Scene& scene, const SceneObjectHandle& handle) {
+void SceneObjectsSelection::remove(Scene& scene, const SceneObjectHandle& handle) {
+  auto f = objs_.find(handle);
+  if (f == objs_.end()) {
+    return;
+  }
   detach_all(scene);
 
   objs_.erase(objs_.find(handle));
   update_centroid(scene);
 }
 
-void Selection::add(Scene& scene, const SceneObjectHandle& handle) {
+void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
   detach_all(scene);
 
   objs_.insert(handle);
   update_centroid(scene);
 }
 
-void Selection::clear(Scene& scene) {
+void SceneObjectsSelection::clear(Scene& scene) {
   detach_all(scene);
 
   objs_.clear();
   transform.reset_local(eray::math::Vec3f::filled(0.F));
 }
 
-void Selection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
+void SceneObjectsSelection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
   if (use_custom_origin_) {
     detach_all(scene);
     transform.reset_local(vec);
@@ -36,7 +40,7 @@ void Selection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
   custom_origin_ = vec;
 }
 
-void Selection::use_custom_origin(Scene& scene, bool use_custom_origin) {
+void SceneObjectsSelection::use_custom_origin(Scene& scene, bool use_custom_origin) {
   if (use_custom_origin == use_custom_origin_) {
     return;
   }
@@ -49,7 +53,7 @@ void Selection::use_custom_origin(Scene& scene, bool use_custom_origin) {
   }
 }
 
-void Selection::update_transforms(Scene& scene, Cursor& cursor) {
+void SceneObjectsSelection::update_transforms(Scene& scene, Cursor& cursor) {
   if (use_custom_origin_) {
     update_centroid(scene);
     cursor.transform.set_local_pos(transform.pos());
@@ -76,7 +80,7 @@ void Selection::update_transforms(Scene& scene, Cursor& cursor) {
   }
 }
 
-void Selection::detach_all(Scene& scene) {
+void SceneObjectsSelection::detach_all(Scene& scene) {
   if (!transform_dirty_) {
     return;
   }
@@ -89,7 +93,7 @@ void Selection::detach_all(Scene& scene) {
   }
 }
 
-void Selection::update_centroid(Scene& scene) {
+void SceneObjectsSelection::update_centroid(Scene& scene) {
   centroid_ = eray::math::Vec3f::filled(0.F);
   if (is_empty()) {
     if (!use_custom_origin_) {
