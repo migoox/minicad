@@ -74,7 +74,14 @@ class MiniCadApp final : public eray::os::Application {
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
 
-  bool on_scene_object_added(SceneObjectVariant variant);
+  // GUI
+  void gui_objects_list_window();
+  void gui_selection_window();
+  void gui_point_list_window();
+
+  // GUI Events
+  bool on_scene_object_created(SceneObjectVariant variant);
+  bool on_point_created_in_point_list(const PointListObjectHandle& handle);
   bool on_scene_object_deleted(const SceneObjectHandle& handle);
 
   bool on_point_list_object_added();
@@ -119,6 +126,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_point_list_selection_remove(const PointListObjectHandle& handle);
   bool on_point_list_selection_clear();
 
+  // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
   bool on_resize(const eray::os::WindowResizedEvent& ev);

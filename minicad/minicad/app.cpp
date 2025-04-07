@@ -100,23 +100,7 @@ MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
   window_->set_event_callback<os::KeyPressedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_pressed));
 }
 
-void MiniCadApp::render_gui(Duration /* delta */) {
-  ImGui::Begin("MiNI CAD");
-  ImGui::Text("FPS: %d", fps_);
-
-  ImGui::Checkbox("Grid", &m_.grid_on);
-  ImGui::Checkbox("Ortho", &m_.use_ortho);
-  if (ImGui::Button("Look at cursor")) {
-    m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
-  }
-  if (ImGui::Button("Look at origin")) {
-    m_.camera_gimbal->set_local_pos(m_.selection->centroid());
-  }
-
-  ImGui::End();
-
-  ImGui::ShowDemoWindow();
-
+void MiniCadApp::gui_objects_list_window() {
   ImGui::Begin("Objects");
   if (ImGui::Button("Add")) {
     ImGui::OpenPopup("AddSceneObjectPopup");
@@ -140,10 +124,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       if (ImGui::Selectable(name.c_str())) {
         switch (type) {
           case ObjectType::Point:
-            on_scene_object_added(Point{});
+            on_scene_object_created(Point{});
             break;
           case ObjectType::Torus:
-            on_scene_object_added(Torus{});
+            on_scene_object_created(Torus{});
             break;
           case ObjectType::PointList:
             on_point_list_object_added();
@@ -178,38 +162,57 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   }
 
-  for (const auto& test : m_.scene.objs()) {
-    std::visit(eray::util::match{
-                   [&](const SceneObjectHandle& handle) {
-                     if (auto o = m_.scene.get_obj(handle)) {
-                       bool is_selected = m_.selection->contains(handle);
-                       if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
-                         if (is_selected) {
-                           on_selection_remove(handle);
-                         } else {
-                           on_selection_add(handle);
-                         }
-                       }
-                     }
-                   },
-                   [&](const PointListObjectHandle& handle) {
-                     if (auto o = m_.scene.get_obj(handle)) {
-                       bool is_selected = m_.point_list_selection->contains(handle);
-                       if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
-                         if (is_selected) {
-                           on_point_list_selection_remove(handle);
-                         } else {
-                           on_point_list_selection_add(handle);
-                         }
-                       }
-                     }
-                   },
-               },
-               test  //
-    );
+  static zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
+  for (const auto& obj : m_.scene.objs()) {
+    std::visit(  //
+        util::match{
+            [&](const SceneObjectHandle& handle) {
+              if (auto o = m_.scene.get_obj(handle)) {
+                bool is_selected = m_.selection->contains(handle);
+                if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
+                  if (is_selected) {
+                    on_selection_remove(handle);
+                  } else {
+                    on_selection_add(handle);
+                  }
+                }
+                if (std::holds_alternative<Point>(o.value()->object)) {
+                  if (ImGui::BeginDragDropSource()) {
+                    ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &handle, sizeof(SceneObjectHandle));
+                    ImGui::Text("%s", o.value()->name.c_str());
+                    ImGui::EndDragDropSource();
+                  }
+                }
+              }
+            },
+            [&](const PointListObjectHandle& handle) {
+              if (auto o = m_.scene.get_obj(handle)) {
+                bool is_selected = m_.point_list_selection->contains(handle);
+                if (ImGui::Selectable(o.value()->name.c_str(), is_selected)) {
+                  if (is_selected) {
+                    on_point_list_selection_remove(handle);
+                  } else {
+                    on_point_list_selection_add(handle);
+                  }
+                }
+                if (ImGui::BeginDragDropTarget()) {
+                  if (const ImGuiPayload* payload =
+                          ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
+                    IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
+                    auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
+                    m_.scene.add_to_list(point_handle, handle);
+                  }
+                  ImGui::EndDragDropTarget();
+                }
+              }
+            },
+        },
+        obj);
   }
   ImGui::End();
+}
 
+void MiniCadApp::gui_selection_window() {
   ImGui::Begin("Selection");
   if (m_.selection->is_single_selection()) {
     if (auto scene_obj = m_.scene.get_obj(m_.selection->first())) {
@@ -281,7 +284,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::Text("None");
   }
   ImGui::End();
+}
 
+void MiniCadApp::gui_point_list_window() {
   ImGui::Begin("Selected Point List");
   if (m_.point_list_selection->is_single_selection()) {
     if (auto obj = m_.scene.get_obj(m_.point_list_selection->first())) {
@@ -300,20 +305,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       ImGui::Text("Points: ");
       m_.selection->is_single_selection();
 
-      auto disable = !m_.selection->is_single_selection() || !m_.point_list_selection->is_single_selection();
-      if (disable) {
-        ImGui::BeginDisabled();
-      }
       if (ImGui::Button("Add")) {
-        m_.scene.add_to_list(m_.selection->first(), m_.point_list_selection->first());
+        on_point_created_in_point_list(m_.point_list_selection->first());
       }
-      if (disable) {
-        ImGui::EndDisabled();
-      }
-
       ImGui::SameLine();
-
-      disable = !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
+      auto disable = !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
       if (disable) {
         ImGui::BeginDisabled();
       }
@@ -341,6 +337,28 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   }
   ImGui::End();
+}
+
+void MiniCadApp::render_gui(Duration /* delta */) {
+  //   ImGui::ShowDemoWindow();
+
+  ImGui::Begin("MiNI CAD");
+  {
+    ImGui::Text("FPS: %d", fps_);
+    ImGui::Checkbox("Grid", &m_.grid_on);
+    ImGui::Checkbox("Ortho", &m_.use_ortho);
+    if (ImGui::Button("Look at cursor")) {
+      m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
+    }
+    if (ImGui::Button("Look at origin")) {
+      m_.camera_gimbal->set_local_pos(m_.selection->centroid());
+    }
+  }
+  ImGui::End();
+
+  gui_objects_list_window();
+  gui_selection_window();
+  gui_point_list_window();
 
   ImGui::Begin("Tools");
   bool selected = m_.tool_state == ToolState::Cursor;
@@ -486,7 +504,7 @@ void MiniCadApp::update(Duration delta) {
   m_.cursor->update(*m_.camera, math::Vec2f(window_->mouse_pos_ndc()));
 }
 
-bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
+bool MiniCadApp::on_scene_object_created(SceneObjectVariant variant) {
   auto obj_handle = m_.scene.create_scene_obj(std::move(variant));
   if (!obj_handle) {
     Logger::err("Could not add a new point list object");
@@ -498,12 +516,31 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
     on_selection_clear();
     on_selection_add(*obj_handle);
-    util::Logger::info("Added scene object \"{}\"", o.value()->name);
-  } else {
-    util::Logger::warn("Despite calling create scene object, the object has not been added");
+    util::Logger::info("Created scene object \"{}\"", o.value()->name);
+    return true;
   }
 
-  return true;
+  return false;
+}
+
+bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& handle) {
+  auto obj_handle = m_.scene.create_scene_obj(Point{});
+  if (!obj_handle) {
+    Logger::err("Could not add a new point list object");
+    return false;
+  }
+
+  if (auto o = m_.scene.get_obj(*obj_handle)) {
+    m_.scene.add_to_list(*obj_handle, handle);
+    m_.scene_renderer.add_scene_object(*o.value());
+    o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+    on_selection_clear();
+    on_selection_add(*obj_handle);
+    util::Logger::info("Created scene object \"{}\"", o.value()->name);
+    return true;
+  }
+
+  return false;
 }
 
 bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
@@ -524,7 +561,7 @@ bool MiniCadApp::on_point_list_object_added() {
     m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
       m_.scene_renderer.add_point_list_object(*o.value());
-      Logger::info("Added point list object \"{}\"", o.value()->name);
+      Logger::info("Created point list object \"{}\"", o.value()->name);
     }
     return true;
   }

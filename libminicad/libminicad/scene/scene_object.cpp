@@ -31,6 +31,10 @@ PointListObject::~PointListObject() {
 void PointListObject::mark_dirty() { scene_.mark_dirty(handle_); }
 
 std::expected<void, PointListObject::SceneObjectError> PointListObject::add(const SceneObjectHandle& handle) {
+  if (points_map_.contains(handle)) {
+    return {};
+  }
+
   if (!scene_.is_handle_valid(handle)) {
     return std::unexpected(SceneObjectError::HandleIsNotValid);
   }
