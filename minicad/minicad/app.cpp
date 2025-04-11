@@ -492,7 +492,7 @@ void MiniCadApp::render(Application::Duration /* delta */) {
   m_.scene_renderer.billboard("cursor").position   = m_.cursor->transform.pos();
   m_.scene_renderer.billboard("centroid").show     = m_.selection->is_multi_selection();
   m_.scene_renderer.billboard("centroid").position = m_.selection->centroid();
-  m_.scene_renderer.render(*m_.viewport_fb, *m_.camera);
+  m_.scene_renderer.render(m_.scene, *m_.viewport_fb, *m_.camera);
 
   // Render to the default framebuffer
   glDisable(GL_DEPTH_TEST);

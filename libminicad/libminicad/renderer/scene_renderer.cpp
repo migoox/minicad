@@ -1,13 +1,18 @@
+#include <glad/gl.h>
+
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/gl_error.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/res/image.hpp>
+#include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <variant>
 
-#include "libminicad/scene/scene_object.hpp"
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
@@ -18,6 +23,7 @@ namespace res    = eray::res;
 namespace math   = eray::math;
 
 namespace {
+
 gl::VertexArray create_box_vao(float width = 1.F, float height = 1.F, float depth = 1.F) {
   float vertices[] = {
       // Front Face
@@ -143,38 +149,6 @@ gl::VertexArray create_points_vao() {
   return vao;
 }
 
-std::pair<gl::VertexArrayHandle, gl::ElementBuffer> create_point_list_vao(const gl::VertexBuffer& vert_buff) {
-  GLuint id = 0;
-  glCreateVertexArrays(1, &id);
-
-  auto ebo = gl::ElementBuffer::create();
-
-  // Bind EBO to VAO
-  glVertexArrayElementBuffer(id, ebo.raw_gl_id());
-
-  // Apply layouts of VBO
-  GLsizei vertex_size = 0;
-
-  for (const auto& attrib : vert_buff.layout()) {
-    glEnableVertexArrayAttrib(id, attrib.location);
-    glVertexArrayAttribFormat(id,                                     //
-                              attrib.location,                        //
-                              static_cast<GLint>(attrib.count),       //
-                              GL_FLOAT,                               //
-                              attrib.normalize ? GL_TRUE : GL_FALSE,  //
-                              vertex_size);                           //
-
-    vertex_size += static_cast<GLint>(sizeof(float) * attrib.count);
-    glVertexArrayAttribBinding(id, attrib.location, 0);
-  }
-
-  glVertexArrayVertexBuffer(id, 0, vert_buff.raw_gl_id(), 0, vertex_size);
-
-  eray::driver::gl::check_gl_errors();
-
-  return {gl::VertexArrayHandle(id), std::move(ebo)};
-}
-
 gl::TextureHandle create_texture(const res::Image& image) {
   GLuint texture = 0;
   glGenTextures(1, &texture);
@@ -190,6 +164,38 @@ gl::TextureHandle create_texture(const res::Image& image) {
   return gl::TextureHandle(texture);
 }
 }  // namespace
+
+PointListRenderingState PointListRenderingState::create(const eray::driver::gl::VertexBuffer& points_vao) {
+  GLuint id = 0;
+  glCreateVertexArrays(1, &id);
+
+  auto ebo = gl::ElementBuffer::create();
+
+  // Bind EBO to VAO
+  glVertexArrayElementBuffer(id, ebo.raw_gl_id());
+
+  // Apply layouts of VBO
+  GLsizei vertex_size = 0;
+
+  for (const auto& attrib : points_vao.layout()) {
+    glEnableVertexArrayAttrib(id, attrib.location);
+    glVertexArrayAttribFormat(id,                                     //
+                              attrib.location,                        //
+                              static_cast<GLint>(attrib.count),       //
+                              GL_FLOAT,                               //
+                              attrib.normalize ? GL_TRUE : GL_FALSE,  //
+                              vertex_size);                           //
+
+    vertex_size += static_cast<GLint>(sizeof(float) * attrib.count);
+    glVertexArrayAttribBinding(id, attrib.location, 0);
+  }
+
+  glVertexArrayVertexBuffer(id, 0, points_vao.raw_gl_id(), 0, vertex_size);
+
+  eray::driver::gl::check_gl_errors();
+
+  return {gl::VertexArrayHandle(id), std::move(ebo)};
+}
 
 std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRenderer::create(
     const std::filesystem::path& assets_path) {
@@ -217,9 +223,18 @@ std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRen
                      gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
 
   TRY_UNWRAP_ASSET(polyline_vert, manager.load_shader(assets_path / "polyline.vert"));
-  TRY_UNWRAP_ASSET(polyline_frag, manager.load_shader(assets_path / "polyline.frag"));
+  TRY_UNWRAP_ASSET(polyline_frag, manager.load_shader(assets_path / "solid_color.frag"));
   TRY_UNWRAP_PROGRAM(polyline_prog, gl::RenderingShaderProgram::create("polyline_shader", std::move(polyline_vert),
                                                                        std::move(polyline_frag)));
+
+  TRY_UNWRAP_ASSET(bezier_vert, manager.load_shader(assets_path / "bezier.vert"));
+  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(assets_path / "bezier.tesc"));
+  TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(assets_path / "bezier.tese"));
+  TRY_UNWRAP_ASSET(bezier_frag, manager.load_shader(assets_path / "solid_color.frag"));
+  TRY_UNWRAP_PROGRAM(bezier_prog,
+                     gl::RenderingShaderProgram::create("bezier_shader", std::move(bezier_vert), std::move(bezier_frag),
+                                                        std::move(bezier_tesc), std::move(bezier_tese)));
+
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(assets_path / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(assets_path / "sprite.frag"));
   TRY_UNWRAP_PROGRAM(
@@ -242,6 +257,7 @@ std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRen
       .param_sh_prog            = std::move(param_prog),             //
       .grid_sh_prog             = std::move(grid_prog),              //
       .polyline_sh_prog         = std::move(polyline_prog),          //
+      .bezier_sh_prog           = std::move(bezier_prog),            //
       .sprite_sh_prog           = std::move(sprite_prog),            //
       .instanced_sprite_sh_prog = std::move(instanced_sprite_prog),  //
   });
@@ -313,7 +329,7 @@ void SceneRenderer::add_scene_object(const SceneObject& obj) {
 }
 
 void SceneRenderer::add_point_list_object(const PointListObject& obj) {
-  rs_.point_list_vaos.insert({obj.handle(), create_point_list_vao(rs_.points_vao.vbo())});
+  rs_.point_list_vaos.insert({obj.handle(), PointListRenderingState::create(rs_.points_vao.vbo())});
 }
 
 void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
@@ -387,10 +403,10 @@ void SceneRenderer::update_point_list_object(const PointListObject& obj) {
   }
   auto t = obj.points() | std::views::transform([](const SceneObject& ph) { return ph.id(); });
   std::vector<SceneObjectId> temp_vec(t.begin(), t.end());
-  rs_.point_list_vaos.at(obj.handle()).second.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+  rs_.point_list_vaos.at(obj.handle()).ebo.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
 }
 
-void SceneRenderer::render(eray::driver::gl::ViewportFramebuffer& fb, Camera& camera) {
+void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& fb, Camera& camera) {
   fb.bind();
   fb.clear_pick_render();
 
@@ -427,8 +443,26 @@ void SceneRenderer::render(eray::driver::gl::ViewportFramebuffer& fb, Camera& ca
   rs_.polyline_sh_prog->bind();
   rs_.polyline_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   for (auto& point_list : rs_.point_list_vaos) {
-    glBindVertexArray(point_list.second.first.get());
-    glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.second.count()), GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(point_list.second.vao.get());
+    glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.ebo.count()), GL_UNSIGNED_INT, nullptr);
+  }
+
+  rs_.bezier_sh_prog->bind();
+  rs_.bezier_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  rs_.bezier_sh_prog->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  for (auto& point_list : rs_.point_list_vaos) {
+    auto o = scene.get_obj(point_list.first);
+    if (!std::holds_alternative<MultisegmentBezierCurve>(o.value()->object)) {
+      continue;
+    }
+    glBindVertexArray(point_list.second.vao.get());
+
+    // TODO(migoox): reduce to one call only
+    GLsizei draw_count = static_cast<GLsizei>(point_list.second.ebo.count() - 1) / 3;
+    for (GLsizei i = 0; i < draw_count; ++i) {
+      glDrawElements(GL_PATCHES, 4, GL_UNSIGNED_INT, (const void*)((i * 3) * sizeof(GLuint)));
+    }
   }
 
   // Render grid

@@ -24,6 +24,12 @@ struct Billboard {
   eray::driver::gl::TextureHandle texture;
 };
 
+struct PointListRenderingState {
+  static PointListRenderingState create(const eray::driver::gl::VertexBuffer& vert_buff);
+  eray::driver::gl::VertexArrayHandle vao;
+  eray::driver::gl::ElementBuffer ebo;
+};
+
 enum class VisibilityState : uint8_t {
   Visible   = 0,
   Selected  = 1,
@@ -52,7 +58,7 @@ class SceneRenderer {
 
   void update_visibility_state(const SceneObjectHandle& handle, VisibilityState state);
 
-  void render(eray::driver::gl::ViewportFramebuffer& fb, Camera& camera);
+  void render(Scene& scene, eray::driver::gl::ViewportFramebuffer& fb, Camera& camera);
 
   void add_billboard(zstring_view name, const eray::res::Image& img);
   Billboard& billboard(zstring_view name);
@@ -72,9 +78,7 @@ class SceneRenderer {
     std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
     std::vector<SceneObjectHandle> transferred_torus_buff;
 
-    std::unordered_map<PointListObjectHandle,
-                       std::pair<eray::driver::gl::VertexArrayHandle, eray::driver::gl::ElementBuffer>>
-        point_list_vaos;
+    std::unordered_map<PointListObjectHandle, PointListRenderingState> point_list_vaos;
 
     eray::driver::gl::TextureHandle point_txt;
 
@@ -85,6 +89,7 @@ class SceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline_sh_prog;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
 
