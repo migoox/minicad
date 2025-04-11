@@ -84,7 +84,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_point_created_in_point_list(const PointListObjectHandle& handle);
   bool on_scene_object_deleted(const SceneObjectHandle& handle);
 
-  bool on_point_list_object_added();
+  bool on_point_list_object_added(PointListObjectVariant variant);
   bool on_point_list_object_deleted(const PointListObjectHandle& handle);
 
   bool on_points_reorder(const PointListObjectHandle& handle, const std::optional<SceneObjectHandle>& source,

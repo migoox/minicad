@@ -74,6 +74,18 @@ class SceneObject {
   Scene& scene_;  // NOLINT
 };
 
+class Polyline {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Polyline"; }
+};
+
+class MultisegmentBezierCurve {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment Bezier Curve"; }
+};
+
+using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve>;
+
 class PointListObject {
  public:
   PointListObject() = delete;
@@ -114,6 +126,7 @@ class PointListObject {
 
  public:
   std::string name;
+  PointListObjectVariant object;
 
  private:
   friend Scene;

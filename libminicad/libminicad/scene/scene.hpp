@@ -56,8 +56,9 @@ class Scene {
   bool delete_obj(const SceneObjectHandle& handle);
   bool delete_obj(const PointListObjectHandle& handle);
 
-  std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant);
-  std::expected<PointListObjectHandle, ObjectCreationError> create_list_obj();
+  std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant = Point{});
+  std::expected<PointListObjectHandle, ObjectCreationError> create_list_obj(
+      PointListObjectVariant variant = Polyline{});
 
   const std::list<SceneObjectHandle>& scene_objs() const { return scene_objects_list_; }
   const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }

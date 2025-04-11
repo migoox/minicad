@@ -190,7 +190,8 @@ bool Scene::delete_obj(const PointListObjectHandle& handle) {
   return true;
 }
 
-std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_list_obj() {
+std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_list_obj(
+    PointListObjectVariant variant) {
   if (point_list_objects_.empty()) {
     eray::util::Logger::warn("Reached limit of scene objects");
     return std::unexpected(ObjectCreationError::ReachedMaxObjects);
@@ -206,7 +207,12 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
 
   auto& obj    = *point_list_objects_[obj_id]->first;
   auto obj_ind = curr_list_obj_ind_++;
-  obj.name     = std::format("Point List {}", obj_ind);
+  std::visit(eray::util::match{
+                 [&obj, obj_ind](Polyline&) { obj.name = std::format("Polyline {}", obj_ind); },
+                 [&obj, obj_ind](MultisegmentBezierCurve&) { obj.name = std::format("Bezier {}", obj_ind); },
+             },
+             variant);
+  obj.object = std::move(variant);
 
   add_to_order(obj);
 

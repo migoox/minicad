@@ -29,14 +29,13 @@
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/imgui/modals.hpp>
+#include <minicad/imgui/reorder_dnd.hpp>
+#include <minicad/imgui/transform.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
 #include <minicad/selection/selection.hpp>
 #include <optional>
 #include <ranges>
 #include <variant>
-
-#include "imgui/reorder_dnd.hpp"
-#include "minicad/imgui/transform.hpp"
 
 namespace mini {
 
@@ -110,16 +109,18 @@ void MiniCadApp::gui_objects_list_window() {
   }
 
   enum class ObjectType : uint8_t {
-    Point     = 0,
-    Torus     = 1,
-    PointList = 2,
-    _Count    = 3,  // NOLINT
+    Point                   = 0,
+    Torus                   = 1,
+    Polyline                = 2,
+    MultisegmentBezierCurve = 3,
+    _Count                  = 4,  // NOLINT
   };
 
   static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<ObjectType>({
       {ObjectType::Point, "Point"},
       {ObjectType::Torus, "Torus"},
-      {ObjectType::PointList, "Point List"},
+      {ObjectType::Polyline, "Polyline"},
+      {ObjectType::MultisegmentBezierCurve, "Bezier"},
   });
 
   if (ImGui::BeginPopup("AddSceneObjectPopup")) {
@@ -132,8 +133,11 @@ void MiniCadApp::gui_objects_list_window() {
           case ObjectType::Torus:
             on_scene_object_created(Torus{});
             break;
-          case ObjectType::PointList:
-            on_point_list_object_added();
+          case ObjectType::Polyline:
+            on_point_list_object_added(Polyline{});
+            break;
+          case ObjectType::MultisegmentBezierCurve:
+            on_point_list_object_added(MultisegmentBezierCurve{});
             break;
           case ObjectType::_Count:
             util::panic("AddSceneObjectPopup failed with object unexpected type");
@@ -291,6 +295,9 @@ void MiniCadApp::gui_point_list_window() {
     static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
     auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
     if (auto obj = m_.scene.get_obj(m_.point_list_selection->first())) {
+      auto type_name = std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
+
+      ImGui::Text("Type: %s", type_name.c_str());
       ImGui::Text("Name: %s", obj.value()->name.c_str());
       ImGui::SameLine();
       static std::string object_name;
@@ -560,8 +567,8 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   return true;
 }
 
-bool MiniCadApp::on_point_list_object_added() {
-  if (auto handle = m_.scene.create_list_obj()) {
+bool MiniCadApp::on_point_list_object_added(PointListObjectVariant variant) {
+  if (auto handle = m_.scene.create_list_obj(std::move(variant))) {
     m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
       m_.scene_renderer.add_point_list_object(*o.value());

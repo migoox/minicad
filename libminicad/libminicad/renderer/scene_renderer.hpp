@@ -64,7 +64,6 @@ class SceneRenderer {
   struct RenderingState {
     eray::driver::gl::VertexArray points_vao;
     eray::driver::gl::VertexArray box_vao;
-
     eray::driver::gl::VertexArrays torus_vao;
 
     std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
