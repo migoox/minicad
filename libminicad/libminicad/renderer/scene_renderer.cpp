@@ -460,6 +460,8 @@ void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& 
   // Render beziers
   rs_.bezier_sh_prog->bind();
   rs_.bezier_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  rs_.bezier_sh_prog->set_uniform("u_width", static_cast<float>(fb.width()));
+  rs_.bezier_sh_prog->set_uniform("u_height", static_cast<float>(fb.height()));
   rs_.bezier_sh_prog->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   glPatchParameteri(GL_PATCH_VERTICES, 4);
   for (auto& point_list : rs_.point_lists_) {

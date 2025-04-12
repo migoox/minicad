@@ -1,6 +1,6 @@
 #version 430 core
 
-layout(isolines) in;
+layout(isolines, equal_spacing) in;
 uniform mat4 u_pvMat;
 
 void main()
