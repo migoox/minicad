@@ -329,7 +329,7 @@ void SceneRenderer::add_scene_object(const SceneObject& obj) {
 }
 
 void SceneRenderer::add_point_list_object(const PointListObject& obj) {
-  rs_.point_list_vaos.insert({obj.handle(), PointListRenderingState::create(rs_.points_vao.vbo())});
+  rs_.point_lists_.insert({obj.handle(), PointListRenderingState::create(rs_.points_vao.vbo())});
 }
 
 void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
@@ -387,7 +387,7 @@ void SceneRenderer::delete_scene_object(const SceneObject& obj, Scene& scene) {
       obj.object);
 }
 
-void SceneRenderer::delete_point_list_object(const PointListObject& obj) { rs_.point_list_vaos.erase(obj.handle()); }
+void SceneRenderer::delete_point_list_object(const PointListObject& obj) { rs_.point_lists_.erase(obj.handle()); }
 
 void SceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
   auto txt = create_texture(img);
@@ -398,12 +398,20 @@ Billboard& SceneRenderer::billboard(zstring_view name) { return rs_.billboards.a
 
 void SceneRenderer::update_point_list_object(const PointListObject& obj) {
   // TODO(migoox): do it better
-  if (!rs_.point_list_vaos.contains(obj.handle())) {
+  if (!rs_.point_lists_.contains(obj.handle())) {
     return;
   }
   auto t = obj.points() | std::views::transform([](const SceneObject& ph) { return ph.id(); });
   std::vector<SceneObjectId> temp_vec(t.begin(), t.end());
-  rs_.point_list_vaos.at(obj.handle()).ebo.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+  rs_.point_lists_.at(obj.handle()).ebo.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+}
+
+void SceneRenderer::show_polyline(const PointListObjectHandle& obj, bool show) {
+  rs_.point_lists_.at(obj).show_polyline = show;
+}
+
+bool SceneRenderer::is_polyline_shown(const PointListObjectHandle& obj) {
+  return rs_.point_lists_.at(obj).show_polyline;
 }
 
 void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& fb, Camera& camera) {
@@ -439,19 +447,22 @@ void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& 
   glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
                           static_cast<GLsizei>(rs_.transferred_torus_buff.size()));
 
-  // Render point lists
+  // Render polylines
   rs_.polyline_sh_prog->bind();
   rs_.polyline_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  for (auto& point_list : rs_.point_list_vaos) {
-    glBindVertexArray(point_list.second.vao.get());
-    glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.ebo.count()), GL_UNSIGNED_INT, nullptr);
+  for (auto& point_list : rs_.point_lists_) {
+    if (point_list.second.show_polyline) {
+      glBindVertexArray(point_list.second.vao.get());
+      glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.ebo.count()), GL_UNSIGNED_INT, nullptr);
+    }
   }
 
+  // Render beziers
   rs_.bezier_sh_prog->bind();
   rs_.bezier_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   rs_.bezier_sh_prog->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   glPatchParameteri(GL_PATCH_VERTICES, 4);
-  for (auto& point_list : rs_.point_list_vaos) {
+  for (auto& point_list : rs_.point_lists_) {
     auto o = scene.get_obj(point_list.first);
     if (!std::holds_alternative<MultisegmentBezierCurve>(o.value()->object)) {
       continue;

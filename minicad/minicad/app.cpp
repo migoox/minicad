@@ -310,6 +310,12 @@ void MiniCadApp::gui_point_list_window() {
         obj.value()->name = object_name;
       }
 
+      if (!std::holds_alternative<Polyline>(obj.value()->object)) {
+        auto show = m_.scene_renderer.is_polyline_shown(obj.value()->handle());
+        if (ImGui::Checkbox("Polyline", &show)) {
+          m_.scene_renderer.show_polyline(obj.value()->handle(), show);
+        }
+      }
       ImGui::Text("Points: ");
       m_.selection->is_single_selection();
 

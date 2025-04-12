@@ -28,6 +28,7 @@ struct PointListRenderingState {
   static PointListRenderingState create(const eray::driver::gl::VertexBuffer& vert_buff);
   eray::driver::gl::VertexArrayHandle vao;
   eray::driver::gl::ElementBuffer ebo;
+  bool show_polyline{true};
 };
 
 enum class VisibilityState : uint8_t {
@@ -66,6 +67,9 @@ class SceneRenderer {
   void show_grid(bool show_grid) { rs_.show_grid = show_grid; }
   bool is_grid() const { return rs_.show_grid; }
 
+  void show_polyline(const PointListObjectHandle& obj, bool show);
+  bool is_polyline_shown(const PointListObjectHandle& obj);
+
  private:
   struct RenderingState {
     eray::driver::gl::VertexArray points_vao;
@@ -78,7 +82,7 @@ class SceneRenderer {
     std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
     std::vector<SceneObjectHandle> transferred_torus_buff;
 
-    std::unordered_map<PointListObjectHandle, PointListRenderingState> point_list_vaos;
+    std::unordered_map<PointListObjectHandle, PointListRenderingState> point_lists_;
 
     eray::driver::gl::TextureHandle point_txt;
 
