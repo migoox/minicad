@@ -19,6 +19,7 @@ SceneObject::~SceneObject() {
         auto ind = it->second;
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + ind);
+        pl.value()->update_indices_from(ind);
       }
     }
   }
