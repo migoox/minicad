@@ -1,6 +1,7 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <minicad/selection/selection.hpp>
+#include <variant>
 
 namespace mini {
 
@@ -15,9 +16,21 @@ void SceneObjectsSelection::remove(Scene& scene, const SceneObjectHandle& handle
 
   objs_.erase(objs_.find(handle));
   update_centroid(scene);
+  update_is_points_only_selection(scene);
 }
 
 void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
+  if (points_only_ || objs_.empty()) {
+    bool is_point = false;
+    if (auto o = scene.get_obj(handle)) {
+      is_point = std::holds_alternative<Point>(o.value()->object);
+    } else {
+      return;
+    }
+
+    points_only_ = is_point;
+  }
+
   detach_all(scene);
 
   objs_.insert(handle);
@@ -25,6 +38,7 @@ void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
 }
 
 void SceneObjectsSelection::clear(Scene& scene) {
+  points_only_ = false;
   detach_all(scene);
 
   objs_.clear();
@@ -113,6 +127,18 @@ void SceneObjectsSelection::update_centroid(Scene& scene) {
   centroid_ /= static_cast<float>(count);
   if (!use_custom_origin_) {
     transform.reset_local(centroid_);
+  }
+}
+
+void SceneObjectsSelection::update_is_points_only_selection(Scene& scene) {
+  points_only_ = true;
+  for (const auto& h : objs_) {
+    if (auto o = scene.get_obj(h)) {
+      if (!std::holds_alternative<Point>(o.value()->object)) {
+        points_only_ = false;
+        return;
+      }
+    }
   }
 }
 

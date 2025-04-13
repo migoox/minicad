@@ -55,6 +55,7 @@ class SceneObjectsSelection {
     detach_all(scene);
     objs_.insert(begin, end);
     update_centroid(scene);
+    update_is_points_only_selection(scene);
   }
 
   template <eray::util::Iterator<SceneObjectHandle> It>
@@ -67,6 +68,7 @@ class SceneObjectsSelection {
       }
     }
     update_centroid(scene);
+    update_is_points_only_selection(scene);
   }
 
   bool is_multi_selection() const { return objs_.size() > 1; }
@@ -91,6 +93,8 @@ class SceneObjectsSelection {
   void use_custom_origin(Scene& scene, bool use_custom_origin);
   bool is_using_custom_origin() const { return use_custom_origin_; }
 
+  bool is_points_only() const { return points_only_; }
+
   auto begin() { return objs_.begin(); }
   auto begin() const { return objs_.begin(); }
   auto end() { return objs_.end(); }
@@ -102,10 +106,13 @@ class SceneObjectsSelection {
  private:
   void detach_all(Scene& scene);
   void update_centroid(Scene& scene);
+  void update_is_points_only_selection(Scene& scene);
 
  private:
   bool transform_dirty_;
   bool use_custom_origin_;
+
+  bool points_only_;
 
   eray::math::Vec3f centroid_;
   eray::math::Vec3f custom_origin_;
