@@ -1,3 +1,4 @@
+#include <iostream>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/os/driver.hpp>
 #include <liberay/os/system.hpp>

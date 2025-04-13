@@ -1,5 +1,6 @@
 #include <glad/gl.h>
 
+#include <algorithm>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/gl_error.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
@@ -10,6 +11,7 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <ranges>
 #include <variant>
 
 #include "liberay/math/vec_fwd.hpp"
@@ -194,7 +196,8 @@ PointListRenderingState PointListRenderingState::create(const eray::driver::gl::
 
   eray::driver::gl::check_gl_errors();
 
-  return {gl::VertexArrayHandle(id), std::move(ebo)};
+  return {
+      .vao = gl::VertexArrayHandle(id), .ebo = std::move(ebo), .thrd_degree_bezier_ebo = gl::ElementBuffer::create()};
 }
 
 std::expected<SceneRenderer, SceneRenderer::SceneRendererCreationError> SceneRenderer::create(
@@ -397,13 +400,23 @@ void SceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img
 Billboard& SceneRenderer::billboard(zstring_view name) { return rs_.billboards.at(name); }
 
 void SceneRenderer::update_point_list_object(const PointListObject& obj) {
+  namespace views  = std::views;
+  namespace ranges = std::ranges;
+
   // TODO(migoox): do it better
   if (!rs_.point_lists_.contains(obj.handle())) {
     return;
   }
-  auto t = obj.points() | std::views::transform([](const SceneObject& ph) { return ph.id(); });
-  std::vector<SceneObjectId> temp_vec(t.begin(), t.end());
-  rs_.point_lists_.at(obj.handle()).ebo.buffer_data(std::span{temp_vec}, gl::DataUsage::StaticDraw);
+  auto point_ids =
+      obj.points() | views::transform([](const SceneObject& ph) { return ph.id(); }) | ranges::to<std::vector>();
+
+  rs_.point_lists_.at(obj.handle()).ebo.buffer_data(std::span{point_ids}, gl::DataUsage::StaticDraw);
+
+  auto thrd_degree_bezier_control_points =
+      point_ids | views::slide(4) | views::stride(3) | views::join | ranges::to<std::vector>();
+
+  rs_.point_lists_.at(obj.handle())
+      .thrd_degree_bezier_ebo.buffer_data(std::span{thrd_degree_bezier_control_points}, gl::DataUsage::StaticDraw);
 }
 
 void SceneRenderer::show_polyline(const PointListObjectHandle& obj, bool show) {
@@ -452,6 +465,7 @@ void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& 
   rs_.polyline_sh_prog->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   for (auto& point_list : rs_.point_lists_) {
     if (point_list.second.show_polyline) {
+      glVertexArrayElementBuffer(point_list.second.vao.get(), point_list.second.ebo.raw_gl_id());
       glBindVertexArray(point_list.second.vao.get());
       glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.ebo.count()), GL_UNSIGNED_INT, nullptr);
     }
@@ -469,13 +483,9 @@ void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& 
     if (!std::holds_alternative<MultisegmentBezierCurve>(o.value()->object)) {
       continue;
     }
+    glVertexArrayElementBuffer(point_list.second.vao.get(), point_list.second.thrd_degree_bezier_ebo.raw_gl_id());
     glBindVertexArray(point_list.second.vao.get());
-
-    // TODO(migoox): reduce to one call only
-    GLsizei draw_count = static_cast<GLsizei>(point_list.second.ebo.count() - 1) / 3;
-    for (GLsizei i = 0; i < draw_count; ++i) {
-      glDrawElements(GL_PATCHES, 4, GL_UNSIGNED_INT, (const void*)((i * 3) * sizeof(GLuint)));
-    }
+    glDrawElements(GL_PATCHES, point_list.second.thrd_degree_bezier_ebo.count(), GL_UNSIGNED_INT, nullptr);
   }
 
   // Render grid

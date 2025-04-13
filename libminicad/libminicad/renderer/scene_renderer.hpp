@@ -28,6 +28,7 @@ struct PointListRenderingState {
   static PointListRenderingState create(const eray::driver::gl::VertexBuffer& vert_buff);
   eray::driver::gl::VertexArrayHandle vao;
   eray::driver::gl::ElementBuffer ebo;
+  eray::driver::gl::ElementBuffer thrd_degree_bezier_ebo;
   bool show_polyline{true};
 };
 
