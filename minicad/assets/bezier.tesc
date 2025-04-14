@@ -3,6 +3,8 @@
 
 layout (vertices=CONTROL_POINTS_COUNT) out;
 
+uniform int u_bezier_degree = 3;
+
 uniform mat4 u_pvMat;
 uniform float u_width;
 uniform float u_height;

@@ -17,6 +17,7 @@ SceneObject::~SceneObject() {
       auto it = pl.value()->points_map_.find(handle_);
       if (it != pl.value()->points_map_.end()) {
         auto ind = it->second;
+        pl.value()->mark_dirty();
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + ind);
         pl.value()->update_indices_from(ind);

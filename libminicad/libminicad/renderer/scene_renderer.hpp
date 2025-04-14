@@ -29,7 +29,11 @@ struct PointListRenderingState {
   eray::driver::gl::VertexArrayHandle vao;
   eray::driver::gl::ElementBuffer ebo;
   eray::driver::gl::ElementBuffer thrd_degree_bezier_ebo;
+  int last_bezier_degree;
   bool show_polyline{true};
+
+  size_t kMaxBezierPoints = 4;
+  size_t kMaxBezierDegree = 3;
 };
 
 enum class VisibilityState : uint8_t {
