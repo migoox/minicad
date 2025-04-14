@@ -32,8 +32,8 @@ struct PointListRenderingState {
   int last_bezier_degree;
   bool show_polyline{true};
 
-  size_t kMaxBezierPoints = 4;
-  size_t kMaxBezierDegree = 3;
+  static constexpr int kMaxBezierDegree    = 3;
+  static constexpr size_t kMaxBezierPoints = 4;
 };
 
 enum class VisibilityState : uint8_t {

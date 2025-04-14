@@ -411,12 +411,14 @@ void SceneRenderer::update_point_list_object(const PointListObject& obj) {
       obj.points() | views::transform([](const SceneObject& ph) { return ph.id(); }) | ranges::to<std::vector>();
   rs_.point_lists_.at(obj.handle()).ebo.buffer_data(std::span{point_ids}, gl::DataUsage::StaticDraw);
 
+  static auto constexpr kMaxDegree  = PointListRenderingState::kMaxBezierDegree;
+  static auto constexpr kWindowSize = PointListRenderingState::kMaxBezierPoints;
   auto thrd_degree_bezier_control_points =
-      point_ids | views::slide(4) | views::stride(3) | views::join | ranges::to<std::vector>();
+      point_ids | views::slide(kWindowSize) | views::stride(kWindowSize - 1) | views::join | ranges::to<std::vector>();
 
   // Add the last window that has length less than 4
   auto n        = point_ids.size();
-  auto last_ind = ((n - 1) / 3) * 3;
+  auto last_ind = ((n - 1) / kMaxDegree) * kMaxDegree;
   int degree    = static_cast<int>(n - last_ind - 1);
   for (auto i = last_ind; i < n; ++i) {
     thrd_degree_bezier_control_points.push_back(point_ids[i]);
@@ -424,7 +426,7 @@ void SceneRenderer::update_point_list_object(const PointListObject& obj) {
 
   // Fill up the last window, so that it has exactly 4 elements
   if (n > 0 && degree > 0) {
-    for (int i = 0; i < 3 - degree; ++i) {
+    for (int i = 0; i < kMaxDegree - degree; ++i) {
       thrd_degree_bezier_control_points.push_back(thrd_degree_bezier_control_points.back());
     }
   }
@@ -503,10 +505,13 @@ void SceneRenderer::render(Scene& scene, eray::driver::gl::ViewportFramebuffer& 
 
     rs_.bezier_sh_prog->set_uniform("u_bezier_degree", 3);
     if (point_list.second.last_bezier_degree > 0) {
-      glDrawElements(GL_PATCHES, point_list.second.thrd_degree_bezier_ebo.count() - 4, GL_UNSIGNED_INT, nullptr);
+      glDrawElements(GL_PATCHES,
+                     point_list.second.thrd_degree_bezier_ebo.count() - PointListRenderingState::kMaxBezierPoints,
+                     GL_UNSIGNED_INT, nullptr);
       rs_.bezier_sh_prog->set_uniform("u_bezier_degree", point_list.second.last_bezier_degree);
-      glDrawElements(GL_PATCHES, 4, GL_UNSIGNED_INT,
-                     (const void*)(sizeof(GLuint) * (point_list.second.thrd_degree_bezier_ebo.count() - 4)));
+      glDrawElements(GL_PATCHES, PointListRenderingState::kMaxBezierPoints, GL_UNSIGNED_INT,
+                     (const void*)(sizeof(GLuint) * (point_list.second.thrd_degree_bezier_ebo.count() -
+                                                     PointListRenderingState::kMaxBezierPoints)));
     } else {
       glDrawElements(GL_PATCHES, point_list.second.thrd_degree_bezier_ebo.count(), GL_UNSIGNED_INT, nullptr);
     }
