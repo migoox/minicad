@@ -3,13 +3,15 @@
 
 layout (vertices=CONTROL_POINTS_COUNT) out;
 
-uniform int u_bezier_degree = 3;
-
 uniform mat4 u_pvMat;
 uniform float u_width;
 uniform float u_height;
 
-float find_tess_level() {
+const int IsolinesCount = 8;
+
+patch out float isolinesCount;
+
+float find_polyline_length() {
     vec2 screen_control_points[CONTROL_POINTS_COUNT];
 
     for (int i = 0; i < CONTROL_POINTS_COUNT; ++i) {
@@ -22,7 +24,7 @@ float find_tess_level() {
         polyline_length += distance(screen_control_points[i], screen_control_points[i + 1]);
     }
 
-    return clamp(polyline_length, 4.0, 64.0);
+    return polyline_length;
 }
 
 void main()
@@ -31,8 +33,11 @@ void main()
 
     if (gl_InvocationID == 0)
     {
-        gl_TessLevelOuter[0] = float(1);
-        gl_TessLevelOuter[1] = find_tess_level();
+        isolinesCount = float(IsolinesCount);
+        float tess_level = clamp(find_polyline_length() / float(IsolinesCount), 4.0, 64.0);
+
+        gl_TessLevelOuter[0] = float(IsolinesCount);
+        gl_TessLevelOuter[1] = tess_level;
     }
 }
 	

@@ -1,9 +1,9 @@
 #include <glad/gl.h>
 
-#include <algorithm>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/gl_error.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
@@ -13,8 +13,6 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <ranges>
 #include <variant>
-
-#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
