@@ -6,6 +6,7 @@
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <list>
 #include <memory>
 #include <optional>
 #include <stack>
