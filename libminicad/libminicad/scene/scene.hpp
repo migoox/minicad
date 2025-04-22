@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <list>
 #include <memory>
@@ -23,7 +23,8 @@ using OptionalObserverPtr = std::optional<eray::util::ObserverPtr<T>>;
 
 class Scene {
  public:
-  Scene();
+  Scene() = delete;
+  explicit Scene(std::unique_ptr<ISceneRenderer>&& renderer);
 
   ERAY_ENABLE_DEFAULT_MOVE_AND_COPY_CTOR(Scene)
   ERAY_DISABLE_MOVE_AND_COPY_ASSIGN(Scene)
@@ -65,14 +66,17 @@ class Scene {
   const std::list<PointListObjectHandle>& point_list_objs() const { return point_list_objects_list_; }
   const std::vector<ObjectHandle>& objs() const { return objects_order_; }
 
-  void mark_dirty(const SceneObjectHandle& handle) { dirty_scene_objects_.insert(handle.obj_id); }
-  void mark_dirty(const PointListObjectHandle& handle) { dirty_point_list_objects_.insert(handle.obj_id); }
-
-  void visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor);
-  void visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor);
-
   bool is_handle_valid(const PointListObjectHandle& handle) const;
   bool is_handle_valid(const SceneObjectHandle& handle) const;
+
+  /**
+   * @brief Calls renderer update, which fetches the commands from the queues and applies the changes
+   * to the rendering state.
+   *
+   */
+  void update_rendering_state() { renderer_->update(*this); }
+
+  ISceneRenderer& renderer() { return *renderer_; }
 
  public:
   static constexpr std::size_t kMaxObjects = 100;
@@ -94,6 +98,8 @@ class Scene {
 
  private:
   friend PointListObject;
+
+  std::unique_ptr<ISceneRenderer> renderer_;
 
   static std::uint32_t next_signature_;
 

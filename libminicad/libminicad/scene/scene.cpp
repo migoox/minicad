@@ -8,11 +8,18 @@
 #include <optional>
 #include <variant>
 
+#include "libminicad/renderer/rendering_command.hpp"
+
 namespace mini {
 
 std::uint32_t Scene::next_signature_ = 0;
 
-Scene::Scene() : signature_(next_signature_++), curr_timestamp_(0), curr_scene_obj_ind_(1), curr_list_obj_ind_(1) {
+Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
+    : renderer_(std::move(renderer)),
+      signature_(next_signature_++),
+      curr_timestamp_(0),
+      curr_scene_obj_ind_(1),
+      curr_list_obj_ind_(1) {
   scene_objects_.resize(kMaxObjects);
   point_list_objects_.resize(kMaxObjects);
   for (size_t i = kMaxObjects; i > 0; --i) {
@@ -132,6 +139,7 @@ std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene
 
   add_to_order(obj);
 
+  renderer_->push_object_rs_cmd(SceneObjectRSCommand(h, SceneObjectRSCommand::Internal::AddObject{}));
   return h;
 }
 
@@ -216,25 +224,8 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
 
   add_to_order(obj);
 
+  renderer_->push_object_rs_cmd(PointListObjectRSCommand(h, PointListObjectRSCommand::Internal::AddObject{}));
   return h;
-}
-
-void Scene::visit_dirty_scene_objects(const std::function<void(SceneObject&)>& visitor) {
-  for (auto id : dirty_scene_objects_) {
-    if (scene_objects_[id]) {
-      visitor(*scene_objects_[id]->first);
-    }
-  }
-  dirty_scene_objects_.clear();
-}
-
-void Scene::visit_dirty_point_objects(const std::function<void(PointListObject&)>& visitor) {
-  for (auto id : dirty_point_list_objects_) {
-    if (point_list_objects_[id]) {
-      visitor(*point_list_objects_[id]->first);
-    }
-  }
-  dirty_point_list_objects_.clear();
 }
 
 }  // namespace mini

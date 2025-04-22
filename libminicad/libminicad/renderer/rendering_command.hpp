@@ -6,9 +6,10 @@
 namespace mini {
 
 struct SceneObjectRSCommand {
-  struct AddObject {};
-
-  struct UpdateObjectParams {};
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+  };
 
   struct UpdateObjectVisibility {
     explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
@@ -16,9 +17,10 @@ struct SceneObjectRSCommand {
     VisibilityState new_visibility_state;
   };
 
-  struct DeleteObject {};
+  struct UpdateObjectMembers {};
 
-  using CommandVariant = std::variant<DeleteObject, UpdateObjectParams, UpdateObjectVisibility, AddObject>;
+  using CommandVariant =
+      std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility>;
 
   explicit SceneObjectRSCommand(SceneObjectHandle _handle, CommandVariant _cmd) : handle(_handle), cmd(_cmd) {}
   SceneObjectRSCommand() = delete;
@@ -28,17 +30,18 @@ struct SceneObjectRSCommand {
 };
 
 struct PointListObjectRSCommand {
-  struct AddObject {};
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+  };
 
-  struct UpdateObjectParams {};
+  struct UpdateObjectMembers {};
 
   struct UpdateObjectVisibility {
     explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
 
     VisibilityState new_visibility_state;
   };
-
-  struct DeleteObject {};
 
   /**
    * @brief Applies to any point list, hides/shows the polyline between the scene points.
@@ -56,8 +59,8 @@ struct PointListObjectRSCommand {
     bool show;
   };
 
-  using CommandVariant = std::variant<DeleteObject, UpdateObjectParams, UpdateObjectVisibility, AddObject, ShowPolyline,
-                                      ShowBernsteinControlPoints>;
+  using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers,
+                                      UpdateObjectVisibility, ShowPolyline, ShowBernsteinControlPoints>;
 
   explicit PointListObjectRSCommand(PointListObjectHandle _handle, CommandVariant _cmd) : handle(_handle), cmd(_cmd) {}
   PointListObjectRSCommand() = delete;

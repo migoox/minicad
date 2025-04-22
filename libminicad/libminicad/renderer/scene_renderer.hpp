@@ -12,7 +12,8 @@
 namespace mini {
 
 /**
- * @brief Rendering API agnostic minicad scene renderer.
+ * @brief Rendering API agnostic minicad scene renderer. The implementation of this interface is injected into the
+ * Scene on Scene creation.
  *
  */
 class ISceneRenderer {
@@ -38,7 +39,7 @@ class ISceneRenderer {
 
   virtual void update(Scene& scene) = 0;
 
-  virtual void render(Scene& scene, Camera& camera) = 0;
+  virtual void render(Camera& camera) = 0;
 };
 
 }  // namespace mini

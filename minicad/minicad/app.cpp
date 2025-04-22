@@ -76,10 +76,9 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
                         .camera               = std::move(camera),                              //
                         .camera_gimbal        = std::move(gimbal),                              //
                         .grid_on              = true,                                           //
-                        .scene                = Scene(),                                        //
+                        .scene                = Scene(std::move(sr)),                           //
                         .selection            = std::make_unique<SceneObjectsSelection>(),      //
                         .point_list_selection = std::make_unique<PointListObjectsSelection>(),  //
-                        .scene_renderer       = std::move(sr),                                  //
                     });
 }
 
@@ -366,10 +365,10 @@ void MiniCadApp::gui_point_list_window() {
       }
 
       if (!std::holds_alternative<Polyline>(obj.value()->object)) {
-        auto state = m_.scene_renderer->object_rs(obj.value()->handle());
+        auto state = m_.scene.renderer().object_rs(obj.value()->handle());
         if (state) {
           if (ImGui::Checkbox("Polyline", &state->show_polyline)) {
-            m_.scene_renderer->set_object_rs(obj.value()->handle(), *state);
+            m_.scene.renderer().set_object_rs(obj.value()->handle(), *state);
           }
         }
       }
@@ -546,24 +545,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
-  m_.scene.visit_dirty_scene_objects([this](SceneObject& obj) {
-    m_.scene_renderer->push_object_rs_cmd(
-        SceneObjectRSCommand(obj.handle(), SceneObjectRSCommand::UpdateObjectParams{}));
-  });
-  m_.scene.visit_dirty_point_objects([this](PointListObject& obj) {
-    m_.scene_renderer->push_object_rs_cmd(
-        PointListObjectRSCommand(obj.handle(), PointListObjectRSCommand::UpdateObjectParams{}));
-  });
-
-  m_.scene_renderer->update(m_.scene);
-
   m_.camera->set_orthographic(m_.use_ortho);
 
-  m_.scene_renderer->show_grid(m_.grid_on);
-  m_.scene_renderer->billboard("cursor").position   = m_.cursor->transform.pos();
-  m_.scene_renderer->billboard("centroid").show     = m_.selection->is_multi_selection();
-  m_.scene_renderer->billboard("centroid").position = m_.selection->centroid();
-  m_.scene_renderer->render(m_.scene, *m_.camera);
+  m_.scene.renderer().update(m_.scene);
+
+  m_.scene.renderer().show_grid(m_.grid_on);
+  m_.scene.renderer().billboard("cursor").position   = m_.cursor->transform.pos();
+  m_.scene.renderer().billboard("centroid").show     = m_.selection->is_multi_selection();
+  m_.scene.renderer().billboard("centroid").position = m_.selection->centroid();
+  m_.scene.renderer().render(*m_.camera);
 }
 
 void MiniCadApp::update(Duration delta) {
@@ -584,7 +574,6 @@ bool MiniCadApp::on_scene_object_created(SceneObjectVariant variant) {
   }
 
   if (auto o = m_.scene.get_obj(*obj_handle)) {
-    m_.scene_renderer->push_object_rs_cmd(SceneObjectRSCommand(o.value()->handle(), SceneObjectRSCommand::AddObject{}));
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
     on_selection_clear();
     on_selection_add(*obj_handle);
@@ -604,7 +593,6 @@ bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& han
 
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     m_.scene.add_to_list(*obj_handle, handle);
-    m_.scene_renderer->push_object_rs_cmd(SceneObjectRSCommand(o.value()->handle(), SceneObjectRSCommand::AddObject{}));
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
     on_selection_clear();
     on_selection_add(*obj_handle);
@@ -617,11 +605,9 @@ bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& han
 
 bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
-    m_.scene_renderer->push_object_rs_cmd(
-        SceneObjectRSCommand(o.value()->handle(), SceneObjectRSCommand::DeleteObject{}));
-    util::Logger::info("Deleted scene object \"{}\"", o.value()->name);
     m_.scene.delete_obj(handle);
-    m_.scene_renderer->push_object_rs_cmd(SceneObjectRSCommand(
+    util::Logger::info("Deleted scene object \"{}\"", o.value()->name);
+    m_.scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(
         o.value()->handle(), SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   } else {
     util::Logger::warn("Tried to delete a non existing element");
@@ -634,8 +620,6 @@ bool MiniCadApp::on_point_list_object_added(PointListObjectVariant variant) {
   if (auto handle = m_.scene.create_list_obj(std::move(variant))) {
     m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
-      m_.scene_renderer->push_object_rs_cmd(
-          PointListObjectRSCommand(o.value()->handle(), PointListObjectRSCommand::AddObject{}));
       Logger::info("Created point list object \"{}\"", o.value()->name);
     }
     return true;
@@ -648,8 +632,6 @@ bool MiniCadApp::on_point_list_object_added_from_points_selection(PointListObjec
   if (auto handle = m_.scene.create_list_obj(std::move(variant))) {
     m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
-      m_.scene_renderer->push_object_rs_cmd(
-          PointListObjectRSCommand(o.value()->handle(), PointListObjectRSCommand::AddObject{}));
       Logger::info("Created point list object \"{}\"", o.value()->name);
 
       if (m_.selection->is_points_only()) {
@@ -669,8 +651,6 @@ bool MiniCadApp::on_point_list_object_added_from_points_selection(PointListObjec
 
 bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
-    m_.scene_renderer->push_object_rs_cmd(
-        PointListObjectRSCommand(o.value()->handle(), PointListObjectRSCommand::DeleteObject{}));
     Logger::info("Deleted point list object \"{}\"", o.value()->name);
     m_.scene.delete_obj(handle);
     return true;
@@ -705,7 +685,7 @@ bool MiniCadApp::on_points_reorder(const PointListObjectHandle& handle, const st
 
 bool MiniCadApp::on_selection_add(const SceneObjectHandle& handle) {
   m_.selection->add(m_.scene, handle);
-  m_.scene_renderer->push_object_rs_cmd(
+  m_.scene.renderer().push_object_rs_cmd(
       SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
   if (auto o = m_.scene.get_obj(handle)) {
     o.value()->mark_dirty();
@@ -715,7 +695,7 @@ bool MiniCadApp::on_selection_add(const SceneObjectHandle& handle) {
 
 bool MiniCadApp::on_selection_remove(const SceneObjectHandle& handle) {
   m_.selection->remove(m_.scene, handle);
-  m_.scene_renderer->push_object_rs_cmd(
+  m_.scene.renderer().push_object_rs_cmd(
       SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   if (auto o = m_.scene.get_obj(handle)) {
     o.value()->mark_dirty();
@@ -732,7 +712,7 @@ bool MiniCadApp::on_selection_set_single(const SceneObjectHandle& handle) {
 
 bool MiniCadApp::on_selection_clear() {
   for (const auto& handle : *m_.selection) {
-    m_.scene_renderer->push_object_rs_cmd(
+    m_.scene.renderer().push_object_rs_cmd(
         SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
     if (auto o = m_.scene.get_obj(handle)) {
       o.value()->mark_dirty();
@@ -827,8 +807,8 @@ bool MiniCadApp::on_tool_action_end() {
     auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
 
     auto ids =
-        m_.scene_renderer->sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
-                                                 static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
+        m_.scene.renderer().sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
+                                                  static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
     on_selection_clear();
 
     if (ids.empty()) {
@@ -887,7 +867,7 @@ bool MiniCadApp::on_mouse_released(const os::MouseButtonReleasedEvent& ev) {
 }
 
 bool MiniCadApp::on_resize(const os::WindowResizedEvent& ev) {  // NOLINT
-  m_.scene_renderer->resize_viewport(math::Vec2i(ev.width(), ev.height()));
+  m_.scene.renderer().resize_viewport(math::Vec2i(ev.width(), ev.height()));
   m_.camera->set_aspect_ratio(static_cast<float>(ev.width()) / static_cast<float>(ev.height()));
   m_.camera->recalculate_projection();
   return true;

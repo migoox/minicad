@@ -3,6 +3,7 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <variant>
@@ -17,6 +18,8 @@ SceneObject::~SceneObject() {
       auto it = pl.value()->points_map_.find(handle_);
       if (it != pl.value()->points_map_.end()) {
         auto ind = it->second;
+        scene_.renderer().push_object_rs_cmd(
+            SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
         pl.value()->mark_dirty();
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + ind);
@@ -26,15 +29,22 @@ SceneObject::~SceneObject() {
   }
 }
 
-void SceneObject::mark_dirty() { scene_.mark_dirty(handle_); }
+void SceneObject::mark_dirty() {
+  scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
+}
 
 PointListObject::~PointListObject() {
+  scene_.renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::DeleteObject{}));
   for (auto p : points_) {
     p.get().point_lists_.erase(handle_);
   }
 }
 
-void PointListObject::mark_dirty() { scene_.mark_dirty(handle_); }
+void PointListObject::mark_dirty() {
+  scene_.renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+}
 
 std::expected<void, PointListObject::SceneObjectError> PointListObject::add(const SceneObjectHandle& handle) {
   if (points_map_.contains(handle)) {

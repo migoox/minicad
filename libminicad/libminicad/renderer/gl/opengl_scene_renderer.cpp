@@ -17,7 +17,7 @@ namespace util   = eray::util;
 namespace res    = eray::res;
 namespace math   = eray::math;
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::AddObject&) {
+void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::AddObject&) {
   auto& rs = renderer.scene_objs_rs_;
 
   if (auto obj = scene.get_obj(cmd_ctx.handle)) {
@@ -39,7 +39,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::AddObje
   }
 }
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectParams&) {
+void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectMembers&) {
   auto& rs           = renderer.scene_objs_rs_;
   const auto& handle = cmd_ctx.handle;
 
@@ -95,7 +95,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
   }
 }
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::DeleteObject&) {
+void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::DeleteObject&) {
   auto& rs           = renderer.scene_objs_rs_;
   const auto& handle = cmd_ctx.handle;
 
@@ -155,7 +155,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::DeleteO
   }
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::AddObject&) {
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {
   auto& rs           = renderer.point_lists_rs_;
   const auto& handle = cmd_ctx.handle;
   if (auto obj = scene.get_obj(handle)) {
@@ -163,7 +163,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   }
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectParams&) {
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectMembers&) {
   namespace views  = std::views;
   namespace ranges = std::ranges;
 
@@ -231,7 +231,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   // TODO(migoox): implement object visibility for point lists
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::DeleteObject&) {
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {
   auto& rs           = renderer.point_lists_rs_;
   const auto& handle = cmd_ctx.handle;
 
@@ -488,7 +488,7 @@ std::unordered_set<int> OpenGLSceneRenderer::sample_mouse_pick_box(size_t x, siz
   return framebuffer_->sample_mouse_pick_box(x, y, width, height);
 }
 
-void OpenGLSceneRenderer::render(Scene& scene, Camera& camera) {
+void OpenGLSceneRenderer::render(Camera& camera) {
   framebuffer_->bind();
   framebuffer_->clear_pick_render();
 

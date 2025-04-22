@@ -57,6 +57,10 @@ class SceneObject {
   SceneObjectId id() const { return handle_.obj_id; }
   const SceneObjectHandle& handle() const { return handle_; }
 
+  /**
+   * @brief Pushes SceneObjectRSCommand::UpdateObjectMembers onto a scene renderer command queue.
+   *
+   */
   void mark_dirty();
   size_t order_ind() const { return order_ind_; }
 
@@ -120,6 +124,11 @@ class PointListObject {
 
   PointListObjectId id() const { return handle_.obj_id; }
   const PointListObjectHandle& handle() const { return handle_; }
+
+  /**
+   * @brief Pushes PointListObjectRSCommand::UpdateObjectMembers onto a scene renderer command queue.
+   *
+   */
   void mark_dirty();
 
   size_t order_ind() const { return order_ind_; }

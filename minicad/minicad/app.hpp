@@ -14,7 +14,9 @@
 #include <liberay/res/image.hpp>
 #include <liberay/util/iterator.hpp>
 #include <liberay/util/timer.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
+#include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
@@ -22,9 +24,6 @@
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
-
-#include "libminicad/renderer/rendering_command.hpp"
-#include "libminicad/renderer/visibility_state.hpp"
 
 namespace mini {
 
@@ -69,8 +68,6 @@ class MiniCadApp final : public eray::os::Application {
 
     std::unique_ptr<SceneObjectsSelection> selection;
     std::unique_ptr<PointListObjectsSelection> point_list_selection;
-
-    std::unique_ptr<ISceneRenderer> scene_renderer;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -105,7 +102,7 @@ class MiniCadApp final : public eray::os::Application {
   template <eray::util::Iterator<SceneObjectHandle> It>
   bool on_selection_add_many(It begin, It end) {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
-      m_.scene_renderer->push_object_rs_cmd(
+      m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
       if (auto o = m_.scene.get_obj(handle)) {
         o.value()->mark_dirty();
@@ -118,7 +115,7 @@ class MiniCadApp final : public eray::os::Application {
   template <eray::util::Iterator<SceneObjectHandle> It>
   bool on_selection_remove_many(It begin, It end) {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
-      m_.scene_renderer->push_object_rs_cmd(
+      m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
       if (auto o = m_.scene.get_obj(handle)) {
         o.value()->mark_dirty();

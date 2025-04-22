@@ -21,10 +21,10 @@ struct SceneObjectRSCommandHandler {
                                        const SceneObjectRSCommand& _cmd_ctx)
       : renderer(_renderer), scene(_scene), cmd_ctx(_cmd_ctx) {}
 
-  void operator()(const SceneObjectRSCommand::AddObject&);
-  void operator()(const SceneObjectRSCommand::UpdateObjectParams&);
+  void operator()(const SceneObjectRSCommand::Internal::AddObject&);
+  void operator()(const SceneObjectRSCommand::UpdateObjectMembers&);
   void operator()(const SceneObjectRSCommand::UpdateObjectVisibility&);
-  void operator()(const SceneObjectRSCommand::DeleteObject&);
+  void operator()(const SceneObjectRSCommand::Internal::DeleteObject&);
 
   // NOLINTBEGIN
   OpenGLSceneRenderer& renderer;
@@ -38,10 +38,10 @@ struct PointListObjectRSCommandHandler {
                                            const PointListObjectRSCommand& _cmd_ctx)
       : renderer(_renderer), scene(_scene), cmd_ctx(_cmd_ctx) {}
 
-  void operator()(const PointListObjectRSCommand::AddObject&);
-  void operator()(const PointListObjectRSCommand::UpdateObjectParams&);
+  void operator()(const PointListObjectRSCommand::Internal::AddObject&);
+  void operator()(const PointListObjectRSCommand::UpdateObjectMembers&);
   void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
-  void operator()(const PointListObjectRSCommand::DeleteObject&);
+  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&);
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
 
@@ -83,8 +83,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   std::unordered_set<int> sample_mouse_pick_box(size_t x, size_t y, size_t width, size_t height) const final;
 
   void update(Scene& scene) final;
-
-  void render(Scene& scene, Camera& camera) final;
+  void render(Camera& camera) final;
 
  private:
   friend SceneObjectRSCommandHandler;
