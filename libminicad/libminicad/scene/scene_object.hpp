@@ -24,6 +24,9 @@ using SceneObjectHandle = eray::util::Handle<SceneObject>;
 class PointListObject;
 using PointListObjectHandle = eray::util::Handle<PointListObject>;
 
+template <typename T>
+concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, PointListObjectHandle>;
+
 using ObjectHandle = std::variant<SceneObjectHandle, PointListObjectHandle>;
 
 class PointListObject;

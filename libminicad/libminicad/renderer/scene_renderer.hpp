@@ -1,114 +1,44 @@
 #pragma once
 
-#include <cstdint>
 #include <expected>
-#include <filesystem>
-#include <liberay/driver/gl/framebuffer.hpp>
-#include <liberay/driver/gl/gl_handle.hpp>
-#include <liberay/driver/gl/shader_program.hpp>
-#include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/camera/camera.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
+#include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <unordered_map>
 
 namespace mini {
 
-struct Billboard {
-  explicit Billboard(eray::driver::gl::TextureHandle&& _texture) : texture(std::move(_texture)) {}
-
-  eray::math::Vec3f position;
-  float scale = 0.04F;
-  bool show   = true;
-  eray::driver::gl::TextureHandle texture;
-};
-
-struct PointListRenderingState {
-  static PointListRenderingState create(const eray::driver::gl::VertexBuffer& vert_buff);
-  eray::driver::gl::VertexArrayHandle vao;
-  eray::driver::gl::ElementBuffer ebo;
-  eray::driver::gl::ElementBuffer thrd_degree_bezier_ebo;
-  int last_bezier_degree;
-  bool show_polyline{true};
-
-  static constexpr int kMaxBezierDegree    = 3;
-  static constexpr size_t kMaxBezierPoints = 4;
-};
-
-enum class VisibilityState : uint8_t {
-  Visible   = 0,
-  Selected  = 1,
-  Invisible = 2,
-};
-
-class SceneRenderer {
+/**
+ * @brief Rendering API agnostic minicad scene renderer.
+ *
+ */
+class ISceneRenderer {
  public:
-  SceneRenderer() = delete;
+  virtual ~ISceneRenderer() = default;
 
-  enum class SceneRendererCreationError : uint8_t {
-    AssetsLoadingFailed         = 0,
-    ShaderProgramCreationFailed = 1,
-  };
+  virtual void push_object_rs_cmd(const SceneObjectRSCommand& obj)                        = 0;
+  virtual std::optional<SceneObjectRS> object_rs(const SceneObjectHandle& handle)         = 0;
+  virtual void set_object_rs(const SceneObjectHandle& handle, const SceneObjectRS& state) = 0;
 
-  static std::expected<SceneRenderer, SceneRendererCreationError> create(const std::filesystem::path& assets_path);
+  virtual void push_object_rs_cmd(const PointListObjectRSCommand& obj)                            = 0;
+  virtual std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle)         = 0;
+  virtual void set_object_rs(const PointListObjectHandle& handle, const PointListObjectRS& state) = 0;
 
-  void update_scene_object(const SceneObject& obj);
-  void update_point_list_object(const PointListObject& obj);
+  virtual void add_billboard(zstring_view name, const eray::res::Image& img) = 0;
+  virtual BillboardRS& billboard(zstring_view name)                          = 0;
 
-  void add_scene_object(const SceneObject& obj);
-  void add_point_list_object(const PointListObject& obj);
+  virtual void show_grid(bool show_grid) = 0;
+  virtual bool is_grid_shown() const     = 0;
 
-  void delete_scene_object(const SceneObject& obj, Scene& scene);
-  void delete_point_list_object(const PointListObject& obj);
+  virtual void resize_viewport(eray::math::Vec2i win_size)                                                     = 0;
+  virtual std::unordered_set<int> sample_mouse_pick_box(size_t x, size_t y, size_t width, size_t height) const = 0;
 
-  void update_visibility_state(const SceneObjectHandle& handle, VisibilityState state);
+  virtual void update(Scene& scene) = 0;
 
-  void render(Scene& scene, eray::driver::gl::ViewportFramebuffer& fb, Camera& camera);
-
-  void add_billboard(zstring_view name, const eray::res::Image& img);
-  Billboard& billboard(zstring_view name);
-
-  void show_grid(bool show_grid) { rs_.show_grid = show_grid; }
-  bool is_grid() const { return rs_.show_grid; }
-
-  void show_polyline(const PointListObjectHandle& obj, bool show);
-  bool is_polyline_shown(const PointListObjectHandle& obj);
-
- private:
-  struct RenderingState {
-    eray::driver::gl::VertexArray points_vao;
-    eray::driver::gl::VertexArray box_vao;
-    eray::driver::gl::VertexArrays torus_vao;
-
-    std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
-    std::vector<SceneObjectHandle> transferred_points_buff;
-
-    std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
-    std::vector<SceneObjectHandle> transferred_torus_buff;
-
-    std::unordered_map<PointListObjectHandle, PointListRenderingState> point_lists_;
-
-    eray::driver::gl::TextureHandle point_txt;
-
-    std::unordered_map<zstring_view, Billboard> billboards;
-
-    std::unordered_map<SceneObjectHandle, VisibilityState> visibility_states;
-
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite_sh_prog;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite_sh_prog;
-
-    bool show_grid;
-  };
-
-  explicit SceneRenderer(RenderingState&& rs);
-
- private:
-  RenderingState rs_;
+  virtual void render(Scene& scene, Camera& camera) = 0;
 };
 
 }  // namespace mini
