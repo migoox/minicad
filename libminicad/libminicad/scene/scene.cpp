@@ -218,6 +218,7 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
   std::visit(eray::util::match{
                  [&obj, obj_ind](Polyline&) { obj.name = std::format("Polyline {}", obj_ind); },
                  [&obj, obj_ind](MultisegmentBezierCurve&) { obj.name = std::format("Bezier {}", obj_ind); },
+                 [&obj, obj_ind](BSplineCurve&) { obj.name = std::format("B-Spline {}", obj_ind); },
              },
              variant);
   obj.object = std::move(variant);

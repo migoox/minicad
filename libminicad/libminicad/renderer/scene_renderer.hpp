@@ -20,11 +20,11 @@ class ISceneRenderer {
  public:
   virtual ~ISceneRenderer() = default;
 
-  virtual void push_object_rs_cmd(const SceneObjectRSCommand& obj)                        = 0;
+  virtual void push_object_rs_cmd(const SceneObjectRSCommand& cmd)                        = 0;
   virtual std::optional<SceneObjectRS> object_rs(const SceneObjectHandle& handle)         = 0;
   virtual void set_object_rs(const SceneObjectHandle& handle, const SceneObjectRS& state) = 0;
 
-  virtual void push_object_rs_cmd(const PointListObjectRSCommand& obj)                            = 0;
+  virtual void push_object_rs_cmd(const PointListObjectRSCommand& cmd)                            = 0;
   virtual std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle)         = 0;
   virtual void set_object_rs(const PointListObjectHandle& handle, const PointListObjectRS& state) = 0;
 

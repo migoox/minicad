@@ -7,6 +7,9 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <variant>
 
+#include "liberay/driver/gl/gl_handle.hpp"
+#include "liberay/driver/gl/vertex_array.hpp"
+
 namespace mini::gl {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -28,8 +31,15 @@ struct MultisegmentBezierCurveRS {
 
   static MultisegmentBezierCurveRS create();
 
-  eray::driver::gl::ElementBuffer thrd_degree_bezier_ebo;
+  eray::driver::gl::ElementBuffer control_points_ebo;
   int last_bezier_degree;
+};
+
+struct BSplineCurveRS {
+  static BSplineCurveRS create();
+
+  eray::driver::gl::VertexArray bernstein_points_vao;
+  eray::driver::gl::ElementBuffer de_boor_points_ebo;
 };
 
 struct PointListObjectRS {

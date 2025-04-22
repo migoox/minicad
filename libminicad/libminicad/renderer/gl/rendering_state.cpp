@@ -1,18 +1,28 @@
-#include "libminicad/renderer/rendering_state.hpp"
-
+#include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
+#include <libminicad/renderer/rendering_state.hpp>
+#include <libminicad/renderer/visibility_state.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <optional>
 #include <variant>
-
-#include "liberay/driver/gl/buffer.hpp"
-#include "liberay/util/variant_match.hpp"
-#include "libminicad/renderer/visibility_state.hpp"
-#include "libminicad/scene/scene_object.hpp"
 
 namespace mini::gl {
 
 MultisegmentBezierCurveRS MultisegmentBezierCurveRS::create() {
-  return {.thrd_degree_bezier_ebo = eray::driver::gl::ElementBuffer::create(), .last_bezier_degree = 0};
+  return {.control_points_ebo = eray::driver::gl::ElementBuffer::create(), .last_bezier_degree = 0};
+}
+
+BSplineCurveRS BSplineCurveRS::create() {
+  auto vbo_layout = eray::driver::gl::VertexBuffer::Layout();
+  vbo_layout.add_attribute<float>("pos", 0, 3);
+  auto vao = eray::driver::gl::VertexArray::create(eray::driver::gl::VertexBuffer::create(std::move(vbo_layout)),
+                                                   eray::driver::gl::ElementBuffer::create());
+  return {
+      .bernstein_points_vao = std::move(vao),
+      .de_boor_points_ebo   = eray::driver::gl::ElementBuffer::create(),
+  };
 }
 
 PointListObjectRS PointListObjectRS::create(const eray::driver::gl::VertexBuffer& points_vao,

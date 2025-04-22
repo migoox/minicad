@@ -1,16 +1,15 @@
 #pragma once
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/framebuffer.hpp>
 #include <liberay/driver/gl/gl_handle.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
-
-#include "liberay/driver/gl/framebuffer.hpp"
-#include "liberay/math/vec_fwd.hpp"
 
 namespace mini::gl {
 
@@ -44,6 +43,7 @@ struct PointListObjectRSCommandHandler {
   void operator()(const PointListObjectRSCommand::Internal::DeleteObject&);
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
+  void operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&);
 
   // NOLINTBEGIN
   OpenGLSceneRenderer& renderer;

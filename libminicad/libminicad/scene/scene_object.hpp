@@ -57,12 +57,10 @@ class SceneObject {
   SceneObjectId id() const { return handle_.obj_id; }
   const SceneObjectHandle& handle() const { return handle_; }
 
-  /**
-   * @brief Pushes SceneObjectRSCommand::UpdateObjectMembers onto a scene renderer command queue.
-   *
-   */
   void mark_dirty();
   size_t order_ind() const { return order_ind_; }
+  Scene& scene() { return scene_; }
+  const Scene& scene() const { return scene_; }
 
  public:
   eray::math::Transform3f transform;
@@ -88,10 +86,37 @@ class Polyline {
 
 class MultisegmentBezierCurve {
  public:
-  [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment Bezier Curve"; }
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment C0 Bezier Curve"; }
 };
 
-using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve>;
+/**
+ * @brief The scene point objects represent the de Boor points of the BSplineCurve.
+ *
+ */
+class BSplineCurve {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "B-Spline Curve"; }
+
+  /**
+   * @brief Updates the bernstein points basing on the de Boor points (scene point objects). Invoked automatically
+   * when the de Boor points are marked dirty.
+   *
+   */
+  void update_bernstein_points(const PointListObject& obj);
+
+  /**
+   * @brief Updates the de Boor points (scene point objects) basing on the de Boor points.
+   *
+   */
+  void update_de_boor_points(PointListObject& obj);
+
+  const std::vector<eray::math::Vec3f>& bernstein_points();
+
+ private:
+  std::vector<eray::math::Vec3f> bernstein_points_;
+};
+
+using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve>;
 
 class PointListObject {
  public:
@@ -125,13 +150,11 @@ class PointListObject {
   PointListObjectId id() const { return handle_.obj_id; }
   const PointListObjectHandle& handle() const { return handle_; }
 
-  /**
-   * @brief Pushes PointListObjectRSCommand::UpdateObjectMembers onto a scene renderer command queue.
-   *
-   */
   void mark_dirty();
-
   size_t order_ind() const { return order_ind_; }
+
+  Scene& scene() { return scene_; }
+  const Scene& scene() const { return scene_; }
 
  private:
   void update_indices_from(size_t start_idx);

@@ -215,8 +215,8 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
               std::get<MultisegmentBezierCurveRS>(*rs.point_lists.at(handle).specialized_rs).last_bezier_degree =
                   degree;
               std::get<MultisegmentBezierCurveRS>(*rs.point_lists.at(handle).specialized_rs)
-                  .thrd_degree_bezier_ebo.buffer_data(std::span{thrd_degree_bezier_control_points},
-                                                      gl::DataUsage::StaticDraw);
+                  .control_points_ebo.buffer_data(std::span{thrd_degree_bezier_control_points},
+                                                  gl::DataUsage::StaticDraw);
             },
             [](auto&) {},
 
@@ -246,6 +246,8 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {}
+
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {}
 
 namespace {
 
@@ -547,21 +549,21 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
     std::visit(util::match{
                    [&](const MultisegmentBezierCurveRS& s) {
-                     glVertexArrayElementBuffer(point_list.second.vao.get(), s.thrd_degree_bezier_ebo.raw_gl_id());
+                     glVertexArrayElementBuffer(point_list.second.vao.get(), s.control_points_ebo.raw_gl_id());
                      glBindVertexArray(point_list.second.vao.get());
 
                      shaders_.bezier->set_uniform("u_bezier_degree", 3);
                      if (s.last_bezier_degree > 0) {
                        glDrawElements(GL_PATCHES,
-                                      s.thrd_degree_bezier_ebo.count() - MultisegmentBezierCurveRS::kMaxBezierPoints,
+                                      s.control_points_ebo.count() - MultisegmentBezierCurveRS::kMaxBezierPoints,
                                       GL_UNSIGNED_INT, nullptr);
 
                        shaders_.bezier->set_uniform("u_bezier_degree", s.last_bezier_degree);
                        glDrawElements(GL_PATCHES, MultisegmentBezierCurveRS::kMaxBezierPoints, GL_UNSIGNED_INT,
-                                      (const void*)(sizeof(GLuint) * (s.thrd_degree_bezier_ebo.count() -
+                                      (const void*)(sizeof(GLuint) * (s.control_points_ebo.count() -
                                                                       MultisegmentBezierCurveRS::kMaxBezierPoints)));
                      } else {
-                       glDrawElements(GL_PATCHES, s.thrd_degree_bezier_ebo.count(), GL_UNSIGNED_INT, nullptr);
+                       glDrawElements(GL_PATCHES, s.control_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
                      }
                    },
                    [](const auto&) {},

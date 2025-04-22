@@ -31,6 +31,18 @@ SceneObject::~SceneObject() {
 
 void SceneObject::mark_dirty() {
   scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
+
+  if (std::holds_alternative<Point>(object)) {
+    for (const auto& pl : this->point_lists_) {
+      if (auto o = scene_.get_obj(pl)) {
+        if (std::holds_alternative<BSplineCurve>(o.value()->object)) {
+          std::get<BSplineCurve>(o.value()->object).update_bernstein_points(*o.value());
+          scene_.renderer().push_object_rs_cmd(
+              PointListObjectRSCommand(pl, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+        }
+      }
+    }
+  }
 }
 
 PointListObject::~PointListObject() {
@@ -107,6 +119,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
 
   return std::unexpected(SceneObjectError::NotAPoint);
 }
+
 std::expected<void, PointListObject::SceneObjectError> PointListObject::move_before(const SceneObjectHandle& dest,
                                                                                     const SceneObjectHandle& obj) {
   if (!scene_.is_handle_valid(dest) || !scene_.is_handle_valid(obj)) {
@@ -167,6 +180,18 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_aft
 void PointListObject::update_indices_from(size_t start_idx) {
   for (size_t i = start_idx; i < points_.size(); ++i) {
     points_map_[points_[i].get().handle()] = i;
+  }
+}
+
+void BSplineCurve::update_bernstein_points(const PointListObject& obj) {
+  // TODO(migoox): implement de Boor to Bernstein points conversion
+}
+
+void BSplineCurve::update_de_boor_points(PointListObject& obj) {
+  // TODO(migoox): implement Bernstein points to de Boor points conversion
+  for (const auto& p : obj.points()) {
+    obj.scene().renderer().push_object_rs_cmd(
+        SceneObjectRSCommand(p.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
   }
 }
 
