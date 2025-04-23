@@ -342,49 +342,50 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   TRY_UNWRAP_DEFINE_TRANSFORM_ERR(var, expr, SceneRendererCreationError::ShaderProgramCreationFailed)
   // NOLINTEND
 
-  TRY_UNWRAP_ASSET(param_vert, manager.load_shader(assets_path / "param.vert"));
-  TRY_UNWRAP_ASSET(param_frag, manager.load_shader(assets_path / "param.frag"));
-  TRY_UNWRAP_ASSET(param_tesc, manager.load_shader(assets_path / "param.tesc"));
-  TRY_UNWRAP_ASSET(param_tese, manager.load_shader(assets_path / "param.tese"));
+  auto shaders_path = assets_path / "shaders";
+  TRY_UNWRAP_ASSET(param_vert, manager.load_shader(shaders_path / "parametric_surfaces" / "param.vert"));
+  TRY_UNWRAP_ASSET(param_frag, manager.load_shader(shaders_path / "parametric_surfaces" / "param.frag"));
+  TRY_UNWRAP_ASSET(param_tesc, manager.load_shader(shaders_path / "parametric_surfaces" / "param.tesc"));
+  TRY_UNWRAP_ASSET(param_tese, manager.load_shader(shaders_path / "parametric_surfaces" / "param.tese"));
   TRY_UNWRAP_PROGRAM(param_prog,
                      gl::RenderingShaderProgram::create("param_shader", std::move(param_vert), std::move(param_frag),
                                                         std::move(param_tesc), std::move(param_tese)));
 
-  TRY_UNWRAP_ASSET(grid_vert, manager.load_shader(assets_path / "grid.vert"));
-  TRY_UNWRAP_ASSET(grid_frag, manager.load_shader(assets_path / "grid.frag"));
+  TRY_UNWRAP_ASSET(grid_vert, manager.load_shader(shaders_path / "utils" / "grid.vert"));
+  TRY_UNWRAP_ASSET(grid_frag, manager.load_shader(shaders_path / "utils" / "grid.frag"));
   TRY_UNWRAP_PROGRAM(grid_prog,
                      gl::RenderingShaderProgram::create("grid_shader", std::move(grid_vert), std::move(grid_frag)));
 
-  TRY_UNWRAP_ASSET(polyline_vert, manager.load_shader(assets_path / "polyline.vert"));
-  TRY_UNWRAP_ASSET(polyline_frag, manager.load_shader(assets_path / "solid_color.frag"));
+  TRY_UNWRAP_ASSET(polyline_vert, manager.load_shader(shaders_path / "curves" / "polyline.vert"));
+  TRY_UNWRAP_ASSET(polyline_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
   TRY_UNWRAP_PROGRAM(polyline_prog, gl::RenderingShaderProgram::create("polyline_shader", std::move(polyline_vert),
                                                                        std::move(polyline_frag)));
 
-  TRY_UNWRAP_ASSET(bezier_vert, manager.load_shader(assets_path / "bezier.vert"));
-  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(assets_path / "bezier.tesc"));
-  TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(assets_path / "bezier.tese"));
-  TRY_UNWRAP_ASSET(bezier_frag, manager.load_shader(assets_path / "solid_color.frag"));
+  TRY_UNWRAP_ASSET(bezier_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
+  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(shaders_path / "curves" / "curve.tesc"));
+  TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(shaders_path / "curves" / "bezier_c0.tese"));
+  TRY_UNWRAP_ASSET(bezier_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
   TRY_UNWRAP_PROGRAM(bezier_prog,
                      gl::RenderingShaderProgram::create("bezier_shader", std::move(bezier_vert), std::move(bezier_frag),
                                                         std::move(bezier_tesc), std::move(bezier_tese)));
 
-  TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(assets_path / "sprite.vert"));
-  TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(assets_path / "sprite.frag"));
+  TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
+  TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
   TRY_UNWRAP_PROGRAM(
       sprite_prog, gl::RenderingShaderProgram::create("sprite_shader", std::move(sprite_vert), std::move(sprite_frag)));
 
-  TRY_UNWRAP_ASSET(instanced_sprite_vert, manager.load_shader(assets_path / "sprite_instanced.vert"));
-  TRY_UNWRAP_ASSET(instanced_sprite_frag, manager.load_shader(assets_path / "sprite_instanced.frag"));
-  TRY_UNWRAP_ASSET(instanced_sprite_geom, manager.load_shader(assets_path / "sprite_instanced.geom"));
+  TRY_UNWRAP_ASSET(instanced_sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite_instanced.vert"));
+  TRY_UNWRAP_ASSET(instanced_sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite_instanced.frag"));
+  TRY_UNWRAP_ASSET(instanced_sprite_geom, manager.load_shader(shaders_path / "sprites" / "sprite_instanced.geom"));
   TRY_UNWRAP_PROGRAM(instanced_sprite_prog,
                      gl::RenderingShaderProgram::create("instanced_sprite_shader", std::move(instanced_sprite_vert),
                                                         std::move(instanced_sprite_frag), std::nullopt, std::nullopt,
                                                         std::move(instanced_sprite_geom)));
 
-  TRY_UNWRAP_ASSET(point_img, eray::res::Image::load_from_path(assets_path / "point.png"));
+  TRY_UNWRAP_ASSET(point_img, eray::res::Image::load_from_path(assets_path / "img" / "point.png"));
 
-  TRY_UNWRAP_ASSET(screen_quad_vert, manager.load_shader(assets_path / "screen_quad.vert"));
-  TRY_UNWRAP_ASSET(screen_quad_frag, manager.load_shader(assets_path / "screen_quad.frag"));
+  TRY_UNWRAP_ASSET(screen_quad_vert, manager.load_shader(shaders_path / "utils" / "screen_quad.vert"));
+  TRY_UNWRAP_ASSET(screen_quad_frag, manager.load_shader(shaders_path / "utils" / "screen_quad.frag"));
   TRY_UNWRAP_PROGRAM(screen_quad_prog,
                      gl::RenderingShaderProgram::create("screen_quad_shader", std::move(screen_quad_vert),
                                                         std::move(screen_quad_frag)));
@@ -535,7 +536,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
     }
   }
 
-  // Render beziers
+  // Render Beziers
   shaders_.bezier->bind();
   shaders_.bezier->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
@@ -565,6 +566,22 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                      } else {
                        glDrawElements(GL_PATCHES, s.control_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
                      }
+                   },
+                   [](const auto&) {},
+               },
+               *point_list.second.specialized_rs);
+  }
+
+  // Render B-Splines
+  for (auto& point_list : point_lists_rs_.point_lists) {
+    if (!point_list.second.specialized_rs) {
+      continue;
+    }
+
+    std::visit(util::match{
+                   [&](const BSplineCurveRS& s) {
+                     glVertexArrayElementBuffer(point_list.second.vao.get(), s.de_boor_points_ebo.raw_gl_id());
+                     glBindVertexArray(point_list.second.vao.get());
                    },
                    [](const auto&) {},
                },

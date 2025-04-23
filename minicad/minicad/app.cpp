@@ -63,8 +63,8 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
 
   eray::driver::GLSLShaderManager manager;
 
-  auto centroid_img = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "centroid.png"));
-  auto cursor_img   = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "cursor.png"));
+  auto centroid_img = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "centroid.png"));
+  auto cursor_img   = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "cursor.png"));
 
   auto sr = util::unwrap_or_panic(gl::OpenGLSceneRenderer::create(assets_path, window->size()));
   sr->add_billboard("cursor", cursor_img);
