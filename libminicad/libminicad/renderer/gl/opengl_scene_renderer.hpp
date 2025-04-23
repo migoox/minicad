@@ -97,6 +97,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bspline;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> helper_points;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad;
   } shaders_;
 
@@ -110,6 +111,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     eray::driver::gl::VertexArray points_vao;
     eray::driver::gl::VertexArrays torus_vao;
     eray::driver::gl::TextureHandle point_txt;
+    eray::driver::gl::TextureHandle helper_point_txt;
 
     std::vector<SceneObjectRSCommand> cmds;
 

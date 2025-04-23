@@ -23,7 +23,7 @@ vec3 find_bspline_point(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t) {
     float b1 = 3.0*t*u*u;
     float b0 = u*u*u;
 
-    // convert to the de boor points to bernstein  
+    // convert to the de boor points to bernstein basis 
     vec3 pb0 = (p0 + 4*p1 + p2) / 6.0;
     vec3 pb1 = (4*p1 + 2*p2) / 6.0;
     vec3 pb2 = (2*p1 + 4*p2) / 6.0;

@@ -1,3 +1,6 @@
+#include <glad/gl.h>
+
+#include <liberay/driver/gl/buffer.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
@@ -7,9 +10,8 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <ranges>
 #include <variant>
-
-#include "liberay/driver/gl/buffer.hpp"
 
 namespace mini::gl {
 
@@ -265,7 +267,37 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {}
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {}
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {
+  auto& rs           = renderer.point_lists_rs_;
+  const auto& handle = cmd_ctx.handle;
+
+  if (!rs.point_lists.contains(handle)) {
+    return;
+  }
+
+  if (auto obj = scene.get_obj(handle)) {
+    if (!rs.point_lists.at(handle).specialized_rs ||
+        !std::holds_alternative<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs) ||
+        !std::holds_alternative<BSplineCurve>(obj.value()->object)) {
+      return;
+    }
+    auto& curve = std::get<BSplineCurve>(obj.value()->object);
+
+    auto indices = std::views::iota(0u, static_cast<uint32_t>(curve.bernstein_points().size())) |
+                   std::ranges::to<std::vector<uint32_t>>();
+    std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
+        .bernstein_points_vao.ebo()
+        .buffer_data(std::span{indices}, gl::DataUsage::StaticDraw);
+
+    const auto* vertices = reinterpret_cast<const float*>(curve.bernstein_points().data());
+    std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
+        .bernstein_points_vao.vbo()
+        .buffer_data(std::span(vertices, sizeof(float) * curve.bernstein_points().size()), gl::DataUsage::StaticDraw);
+
+  } else {
+    rs.point_lists.erase(handle);
+  }
+}
 
 namespace {
 
@@ -408,7 +440,20 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                         std::move(instanced_sprite_frag), std::nullopt, std::nullopt,
                                                         std::move(instanced_sprite_geom)));
 
+  TRY_UNWRAP_ASSET(instanced_no_state_sprite_vert,
+                   manager.load_shader(shaders_path / "sprites" / "sprite_instanced_no_state.vert"));
+  TRY_UNWRAP_ASSET(instanced_no_state_sprite_frag,
+                   manager.load_shader(shaders_path / "sprites" / "sprite_instanced.frag"));
+  TRY_UNWRAP_ASSET(instanced_no_state_sprite_geom,
+                   manager.load_shader(shaders_path / "sprites" / "sprite_instanced.geom"));
+  TRY_UNWRAP_PROGRAM(
+      instanced_no_state_sprite_prog,
+      gl::RenderingShaderProgram::create("instanced_sprite_shader", std::move(instanced_no_state_sprite_vert),
+                                         std::move(instanced_no_state_sprite_frag), std::nullopt, std::nullopt,
+                                         std::move(instanced_no_state_sprite_geom)));
+
   TRY_UNWRAP_ASSET(point_img, eray::res::Image::load_from_path(assets_path / "img" / "point.png"));
+  TRY_UNWRAP_ASSET(helper_point_img, eray::res::Image::load_from_path(assets_path / "img" / "helper_point.png"));
 
   TRY_UNWRAP_ASSET(screen_quad_vert, manager.load_shader(shaders_path / "utils" / "screen_quad.vert"));
   TRY_UNWRAP_ASSET(screen_quad_frag, manager.load_shader(shaders_path / "utils" / "screen_quad.frag"));
@@ -417,14 +462,15 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                         std::move(screen_quad_frag)));
 
   auto shaders = Shaders{
-      .param            = std::move(param_prog),             //
-      .grid             = std::move(grid_prog),              //
-      .polyline         = std::move(polyline_prog),          //
-      .bezier           = std::move(bezier_prog),            //
-      .bspline          = std::move(bspline_prog),           //
-      .sprite           = std::move(sprite_prog),            //
-      .instanced_sprite = std::move(instanced_sprite_prog),  //
-      .screen_quad      = std::move(screen_quad_prog),       //
+      .param            = std::move(param_prog),                      //
+      .grid             = std::move(grid_prog),                       //
+      .polyline         = std::move(polyline_prog),                   //
+      .bezier           = std::move(bezier_prog),                     //
+      .bspline          = std::move(bspline_prog),                    //
+      .sprite           = std::move(sprite_prog),                     //
+      .instanced_sprite = std::move(instanced_sprite_prog),           //
+      .helper_points    = std::move(instanced_no_state_sprite_prog),  //
+      .screen_quad      = std::move(screen_quad_prog),                //
   };
 
   auto global_rs = GlobalRS{
@@ -433,10 +479,11 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   };
 
   auto scene_objs_rs = SceneObjectsRS{
-      .points_vao = create_points_vao(),        //
-      .torus_vao  = create_torus_vao(),         //
-      .point_txt  = create_texture(point_img),  //
-      .cmds       = {},                         //
+      .points_vao       = create_points_vao(),               //
+      .torus_vao        = create_torus_vao(),                //
+      .point_txt        = create_texture(point_img),         //
+      .helper_point_txt = create_texture(helper_point_img),  //
+      .cmds             = {},                                //
   };
 
   auto point_list_objs = PointListObjectsRS{
@@ -621,8 +668,32 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                *point_list.second.specialized_rs);
   }
 
-  // Render grid
+  // Render Bernstein control points for B-Splines
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  shaders_.bspline->bind();
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get());
+  shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.helper_points->set_uniform("u_scale", 0.02F);
+  shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
+  shaders_.helper_points->set_uniform("u_textureSampler", 0);
+  shaders_.helper_points->bind();
+  for (auto& point_list : point_lists_rs_.point_lists) {
+    if (!point_list.second.specialized_rs) {
+      continue;
+    }
+
+    std::visit(util::match{
+                   [&](const BSplineCurveRS& s) {
+                     s.bernstein_points_vao.bind();
+                     glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT, nullptr);
+                   },
+                   [](const auto&) {},
+               },
+               *point_list.second.specialized_rs);
+  }
+
+  // Render grid
   if (global_rs_.show_grid) {
     shaders_.grid->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
     shaders_.grid->set_uniform("u_vInvMat", camera.inverse_view_matrix());

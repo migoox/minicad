@@ -6,6 +6,7 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <ranges>
 #include <variant>
 
 namespace mini {
@@ -74,6 +75,12 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::add(cons
     points_.emplace_back(obj);
 
     obj.point_lists_.insert(handle_);
+
+    if (std::holds_alternative<BSplineCurve>(this->object)) {
+      std::get<BSplineCurve>(this->object).update_bernstein_points(*this);
+      scene_.renderer().push_object_rs_cmd(
+          PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+    }
 
     mark_dirty();
 
@@ -184,7 +191,17 @@ void PointListObject::update_indices_from(size_t start_idx) {
 }
 
 void BSplineCurve::update_bernstein_points(const PointListObject& obj) {
-  // TODO(migoox): implement de Boor to Bernstein points conversion
+  auto de_boor_points = obj.points() |
+                        std::ranges::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
+                        std::ranges::views::adjacent<4>;
+
+  bernstein_points_.clear();
+  for (const auto& [p0, p1, p2, p3] : de_boor_points) {
+    bernstein_points_.push_back((p0 + 4 * p1 + p2) / 6.0);
+    bernstein_points_.push_back((4 * p1 + 2 * p2) / 6.0);
+    bernstein_points_.push_back((2 * p1 + 4 * p2) / 6.0);
+    bernstein_points_.push_back((p1 + 4 * p2 + p3) / 6.0);
+  }
 }
 
 void BSplineCurve::update_de_boor_points(PointListObject& obj) {

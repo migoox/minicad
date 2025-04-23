@@ -110,7 +110,7 @@ class BSplineCurve {
    */
   void update_de_boor_points(PointListObject& obj);
 
-  const std::vector<eray::math::Vec3f>& bernstein_points();
+  const std::vector<eray::math::Vec3f>& bernstein_points() const { return bernstein_points_; }
 
  private:
   std::vector<eray::math::Vec3f> bernstein_points_;
