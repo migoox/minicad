@@ -9,6 +9,8 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <variant>
 
+#include "liberay/driver/gl/buffer.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -218,6 +220,22 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
                   .control_points_ebo.buffer_data(std::span{thrd_degree_bezier_control_points},
                                                   gl::DataUsage::StaticDraw);
             },
+            [&](BSplineCurve&) {
+              static auto constexpr kWindowSize = BSplineCurveRS::kMaxBSplinePoints;
+
+              auto de_boor_points =
+                  point_ids | views::slide(kWindowSize) | views::stride(1) | views::join | ranges::to<std::vector>();
+
+              // Assert that correct rendering state is attached to the handle
+              if (!rs.point_lists.at(handle).specialized_rs ||
+                  !std::holds_alternative<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)) {
+                rs.point_lists.at(handle).specialized_rs = BSplineCurveRS::create();
+              }
+
+              // Update the rendering state
+              std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
+                  .de_boor_points_ebo.buffer_data(std::span{de_boor_points}, gl::DataUsage::StaticDraw);
+            },
             [](auto&) {},
 
         },
@@ -362,12 +380,20 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                                        std::move(polyline_frag)));
 
   TRY_UNWRAP_ASSET(bezier_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
-  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(shaders_path / "curves" / "curve.tesc"));
+  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(shaders_path / "curves" / "bezier_c0.tesc"));
   TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(shaders_path / "curves" / "bezier_c0.tese"));
   TRY_UNWRAP_ASSET(bezier_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
   TRY_UNWRAP_PROGRAM(bezier_prog,
                      gl::RenderingShaderProgram::create("bezier_shader", std::move(bezier_vert), std::move(bezier_frag),
                                                         std::move(bezier_tesc), std::move(bezier_tese)));
+
+  TRY_UNWRAP_ASSET(bspline_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
+  TRY_UNWRAP_ASSET(bspline_tesc, manager.load_shader(shaders_path / "curves" / "bspline_c2.tesc"));
+  TRY_UNWRAP_ASSET(bspline_tese, manager.load_shader(shaders_path / "curves" / "bspline_c2.tese"));
+  TRY_UNWRAP_ASSET(bspline_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
+  TRY_UNWRAP_PROGRAM(bspline_prog, gl::RenderingShaderProgram::create("bspline_shader", std::move(bspline_vert),
+                                                                      std::move(bspline_frag), std::move(bspline_tesc),
+                                                                      std::move(bspline_tese)));
 
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
@@ -395,6 +421,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .grid             = std::move(grid_prog),              //
       .polyline         = std::move(polyline_prog),          //
       .bezier           = std::move(bezier_prog),            //
+      .bspline          = std::move(bspline_prog),           //
       .sprite           = std::move(sprite_prog),            //
       .instanced_sprite = std::move(instanced_sprite_prog),  //
       .screen_quad      = std::move(screen_quad_prog),       //
@@ -573,6 +600,11 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   }
 
   // Render B-Splines
+  shaders_.bspline->bind();
+  shaders_.bspline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.bspline->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
+  shaders_.bspline->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
+  shaders_.bspline->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   for (auto& point_list : point_lists_rs_.point_lists) {
     if (!point_list.second.specialized_rs) {
       continue;
@@ -582,6 +614,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                    [&](const BSplineCurveRS& s) {
                      glVertexArrayElementBuffer(point_list.second.vao.get(), s.de_boor_points_ebo.raw_gl_id());
                      glBindVertexArray(point_list.second.vao.get());
+                     glDrawElements(GL_PATCHES, s.de_boor_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
                    },
                    [](const auto&) {},
                },

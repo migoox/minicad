@@ -27,7 +27,7 @@ struct BillboardRS {
 
 struct MultisegmentBezierCurveRS {
   static constexpr int kMaxBezierDegree    = 3;
-  static constexpr size_t kMaxBezierPoints = 4;
+  static constexpr size_t kMaxBezierPoints = kMaxBezierDegree + 1;
 
   static MultisegmentBezierCurveRS create();
 
@@ -36,6 +36,9 @@ struct MultisegmentBezierCurveRS {
 };
 
 struct BSplineCurveRS {
+  static constexpr int kMaxBSplineDegree    = 3;
+  static constexpr size_t kMaxBSplinePoints = kMaxBSplineDegree + 1;
+
   static BSplineCurveRS create();
 
   eray::driver::gl::VertexArray bernstein_points_vao;
@@ -51,7 +54,7 @@ struct PointListObjectRS {
   eray::driver::gl::VertexArrayHandle vao;
   eray::driver::gl::ElementBuffer polyline_ebo;
 
-  std::optional<std::variant<MultisegmentBezierCurveRS>> specialized_rs;
+  std::optional<std::variant<MultisegmentBezierCurveRS, BSplineCurveRS>> specialized_rs;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
