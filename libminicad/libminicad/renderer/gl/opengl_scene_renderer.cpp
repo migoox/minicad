@@ -441,14 +441,14 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                         std::move(instanced_sprite_geom)));
 
   TRY_UNWRAP_ASSET(instanced_no_state_sprite_vert,
-                   manager.load_shader(shaders_path / "sprites" / "sprite_instanced_no_state.vert"));
+                   manager.load_shader(shaders_path / "sprites" / "helper_points.vert"));
   TRY_UNWRAP_ASSET(instanced_no_state_sprite_frag,
                    manager.load_shader(shaders_path / "sprites" / "sprite_instanced.frag"));
   TRY_UNWRAP_ASSET(instanced_no_state_sprite_geom,
                    manager.load_shader(shaders_path / "sprites" / "sprite_instanced.geom"));
   TRY_UNWRAP_PROGRAM(
       instanced_no_state_sprite_prog,
-      gl::RenderingShaderProgram::create("instanced_sprite_shader", std::move(instanced_no_state_sprite_vert),
+      gl::RenderingShaderProgram::create("points_helper_shader", std::move(instanced_no_state_sprite_vert),
                                          std::move(instanced_no_state_sprite_frag), std::nullopt, std::nullopt,
                                          std::move(instanced_no_state_sprite_geom)));
 
@@ -668,9 +668,22 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                *point_list.second.specialized_rs);
   }
 
+  // Render grid
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  if (global_rs_.show_grid) {
+    shaders_.grid->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.grid->set_uniform("u_vInvMat", camera.inverse_view_matrix());
+    shaders_.grid->set_uniform("u_camWorldPos", camera.transform.pos());
+    shaders_.grid->bind();
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+  }
+
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+
   // Render Bernstein control points for B-Splines
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  shaders_.bspline->bind();
+  framebuffer_->begin_pick_render();
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get());
   shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
@@ -685,6 +698,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
     std::visit(util::match{
                    [&](const BSplineCurveRS& s) {
+                     shaders_.helper_points->set_uniform("u_parent_id", static_cast<int>(point_list.first.obj_id));
                      s.bernstein_points_vao.bind();
                      glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT, nullptr);
                    },
@@ -692,18 +706,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                },
                *point_list.second.specialized_rs);
   }
-
-  // Render grid
-  if (global_rs_.show_grid) {
-    shaders_.grid->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-    shaders_.grid->set_uniform("u_vInvMat", camera.inverse_view_matrix());
-    shaders_.grid->set_uniform("u_camWorldPos", camera.transform.pos());
-    shaders_.grid->bind();
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-  }
-
-  glClear(GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_DEPTH_TEST);
+  framebuffer_->end_pick_render();
 
   // Render points
   framebuffer_->begin_pick_render();
