@@ -8,6 +8,7 @@
 #include <liberay/util/logger.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
 
+#include "liberay/math/vec_fwd.hpp"
 
 namespace ImGui {  // NOLINT
 
@@ -75,6 +76,23 @@ bool Transform(eray::math::Transform3f& trans, const ::mini::Camera& camera, Mod
   }
 
   is_scaling = ImGuizmo::IsUsing() && operation == Operation::Scale;
+
+  return result;
+}
+
+bool Translation(eray::math::Vec3f& pos, const ::mini::Camera& camera, const std::function<void()>& on_use) {
+  auto view  = camera.view_matrix();
+  auto proj  = camera.proj_matrix();
+  auto mat   = eray::math::translation(pos);
+  auto delta = eray::math::Mat4f::identity();
+
+  auto result = false;
+  if (ImGuizmo::Manipulate(view.raw_ptr(), proj.raw_ptr(), ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::MODE::WORLD,
+                           mat.raw_ptr(), delta.raw_ptr())) {
+    on_use();
+    pos += eray::math::Vec3f(delta[3]);
+    result = true;
+  }
 
   return result;
 }

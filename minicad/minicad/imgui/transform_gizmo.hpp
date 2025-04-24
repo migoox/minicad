@@ -27,8 +27,11 @@ bool IsOverTransform();
 
 bool IsUsingTransform();
 
-bool Transform(eray::math::Transform3f& trans, const ::mini::Camera& camera, Mode mode, Operation operation,
-               const std::function<void()>& on_use);
+bool Transform(
+    eray::math::Transform3f& trans, const ::mini::Camera& camera, Mode mode, Operation operation,
+    const std::function<void()>& on_use = []() {});
+
+bool Translation(eray::math::Vec3f& pos, const ::mini::Camera& camera, const std::function<void()>& on_use = []() {});
 
 }  // namespace gizmo
 

@@ -1,7 +1,12 @@
+#include <cstddef>
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <minicad/selection/selection.hpp>
+#include <optional>
 #include <variant>
+
+#include "libminicad/renderer/rendering_command.hpp"
+#include "libminicad/scene/scene_object.hpp"
 
 namespace mini {
 
@@ -138,6 +143,33 @@ void SceneObjectsSelection::update_is_points_only_selection(Scene& scene) {
         points_only_ = false;
         return;
       }
+    }
+  }
+}
+
+std::optional<eray::math::Vec3f> HelperPointSelection::pos(Scene& scene) {
+  if (!selection_) {
+    return std::nullopt;
+  }
+
+  if (auto o = scene.get_obj(selection_->parent)) {
+    if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
+      return bspline->point(selection_->helper_point);
+    }
+  }
+  selection_ = std::nullopt;
+  return std::nullopt;
+}
+
+void HelperPointSelection::set_point(Scene& scene, eray::math::Vec3f new_pos) {
+  if (!selection_) {
+    return;
+  }
+  if (auto o = scene.get_obj(selection_->parent)) {
+    if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
+      bspline->set_point(selection_->helper_point, new_pos);
+      scene.renderer().push_object_rs_cmd(
+          PointListObjectRSCommand(selection_->parent, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
     }
   }
 }

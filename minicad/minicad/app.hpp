@@ -68,6 +68,7 @@ class MiniCadApp final : public eray::os::Application {
 
     std::unique_ptr<SceneObjectsSelection> selection;
     std::unique_ptr<PointListObjectsSelection> point_list_selection;
+    HelperPointSelection helper_point_selection;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);

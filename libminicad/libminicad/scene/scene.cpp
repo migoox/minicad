@@ -28,7 +28,7 @@ Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
   }
 }
 
-std::optional<SceneObjectHandle> Scene::handle_by_obj_id(SceneObjectId id) {
+std::optional<SceneObjectHandle> Scene::handle_by_scene_obj_id(SceneObjectId id) {
   if (id >= kMaxObjects) {
     return std::nullopt;
   }
@@ -38,6 +38,18 @@ std::optional<SceneObjectHandle> Scene::handle_by_obj_id(SceneObjectId id) {
   }
 
   return scene_objects_[id]->first->handle();
+}
+
+std::optional<PointListObjectHandle> Scene::handle_by_point_list_obj_id(PointListObjectId id) {
+  if (id >= kMaxObjects) {
+    return std::nullopt;
+  }
+
+  if (!point_list_objects_[id]) {
+    return std::nullopt;
+  }
+
+  return point_list_objects_[id]->first->handle();
 }
 
 bool Scene::is_handle_valid(const SceneObjectHandle& handle) const {

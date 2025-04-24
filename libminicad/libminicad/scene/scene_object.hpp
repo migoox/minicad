@@ -6,10 +6,13 @@
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/zstring_view.hpp>
+#include <optional>
 #include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
+
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
@@ -102,15 +105,31 @@ class BSplineCurve {
    * when the de Boor points are marked dirty.
    *
    */
-  void update_bernstein_points(const PointListObject& obj);
+  void update_bernstein_points(const PointListObject& base);
 
   /**
    * @brief Updates the de Boor points (scene point objects) basing on the de Boor points.
    *
    */
-  void update_de_boor_points(PointListObject& obj);
+  void update_de_boor_points(PointListObject& base);
 
   const std::vector<eray::math::Vec3f>& bernstein_points() const { return bernstein_points_; }
+
+  std::optional<eray::math::Vec3f> point(size_t ind) const {
+    if (bernstein_points_.size() > ind) {
+      return bernstein_points_[ind];
+    }
+
+    return std::nullopt;
+  }
+
+  void set_point(size_t ind, eray::math::Vec3f point) {
+    if (bernstein_points_.size() > ind) {
+      bernstein_points_[ind] = point;
+    }
+  }
+
+  bool contains(size_t ind) { return bernstein_points_.size() > ind; }
 
  private:
   std::vector<eray::math::Vec3f> bernstein_points_;

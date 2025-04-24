@@ -8,6 +8,8 @@
 #include <optional>
 #include <unordered_set>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 class PointListObjectsSelection {
@@ -118,6 +120,25 @@ class SceneObjectsSelection {
   eray::math::Vec3f custom_origin_;
 
   std::unordered_set<SceneObjectHandle> objs_;
+};
+
+struct HelperPoint {
+  PointListObjectHandle parent;
+  size_t helper_point;
+};
+
+class HelperPointSelection {
+ public:
+  bool is_selected() { return selection_.has_value(); }
+  const std::optional<HelperPoint>& selection() { return selection_; }
+  void set_selection(HelperPoint&& selection) { selection_ = std::move(selection); }
+  void clear() { selection_ = std::nullopt; }
+
+  void set_point(Scene& scene, eray::math::Vec3f new_pos);
+  std::optional<eray::math::Vec3f> pos(Scene& scene);
+
+ private:
+  std::optional<HelperPoint> selection_;
 };
 
 }  // namespace mini

@@ -190,8 +190,8 @@ void PointListObject::update_indices_from(size_t start_idx) {
   }
 }
 
-void BSplineCurve::update_bernstein_points(const PointListObject& obj) {
-  auto de_boor_points = obj.points() |
+void BSplineCurve::update_bernstein_points(const PointListObject& base) {
+  auto de_boor_points = base.points() |
                         std::ranges::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
                         std::ranges::views::adjacent<4>;
 
@@ -204,10 +204,10 @@ void BSplineCurve::update_bernstein_points(const PointListObject& obj) {
   }
 }
 
-void BSplineCurve::update_de_boor_points(PointListObject& obj) {
+void BSplineCurve::update_de_boor_points(PointListObject& base) {
   // TODO(migoox): implement Bernstein points to de Boor points conversion
-  for (const auto& p : obj.points()) {
-    obj.scene().renderer().push_object_rs_cmd(
+  for (const auto& p : base.points()) {
+    base.scene().renderer().push_object_rs_cmd(
         SceneObjectRSCommand(p.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
   }
 }
