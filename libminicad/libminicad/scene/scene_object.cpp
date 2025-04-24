@@ -204,12 +204,41 @@ void BSplineCurve::update_bernstein_points(const PointListObject& base) {
   }
 }
 
-void BSplineCurve::update_de_boor_points(PointListObject& base) {
-  // TODO(migoox): implement Bernstein points to de Boor points conversion
-  for (const auto& p : base.points()) {
-    base.scene().renderer().push_object_rs_cmd(
-        SceneObjectRSCommand(p.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+void BSplineCurve::set_bernstein_point(PointListObject& base, size_t ind, eray::math::Vec3f point) {
+  if (bernstein_points_.size() <= ind) {
+    return;
   }
+  bernstein_points_[ind] = point;
+
+  size_t cp_ind = ind / 4;
+
+  auto de_boor_control_points_windows = base.points() | std::ranges::views::slide(4);
+  auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + (cp_ind));
+  auto& p0                            = de_boor_points_to_update[0];
+  auto& p1                            = de_boor_points_to_update[1];
+  auto& p2                            = de_boor_points_to_update[2];
+  auto& p3                            = de_boor_points_to_update[3];
+
+  const auto& bp0 = bernstein_points_[4 * cp_ind];
+  const auto& bp1 = bernstein_points_[4 * cp_ind + 1];
+  const auto& bp2 = bernstein_points_[4 * cp_ind + 2];
+  const auto& bp3 = bernstein_points_[4 * cp_ind + 3];
+
+  p0.transform.set_local_pos(6 * bp0 - 7 * bp1 + 2 * bp2);
+  p1.transform.set_local_pos(2 * bp1 - bp2);
+  p2.transform.set_local_pos(-bp1 + 2 * bp2);
+  p3.transform.set_local_pos(2 * bp1 - 7 * bp2 + 6 * bp3);
+
+  base.scene().renderer().push_object_rs_cmd(
+      SceneObjectRSCommand(p0.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+  base.scene().renderer().push_object_rs_cmd(
+      SceneObjectRSCommand(p1.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+  base.scene().renderer().push_object_rs_cmd(
+      SceneObjectRSCommand(p2.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+  base.scene().renderer().push_object_rs_cmd(
+      SceneObjectRSCommand(p3.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+
+  update_bernstein_points(base);
 }
 
 }  // namespace mini

@@ -115,7 +115,7 @@ class BSplineCurve {
 
   const std::vector<eray::math::Vec3f>& bernstein_points() const { return bernstein_points_; }
 
-  std::optional<eray::math::Vec3f> point(size_t ind) const {
+  std::optional<eray::math::Vec3f> bernstein_point(size_t ind) const {
     if (bernstein_points_.size() > ind) {
       return bernstein_points_[ind];
     }
@@ -123,11 +123,7 @@ class BSplineCurve {
     return std::nullopt;
   }
 
-  void set_point(size_t ind, eray::math::Vec3f point) {
-    if (bernstein_points_.size() > ind) {
-      bernstein_points_[ind] = point;
-    }
-  }
+  void set_bernstein_point(PointListObject& base, size_t ind, eray::math::Vec3f point);
 
   bool contains(size_t ind) { return bernstein_points_.size() > ind; }
 

@@ -154,7 +154,7 @@ std::optional<eray::math::Vec3f> HelperPointSelection::pos(Scene& scene) {
 
   if (auto o = scene.get_obj(selection_->parent)) {
     if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
-      return bspline->point(selection_->helper_point);
+      return bspline->bernstein_point(selection_->helper_point);
     }
   }
   selection_ = std::nullopt;
@@ -167,7 +167,7 @@ void HelperPointSelection::set_point(Scene& scene, eray::math::Vec3f new_pos) {
   }
   if (auto o = scene.get_obj(selection_->parent)) {
     if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
-      bspline->set_point(selection_->helper_point, new_pos);
+      bspline->set_bernstein_point(*o.value(), selection_->helper_point, new_pos);
       scene.renderer().push_object_rs_cmd(
           PointListObjectRSCommand(selection_->parent, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
     }
