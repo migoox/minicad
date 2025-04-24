@@ -1,12 +1,10 @@
-#include <cstddef>
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <minicad/selection/selection.hpp>
 #include <optional>
 #include <variant>
-
-#include "libminicad/renderer/rendering_command.hpp"
-#include "libminicad/scene/scene_object.hpp"
 
 namespace mini {
 

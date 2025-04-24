@@ -536,6 +536,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
     ImGui::End();
   }
+
   if (m_.tool_state == ToolState::Transform) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
@@ -551,12 +552,12 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                                       [&]() { o.value()->mark_dirty(); });
       }
     }
-  }
 
-  if (m_.helper_point_selection.is_selected()) {
-    auto p = *m_.helper_point_selection.pos(m_.scene);
-    if (ImGui::mini::gizmo::Translation(p, *m_.camera)) {
-      m_.helper_point_selection.set_point(m_.scene, p);
+    if (m_.helper_point_selection.is_selected()) {
+      auto p = *m_.helper_point_selection.pos(m_.scene);
+      if (ImGui::mini::gizmo::Translation(p, *m_.camera)) {
+        m_.helper_point_selection.set_point(m_.scene, p);
+      }
     }
   }
 }
