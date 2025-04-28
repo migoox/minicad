@@ -106,6 +106,7 @@ void SceneObjectsSelection::detach_all(Scene& scene) {
   for (const auto& handle : objs_) {
     if (auto o = scene.get_obj(handle)) {
       o.value()->transform.detach_from_parent();
+      o.value()->mark_dirty();
     }
   }
 }

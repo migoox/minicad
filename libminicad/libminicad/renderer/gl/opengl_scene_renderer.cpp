@@ -1,6 +1,7 @@
 #include <glad/gl.h>
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
@@ -25,10 +26,12 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
   auto& rs = renderer.scene_objs_rs_;
 
   if (auto obj = scene.get_obj(cmd_ctx.handle)) {
+    rs.scene_objects_rs.insert({cmd_ctx.handle, SceneObjectRS::create(*obj.value())});
+
     std::visit(eray::util::match{
                    [&](const Point&) {
                      auto i   = cmd_ctx.handle.obj_id;
-                     auto ind = rs.transferred_points_buff.size();
+                     auto ind = static_cast<GLuint>(rs.transferred_points_buff.size());
                      rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
                      rs.transferred_point_ind.insert({cmd_ctx.handle, ind});
                      rs.transferred_points_buff.push_back(cmd_ctx.handle);
@@ -51,17 +54,9 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
     std::visit(util::match{[&](const Point&) {
                              auto p = obj.value()->transform.pos();
                              rs.points_vao.vbo().set_attribute_value(handle.obj_id, "pos", p.raw_ptr());
-
-                             if (rs.scene_objects_rs.contains(handle)) {
-                               auto vs = static_cast<int>(rs.scene_objects_rs.at(handle).state.visibility);
-                               rs.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
-                             } else {
-                               auto vs = 0;
-                               rs.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
-                             }
                            },
                            [&](const Torus& t) {
-                             auto ind  = rs.transferred_torus_ind.at(handle);
+                             auto ind  = static_cast<GLuint>(rs.transferred_torus_ind.at(handle));
                              auto mat  = obj.value()->transform.local_to_world_matrix();
                              auto r    = math::Vec2f(t.minor_radius, t.major_radius);
                              auto tess = t.tess_level;
@@ -73,14 +68,6 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
                              rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
                              rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
                              rs.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-
-                             if (rs.scene_objects_rs.contains(handle)) {
-                               auto vs = static_cast<int>(rs.scene_objects_rs.at(handle).state.visibility);
-                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
-                             } else {
-                               auto vs = 0;
-                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
-                             }
                            }},
                obj.value()->object);
   }
@@ -93,9 +80,21 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
   if (auto obj = scene.get_obj(handle)) {
     if (!rs.scene_objects_rs.contains(handle)) {
       rs.scene_objects_rs.insert({handle, SceneObjectRS::create(*obj.value())});
-    } else {
-      rs.scene_objects_rs.at(handle).state.visibility = cmd.new_visibility_state;
+      util::Logger::warn(
+          "OpenGL Renderer: Attempt to change the visibility state of object without it's rendering state.");
     }
+
+    rs.scene_objects_rs.at(handle).state.visibility = cmd.new_visibility_state;
+    auto vs                                         = static_cast<int>(rs.scene_objects_rs.at(handle).state.visibility);
+    std::visit(util::match{                     //
+                           [&](const Point&) {  //
+                             rs.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
+                           },
+                           [&](const Torus&) {
+                             auto ind = static_cast<GLuint>(rs.transferred_torus_ind.at(handle));
+                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
+                           }},
+               obj.value()->object);
   }
 }
 
@@ -113,7 +112,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
                 return;
               }
 
-              auto ind = rs.transferred_point_ind.at(handle);
+              auto ind = static_cast<GLuint>(rs.transferred_point_ind.at(handle));
               rs.transferred_point_ind.erase(handle);
               rs.transferred_points_buff[ind] = rs.transferred_points_buff[rs.transferred_points_buff.size() - 1];
               rs.transferred_point_ind[rs.transferred_points_buff[ind]] = ind;
@@ -129,7 +128,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
                 return;
               }
 
-              auto ind = rs.transferred_torus_ind[handle];
+              auto ind = static_cast<GLuint>(rs.transferred_torus_ind[handle]);
               rs.transferred_torus_ind.erase(handle);
               rs.transferred_torus_buff[ind] = rs.transferred_torus_buff[rs.transferred_torus_buff.size() - 1];
               rs.transferred_torus_ind[rs.transferred_torus_buff[ind]] = ind;
@@ -279,11 +278,12 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
     if (!rs.point_lists.at(handle).specialized_rs ||
         !std::holds_alternative<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs) ||
         !std::holds_alternative<BSplineCurve>(obj.value()->object)) {
+      eray::util::Logger::warn("OpenGL SceneRenderer: Cannot update Bernstein Control Points position.");
       return;
     }
     auto& curve = std::get<BSplineCurve>(obj.value()->object);
 
-    auto indices = std::views::iota(0u, static_cast<uint32_t>(curve.bernstein_points().size())) |
+    auto indices = std::views::iota(0U, static_cast<uint32_t>(curve.bernstein_points().size())) |
                    std::ranges::to<std::vector<uint32_t>>();
     std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
         .bernstein_points_vao.ebo()
@@ -293,9 +293,6 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
     std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
         .bernstein_points_vao.vbo()
         .buffer_data(std::span(vertices, sizeof(float) * curve.bernstein_points().size()), gl::DataUsage::StaticDraw);
-
-  } else {
-    rs.point_lists.erase(handle);
   }
 }
 
@@ -578,7 +575,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   glClearColor(0.09, 0.05, 0.09, 1.F);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // Render toruses
+  // Render tori
   shaders_.param->set_uniform("u_vMat", camera.view_matrix());
   shaders_.param->set_uniform("u_pMat", camera.proj_matrix());
   shaders_.param->bind();

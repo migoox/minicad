@@ -23,7 +23,7 @@ SceneObject::~SceneObject() {
             SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
         pl.value()->mark_dirty();
         pl.value()->points_map_.erase(it);
-        pl.value()->points_.erase(pl.value()->points_.begin() + ind);
+        pl.value()->points_.erase(pl.value()->points_.begin() + static_cast<int>(ind));
         pl.value()->update_indices_from(ind);
       }
     }
@@ -70,8 +70,8 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::add(cons
 
   auto& obj = *scene_.scene_objects_.at(handle.obj_id)->first;
   if (std::holds_alternative<Point>(obj.object)) {
-    auto ind = points_.size();
-    points_map_.insert({handle, ind});
+    auto idx = points_.size();
+    points_map_.insert({handle, idx});
     points_.emplace_back(obj);
 
     obj.point_lists_.insert(handle_);
@@ -109,10 +109,10 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
   if (std::holds_alternative<Point>(obj.object)) {
     auto it = points_map_.find(handle);
     if (it != points_map_.end()) {
-      auto ind = it->second;
+      auto idx = it->second;
 
       points_map_.erase(it);
-      points_.erase(points_.begin() + ind);
+      points_.erase(points_.begin() + static_cast<int>(idx));
     }
 
     auto obj_it = obj.point_lists_.find(handle_);
@@ -144,11 +144,11 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_bef
     return {};
   }
   SceneObject& obj_ref = points_[obj_idx].get();
-  points_.erase(points_.begin() + obj_idx);
+  points_.erase(points_.begin() + static_cast<int>(obj_idx));
   if (obj_idx < dest_idx && dest_idx > 0) {
     dest_idx--;
   }
-  points_.insert(points_.begin() + dest_idx, std::ref(obj_ref));
+  points_.insert(points_.begin() + static_cast<int>(dest_idx), std::ref(obj_ref));
   update_indices_from(std::min(dest_idx, obj_idx));
 
   return {};
@@ -172,13 +172,13 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_aft
   }
 
   SceneObject& obj_ref = points_[obj_idx].get();
-  points_.erase(points_.begin() + obj_idx);
+  points_.erase(points_.begin() + static_cast<int>(obj_idx));
   size_t insert_pos = dest_idx + 1;
   if (obj_idx > dest_idx && insert_pos > 0) {
     insert_pos--;
   }
   insert_pos = std::min(insert_pos, points_.size());
-  points_.insert(points_.begin() + insert_pos, std::ref(obj_ref));
+  points_.insert(points_.begin() + static_cast<int>(insert_pos), std::ref(obj_ref));
   update_indices_from(std::min(insert_pos, obj_idx));
 
   return {};
@@ -213,7 +213,7 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t ind, eray::
   size_t cp_ind = ind / 4;
 
   auto de_boor_control_points_windows = base.points() | std::ranges::views::slide(4);
-  auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + (cp_ind));
+  auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_ind));
   auto& p0                            = de_boor_points_to_update[0];
   auto& p1                            = de_boor_points_to_update[1];
   auto& p2                            = de_boor_points_to_update[2];
