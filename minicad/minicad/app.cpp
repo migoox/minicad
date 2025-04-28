@@ -37,6 +37,7 @@
 #include <minicad/imgui/transform.hpp>
 #include <minicad/imgui/transform_gizmo.hpp>
 #include <minicad/selection/selection.hpp>
+#include <minicad/tools/select_tool.hpp>
 #include <optional>
 #include <ranges>
 #include <variant>
@@ -70,16 +71,22 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   sr->add_billboard("cursor", cursor_img);
   sr->add_billboard("centroid", centroid_img);
 
-  return MiniCadApp(std::move(window),
-                    {
-                        .cursor               = std::make_unique<Cursor>(),                     //
-                        .camera               = std::move(camera),                              //
-                        .camera_gimbal        = std::move(gimbal),                              //
-                        .grid_on              = true,                                           //
-                        .scene                = Scene(std::move(sr)),                           //
-                        .selection            = std::make_unique<SceneObjectsSelection>(),      //
-                        .point_list_selection = std::make_unique<PointListObjectsSelection>(),  //
-                    });
+  return MiniCadApp(std::move(window), {
+                                           .orbiting_camera_operator = OrbitingCameraOperator(),    //
+                                           .cursor                   = std::make_unique<Cursor>(),  //
+                                           .camera                   = std::move(camera),           //
+                                           .camera_gimbal            = std::move(gimbal),           //
+                                           .show_centroid            = false,                       //
+                                           .grid_on                  = true,                        //
+                                           .use_ortho                = false,                       //
+                                           .is_gizmo_used            = false,                       //
+                                           .select_tool              = SelectTool(),                //
+                                           .scene                    = Scene(std::move(sr)),        //
+                                           .tool_state               = ToolState::Cursor,
+                                           .selection                = std::make_unique<SceneObjectsSelection>(),    //
+                                           .point_list_selection   = std::make_unique<PointListObjectsSelection>(),  //
+                                           .helper_point_selection = HelperPointSelection()                          //
+                                       });
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
@@ -173,7 +180,7 @@ void MiniCadApp::gui_objects_list_window() {
     }
   }
 
-  static zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
+  static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
   for (const auto& obj : m_.scene.objs()) {
     std::visit(  //
         util::match{
@@ -312,7 +319,7 @@ void MiniCadApp::gui_selection_window() {
       ImGui::mini::Transform(scene_obj.value()->transform, [&]() { scene_obj.value()->mark_dirty(); });
 
       std::visit(eray::util::match{
-                     [this](Point& p) {
+                     [](Point& /*p*/) {
                        //    ImGui::Text("Part of the lists:");
                        //    for (const auto& p : p()) {
                        //      if (auto point_list = m_.scene.get_obj(p)) {
@@ -358,6 +365,7 @@ void MiniCadApp::gui_point_list_window() {
   if (m_.point_list_selection->is_single_selection()) {
     static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
     auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
+
     if (auto obj = m_.scene.get_obj(m_.point_list_selection->first())) {
       auto type_name = std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
 
@@ -382,38 +390,58 @@ void MiniCadApp::gui_point_list_window() {
           }
         }
       }
-      ImGui::Text("Points: ");
-      m_.selection->is_single_selection();
 
-      if (ImGui::Button("Add")) {
-        on_point_created_in_point_list(m_.point_list_selection->first());
-      }
-      ImGui::SameLine();
-      auto disable = !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
-      if (disable) {
-        ImGui::BeginDisabled();
-      }
-      if (ImGui::Button("Remove")) {
-        m_.scene.remove_from_list(m_.selection->first(), m_.point_list_selection->first());
-      }
-      if (disable) {
-        ImGui::EndDisabled();
-      }
+      if (ImGui::BeginTabBar("PointsTabBar", ImGuiTabBarFlags_None)) {
+        if (ImGui::BeginTabItem("Control Points")) {
+          m_.selection->is_single_selection();
 
-      for (auto& p : obj.value()->points()) {
-        ImGui::PushID(p.id());
-
-        bool is_selected = m_.selection->contains(p.handle());
-        if (ImGui::Selectable(p.name.c_str(), is_selected)) {
-          if (is_selected) {
-            on_selection_remove(p.handle());
-          } else {
-            on_selection_add(p.handle());
+          if (ImGui::Button("Add")) {
+            on_point_created_in_point_list(m_.point_list_selection->first());
           }
-        }
-        reorder_dnd.drag_and_drop_component(p, true);
+          ImGui::SameLine();
+          auto disable = !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
+          if (disable) {
+            ImGui::BeginDisabled();
+          }
+          if (ImGui::Button("Remove")) {
+            m_.scene.remove_from_list(m_.selection->first(), m_.point_list_selection->first());
+          }
+          if (disable) {
+            ImGui::EndDisabled();
+          }
 
-        ImGui::PopID();
+          for (auto& p : obj.value()->points()) {
+            ImGui::PushID(static_cast<int>(p.id()));
+
+            bool is_selected = m_.selection->contains(p.handle());
+            if (ImGui::Selectable(p.name.c_str(), is_selected)) {
+              if (is_selected) {
+                on_selection_remove(p.handle());
+              } else {
+                on_selection_add(p.handle());
+              }
+            }
+            reorder_dnd.drag_and_drop_component(p, true);
+
+            ImGui::PopID();
+          }
+          ImGui::EndTabItem();
+        }
+        if (std::holds_alternative<BSplineCurve>(obj.value()->object) && ImGui::BeginTabItem("Bernstein Points")) {
+          auto id = 0;
+          ImGui::Separator();
+          for (const auto& points : std::get<BSplineCurve>(obj.value()->object).bernstein_points() |
+                                        std::views::slide(4) | std::views::stride(4)) {
+            for (auto p : points) {
+              ImGui::PushID(id++);
+              ImGui::InputFloat3("##Point", p.data, "%.3f", ImGuiInputTextFlags_ReadOnly);
+              ImGui::PopID();
+            }
+            ImGui::Separator();
+          }
+          ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
       }
     }
     on_points_reorder(m_.point_list_selection->first(), reorder_dnd.source, reorder_dnd.before_dest,
@@ -452,10 +480,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   if (ImGui::Selectable("Select", selected)) {
     on_select_state_set();
   }
-  selected = m_.tool_state == ToolState::Transform;
-  if (ImGui::Selectable("Transform", selected)) {
-    on_transform_state_set();
-  }
+
   ImGui::End();
 
   static auto operation = ImGui::mini::gizmo::Operation::Translation;
@@ -473,7 +498,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         m_.cursor->set_by_ndc_pos(*m_.camera, ndc_pos);
       }
 
-    } else if (m_.tool_state == ToolState::Transform) {
+    } else if (m_.tool_state == ToolState::Select) {
       static constexpr auto kOperationName = util::StringEnumMapper<ImGui::mini::gizmo::Operation>({
           {ImGui::mini::gizmo::Operation::Translation, "Translate"},
           {ImGui::mini::gizmo::Operation::Rotation, "Rotate"},
@@ -531,25 +556,31 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRect(ImVec2(rect.pos.x, rect.pos.y), ImVec2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y),
-                       IM_COL32(56, 123, 203, 255), 0.0f, ImDrawFlags_None, 2.0f);
+    draw_list->AddRect(
+        ImVec2(static_cast<float>(rect.pos.x), static_cast<float>(rect.pos.y)),
+        ImVec2(static_cast<float>(rect.pos.x + rect.size.x), static_cast<float>(rect.pos.y + rect.size.y)),
+        IM_COL32(56, 123, 203, 255), 0.0F, ImDrawFlags_None, 2.0F);
 
     ImGui::End();
   }
 
-  if (m_.tool_state == ToolState::Transform) {
+  if (m_.tool_state == ToolState::Select) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
 
     if (m_.selection->is_multi_selection() || m_.selection->is_using_custom_origin()) {
       m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
-      ImGui::mini::gizmo::Transform(m_.selection->transform, *m_.camera, mode, operation,
-                                    [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); });
+      if (ImGui::mini::gizmo::Transform(m_.selection->transform, *m_.camera, mode, operation,
+                                        [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); })) {
+        m_.select_tool.end_box_select();
+      }
     } else if (m_.selection->is_single_selection()) {
       m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
       if (auto o = m_.scene.get_obj(m_.selection->first())) {
-        ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
-                                      [&]() { o.value()->mark_dirty(); });
+        if (ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
+                                          [&]() { o.value()->mark_dirty(); })) {
+          m_.select_tool.end_box_select();
+        }
       }
     }
 
@@ -557,6 +588,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       auto p = *m_.helper_point_selection.pos(m_.scene);
       if (ImGui::mini::gizmo::Translation(p, *m_.camera)) {
         m_.helper_point_selection.set_point(m_.scene, p);
+        m_.select_tool.end_box_select();
       }
     }
   }
@@ -593,6 +625,7 @@ bool MiniCadApp::on_scene_object_created(SceneObjectVariant variant) {
 
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+    o.value()->mark_dirty();
     on_selection_clear();
     on_selection_add(*obj_handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
@@ -612,6 +645,7 @@ bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& han
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     m_.scene.add_to_list(*obj_handle, handle);
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+    o.value()->mark_dirty();
     on_selection_clear();
     on_selection_add(*obj_handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
@@ -705,9 +739,7 @@ bool MiniCadApp::on_selection_add(const SceneObjectHandle& handle) {
   m_.selection->add(m_.scene, handle);
   m_.scene.renderer().push_object_rs_cmd(
       SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
-  if (auto o = m_.scene.get_obj(handle)) {
-    o.value()->mark_dirty();
-  }
+
   return true;
 }
 
@@ -715,9 +747,6 @@ bool MiniCadApp::on_selection_remove(const SceneObjectHandle& handle) {
   m_.selection->remove(m_.scene, handle);
   m_.scene.renderer().push_object_rs_cmd(
       SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
-  if (auto o = m_.scene.get_obj(handle)) {
-    o.value()->mark_dirty();
-  }
   return true;
 }
 
@@ -732,9 +761,6 @@ bool MiniCadApp::on_selection_clear() {
   for (const auto& handle : *m_.selection) {
     m_.scene.renderer().push_object_rs_cmd(
         SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
-    if (auto o = m_.scene.get_obj(handle)) {
-      o.value()->mark_dirty();
-    }
   }
   m_.selection->clear(m_.scene);
   m_.helper_point_selection.clear();
@@ -801,11 +827,6 @@ bool MiniCadApp::on_select_state_set() {
   return true;
 }
 
-bool MiniCadApp::on_transform_state_set() {
-  m_.tool_state = ToolState::Transform;
-  return true;
-}
-
 bool MiniCadApp::on_tool_action_start() {
   if (m_.tool_state == ToolState::Cursor) {
     m_.cursor->start_movement();
@@ -813,7 +834,9 @@ bool MiniCadApp::on_tool_action_start() {
   }
 
   if (m_.tool_state == ToolState::Select) {
-    m_.select_tool.start_box_select(math::Vec2f(window_->mouse_pos()));
+    if (!m_.is_gizmo_used) {
+      m_.select_tool.start_box_select(math::Vec2f(window_->mouse_pos()));
+    }
     return true;
   }
 
@@ -821,7 +844,7 @@ bool MiniCadApp::on_tool_action_start() {
 }
 
 bool MiniCadApp::on_tool_action_end() {
-  if (m_.tool_state == ToolState::Select) {
+  if (m_.tool_state == ToolState::Select && m_.select_tool.is_box_select_active()) {
     m_.select_tool.end_box_select();
     auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
 
@@ -875,11 +898,11 @@ bool MiniCadApp::on_mouse_pressed(const os::MouseButtonPressedEvent& ev) {
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonMiddle) {
-    m_.orbiting_camera_operator.start_pan(math::Vec2f(ev.x(), ev.y()));
+    m_.orbiting_camera_operator.start_pan(math::Vec2f(static_cast<float>(ev.x()), static_cast<float>(ev.y())));
   }
 
   if (ev.mouse_btn_code() == eray::os::MouseBtnCode::MouseButtonRight) {
-    m_.orbiting_camera_operator.start_rot(math::Vec2f(ev.x(), ev.y()));
+    m_.orbiting_camera_operator.start_rot(math::Vec2f(static_cast<float>(ev.x()), static_cast<float>(ev.y())));
   }
 
   return true;

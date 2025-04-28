@@ -40,9 +40,8 @@ class MiniCadApp final : public eray::os::Application {
 
  private:
   enum class ToolState : uint8_t {
-    Select    = 0,
-    Cursor    = 1,
-    Transform = 2,
+    Select = 0,
+    Cursor = 1,
   };
 
   struct Members {
@@ -94,7 +93,6 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_cursor_state_set();
   bool on_select_state_set();
-  bool on_transform_state_set();
   bool on_tool_action_start();
   bool on_tool_action_end();
 
@@ -105,9 +103,6 @@ class MiniCadApp final : public eray::os::Application {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
-      if (auto o = m_.scene.get_obj(handle)) {
-        o.value()->mark_dirty();
-      }
     }
     m_.selection->add_many(m_.scene, begin, end);
     return true;
@@ -118,9 +113,6 @@ class MiniCadApp final : public eray::os::Application {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
-      if (auto o = m_.scene.get_obj(handle)) {
-        o.value()->mark_dirty();
-      }
     }
     m_.selection->remove_many(m_.scene, begin, end);
     return true;
