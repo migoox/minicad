@@ -61,13 +61,13 @@ struct PointListObjectRS {
 
 struct PointRS {};
 
-struct TorusRS {};
+struct SurfaceParametrizationRS {};
 
 struct SceneObjectRS {
   static SceneObjectRS create(const SceneObject& scene_obj);
   ::mini::SceneObjectRS state;
 
-  std::variant<PointRS, TorusRS> specialized_rs;
+  std::variant<PointRS, SurfaceParametrizationRS> specialized_rs;
 };
 
 //----------------------------------------------------------------------------------------------------------------------

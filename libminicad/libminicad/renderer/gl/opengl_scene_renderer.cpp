@@ -102,60 +102,63 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
   auto& rs           = renderer.scene_objs_rs_;
   const auto& handle = cmd_ctx.handle;
 
-  if (auto obj = scene.get_obj(handle)) {
-    std::visit(
-        eray::util::match{
-            [&](const Point&) {
-              if (rs.transferred_points_buff.size() - 1 == rs.transferred_point_ind.at(handle)) {
-                rs.transferred_points_buff.pop_back();
-                rs.transferred_point_ind.erase(handle);
-                return;
-              }
-
-              auto ind = static_cast<GLuint>(rs.transferred_point_ind.at(handle));
-              rs.transferred_point_ind.erase(handle);
-              rs.transferred_points_buff[ind] = rs.transferred_points_buff[rs.transferred_points_buff.size() - 1];
-              rs.transferred_point_ind[rs.transferred_points_buff[ind]] = ind;
-              rs.transferred_points_buff.pop_back();
-
-              auto i = rs.transferred_points_buff[ind].obj_id;
-              rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-            },
-            [&](const Torus&) {
-              if (rs.transferred_torus_buff.size() - 1 == rs.transferred_torus_ind.at(handle)) {
-                rs.transferred_torus_buff.pop_back();
-                rs.transferred_torus_ind.erase(handle);
-                return;
-              }
-
-              auto ind = static_cast<GLuint>(rs.transferred_torus_ind[handle]);
-              rs.transferred_torus_ind.erase(handle);
-              rs.transferred_torus_buff[ind] = rs.transferred_torus_buff[rs.transferred_torus_buff.size() - 1];
-              rs.transferred_torus_ind[rs.transferred_torus_buff[ind]] = ind;
-              rs.transferred_torus_buff.pop_back();
-              auto id = static_cast<int>(handle.obj_id);
-
-              if (auto o2 = scene.get_obj(rs.transferred_torus_buff[ind])) {
-                auto mat = o2.value()->transform.local_to_world_matrix();
-                std::visit(eray::util::match{
-                               [&](const Point&) {},
-                               [&](const Torus& t) {
-                                 auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-                                 auto tess = t.tess_level;
-                                 rs.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
-                                 rs.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
-                               },
-                           },
-                           o2.value()->object);
-                rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
-                rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
-                rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
-                rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
-                rs.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-              }
-            }},
-        obj.value()->object);
+  if (!rs.scene_objects_rs.contains(handle)) {
+    util::Logger::warn("OpenGL Renderer: Detected attempt to delete non-existent rendering state.");
+    return;
   }
+
+  std::visit(eray::util::match{
+                 [&](const PointRS&) {
+                   if (rs.transferred_points_buff.size() - 1 == rs.transferred_point_ind.at(handle)) {
+                     rs.transferred_points_buff.pop_back();
+                     rs.transferred_point_ind.erase(handle);
+                     return;
+                   }
+
+                   auto ind = static_cast<GLuint>(rs.transferred_point_ind.at(handle));
+                   rs.transferred_point_ind.erase(handle);
+                   rs.transferred_points_buff[ind] = rs.transferred_points_buff[rs.transferred_points_buff.size() - 1];
+                   rs.transferred_point_ind[rs.transferred_points_buff[ind]] = ind;
+                   rs.transferred_points_buff.pop_back();
+
+                   auto i = rs.transferred_points_buff[ind].obj_id;
+                   rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+                 },
+                 [&](const SurfaceParametrizationRS&) {
+                   if (rs.transferred_torus_buff.size() - 1 == rs.transferred_torus_ind.at(handle)) {
+                     rs.transferred_torus_buff.pop_back();
+                     rs.transferred_torus_ind.erase(handle);
+                     return;
+                   }
+
+                   auto ind = static_cast<GLuint>(rs.transferred_torus_ind[handle]);
+                   rs.transferred_torus_ind.erase(handle);
+                   rs.transferred_torus_buff[ind] = rs.transferred_torus_buff[rs.transferred_torus_buff.size() - 1];
+                   rs.transferred_torus_ind[rs.transferred_torus_buff[ind]] = ind;
+                   rs.transferred_torus_buff.pop_back();
+                   auto id = static_cast<int>(handle.obj_id);
+
+                   if (auto o2 = scene.get_obj(rs.transferred_torus_buff[ind])) {
+                     auto mat = o2.value()->transform.local_to_world_matrix();
+                     std::visit(
+                         eray::util::match{
+                             [&](const Point&) {},
+                             [&](const Torus& t) {
+                               auto r    = math::Vec2f(t.minor_radius, t.major_radius);
+                               auto tess = t.tess_level;
+                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
+                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
+                             },
+                         },
+                         o2.value()->object);
+                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
+                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
+                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
+                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
+                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
+                   }
+                 }},
+             rs.scene_objects_rs.at(handle).specialized_rs);
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {

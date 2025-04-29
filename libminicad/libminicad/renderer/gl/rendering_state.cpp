@@ -67,10 +67,16 @@ PointListObjectRS PointListObjectRS::create(const eray::driver::gl::VertexBuffer
   };
 }
 
-SceneObjectRS SceneObjectRS::create(const SceneObject& /*scene_obj*/) {
+SceneObjectRS SceneObjectRS::create(const SceneObject& scene_obj) {
+  auto specialized_rs = std::visit(
+      eray::util::match{
+          [](const Point&) -> std::variant<PointRS, SurfaceParametrizationRS> { return PointRS{}; },
+          [](const Torus&) -> std::variant<PointRS, SurfaceParametrizationRS> { return SurfaceParametrizationRS{}; },
+      },
+      scene_obj.object);
   return {
       .state          = ::mini::SceneObjectRS(VisibilityState::Visible),
-      .specialized_rs = PointRS{},
+      .specialized_rs = specialized_rs,
   };
 }
 

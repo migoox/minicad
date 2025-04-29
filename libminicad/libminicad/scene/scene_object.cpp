@@ -14,17 +14,25 @@ namespace mini {
 namespace util = eray::util;
 
 SceneObject::~SceneObject() {
+  scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
+
   for (const auto& pl_h : point_lists_) {
     if (auto pl = scene_.get_obj(pl_h)) {
       auto it = pl.value()->points_map_.find(handle_);
       if (it != pl.value()->points_map_.end()) {
         auto ind = it->second;
-        scene_.renderer().push_object_rs_cmd(
-            SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
         pl.value()->mark_dirty();
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + static_cast<int>(ind));
         pl.value()->update_indices_from(ind);
+
+        if (std::holds_alternative<Point>(object)) {
+          if (std::holds_alternative<BSplineCurve>(pl.value()->object)) {
+            std::get<BSplineCurve>(pl.value()->object).update_bernstein_points(*pl.value());
+            scene_.renderer().push_object_rs_cmd(
+                PointListObjectRSCommand(pl_h, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+          }
+        }
       }
     }
   }

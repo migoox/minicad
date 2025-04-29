@@ -173,7 +173,7 @@ void Scene::remove_from_order(size_t ind) {
             [&](const PointListObjectHandle& handle) { point_list_objects_.at(handle.obj_id)->first->order_ind_--; }},
         objects_order_[i]);
   }
-  objects_order_.erase(objects_order_.begin() + ind);
+  objects_order_.erase(objects_order_.begin() + static_cast<int>(ind));
 }
 
 bool Scene::delete_obj(const SceneObjectHandle& handle) {

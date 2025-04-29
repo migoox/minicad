@@ -12,8 +12,6 @@
 #include <unordered_set>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 using SceneObjectId     = std::uint32_t;
