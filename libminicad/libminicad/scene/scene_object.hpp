@@ -103,7 +103,7 @@ class BSplineCurve {
    * when the de Boor points are marked dirty.
    *
    */
-  void update_bernstein_points(const PointListObject& base);
+  void reset_bernstein_points(const PointListObject& base);
 
   /**
    * @brief Updates the de Boor points (scene point objects) basing on the de Boor points.
