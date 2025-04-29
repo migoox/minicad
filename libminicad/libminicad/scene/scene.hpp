@@ -15,12 +15,6 @@
 
 namespace mini {
 
-template <typename T>
-using ObserverPtr = eray::util::ObserverPtr<T>;
-
-template <typename T>
-using OptionalObserverPtr = std::optional<eray::util::ObserverPtr<T>>;
-
 class Scene {
  public:
   Scene() = delete;

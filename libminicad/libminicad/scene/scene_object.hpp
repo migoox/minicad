@@ -32,6 +32,12 @@ using ObjectHandle = std::variant<SceneObjectHandle, PointListObjectHandle>;
 
 class PointListObject;
 
+template <typename T>
+using ObserverPtr = eray::util::ObserverPtr<T>;
+
+template <typename T>
+using OptionalObserverPtr = std::optional<eray::util::ObserverPtr<T>>;
+
 class Point {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
@@ -99,8 +105,7 @@ class BSplineCurve {
   [[nodiscard]] static zstring_view type_name() noexcept { return "B-Spline Curve"; }
 
   /**
-   * @brief Updates the bernstein points basing on the de Boor points (scene point objects). Invoked automatically
-   * when the de Boor points are marked dirty.
+   * @brief Resets the bernstein points basing on the de Boor points (scene point objects).
    *
    */
   void reset_bernstein_points(const PointListObject& base);
@@ -111,11 +116,17 @@ class BSplineCurve {
    */
   void update_de_boor_points(PointListObject& base);
 
+  /**
+   * @brief Updates the Bernstein points (scene point objects) basing on the de Boor points.
+   *
+   */
+  void update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle);
+
   const std::vector<eray::math::Vec3f>& bernstein_points() const { return bernstein_points_; }
 
-  std::optional<eray::math::Vec3f> bernstein_point(size_t ind) const {
-    if (bernstein_points_.size() > ind) {
-      return bernstein_points_[ind];
+  std::optional<eray::math::Vec3f> bernstein_point(size_t idx) const {
+    if (bernstein_points_.size() > idx) {
+      return bernstein_points_[idx];
     }
 
     return std::nullopt;
@@ -123,7 +134,17 @@ class BSplineCurve {
 
   void set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point);
 
-  bool contains(size_t ind) { return bernstein_points_.size() > ind; }
+  bool contains(size_t idx) { return bernstein_points_.size() > idx; }
+
+ private:
+  /**
+   * @brief Updates the bernstein points basing on the de Boor points (scene point objects). Invoked automatically
+   * when the de Boor points are marked dirty.
+   *
+   * @param base
+   * @param idx: represents first control point (de boor point) index in the segment of length 4
+   */
+  void update_bernstein_segment(const PointListObject& base, int cp_idx);
 
  private:
   std::vector<eray::math::Vec3f> bernstein_points_;
@@ -148,6 +169,22 @@ class PointListObject {
   auto handles() { return points_map_ | std::views::keys; }
 
   bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
+
+  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) {
+    if (!contains(handle)) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<SceneObject>(points_.at(points_map_.at(handle)).get());
+  }
+
+  std::optional<size_t> point_idx(const SceneObjectHandle& handle) {
+    if (!contains(handle)) {
+      return std::nullopt;
+    }
+
+    return points_map_.at(handle);
+  }
 
   enum class SceneObjectError : uint8_t {
     NotAPoint        = 0,

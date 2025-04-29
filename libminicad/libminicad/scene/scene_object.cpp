@@ -46,8 +46,11 @@ void SceneObject::mark_dirty() {
       if (auto o = scene_.get_obj(pl)) {
         if (std::holds_alternative<BSplineCurve>(o.value()->object)) {
           std::get<BSplineCurve>(o.value()->object).reset_bernstein_points(*o.value());
-          scene_.renderer().push_object_rs_cmd(
-              PointListObjectRSCommand(pl, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+          scene_
+              .renderer()
+
+              .push_object_rs_cmd(
+                  PointListObjectRSCommand(pl, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
         }
       }
     }
@@ -219,15 +222,47 @@ void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
   }
 }
 
+void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_idx) {
+  auto de_boor_points = base.points();
+
+  if (cp_idx + 3 >= static_cast<int>(de_boor_points.size()) || cp_idx < 0) {
+    return;
+  }
+
+  auto p0 = de_boor_points[cp_idx].transform.pos();
+  auto p1 = de_boor_points[cp_idx + 1].transform.pos();
+  auto p2 = de_boor_points[cp_idx + 2].transform.pos();
+  auto p3 = de_boor_points[cp_idx + 3].transform.pos();
+
+  auto cp_idx_u                       = static_cast<size_t>(cp_idx);
+  bernstein_points_[3 * cp_idx_u]     = (p0 + 4 * p1 + p2) / 6.0;
+  bernstein_points_[3 * cp_idx_u + 1] = (4 * p1 + 2 * p2) / 6.0;
+  bernstein_points_[3 * cp_idx_u + 2] = (2 * p1 + 4 * p2) / 6.0;
+  bernstein_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
+}
+
+void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle) {
+  if (auto o = base.point_idx(handle)) {
+    auto cp_idx = static_cast<int>(o.value());
+    update_bernstein_segment(base, cp_idx - 1);
+    update_bernstein_segment(base, cp_idx);
+    update_bernstein_segment(base, cp_idx + 1);
+  }
+}
+
 void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point) {
   if (bernstein_points_.size() <= idx) {
     return;
   }
-  bernstein_points_[idx] = point;
 
   size_t cp_idx = idx / 3;
+  if (idx == bernstein_points_.size() - 1) {
+    --cp_idx;
+  }
 
-  auto de_boor_control_points_windows = base.points() | std::ranges::views::slide(4);
+  bernstein_points_[idx] = point;
+
+  auto de_boor_control_points_windows = base.points() | std::views::slide(4);
   auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_idx));
   auto& p0                            = de_boor_points_to_update[0];
   auto& p1                            = de_boor_points_to_update[1];
@@ -253,7 +288,11 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   base.scene().renderer().push_object_rs_cmd(
       SceneObjectRSCommand(p3.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
 
-  reset_bernstein_points(base);
+  auto cp_idx_int = static_cast<int>(cp_idx);
+  update_bernstein_segment(base, cp_idx_int - 2);
+  update_bernstein_segment(base, cp_idx_int - 1);
+  update_bernstein_segment(base, cp_idx_int + 1);
+  update_bernstein_segment(base, cp_idx_int + 2);
 }
 
 }  // namespace mini
