@@ -569,13 +569,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
 
     if (m_.selection->is_multi_selection() || m_.selection->is_using_custom_origin()) {
-      m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
       if (ImGui::mini::gizmo::Transform(m_.selection->transform, *m_.camera, mode, operation,
                                         [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); })) {
         m_.select_tool.end_box_select();
       }
     } else if (m_.selection->is_single_selection()) {
-      m_.is_gizmo_used = ImGui::mini::gizmo::IsOverTransform();
       if (auto o = m_.scene.get_obj(m_.selection->first())) {
         if (ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
                                           [&]() { o.value()->mark_dirty(); })) {
@@ -834,6 +832,9 @@ bool MiniCadApp::on_tool_action_start() {
   }
 
   if (m_.tool_state == ToolState::Select) {
+    if (ImGui::mini::gizmo::IsOverTransform()) {
+      m_.is_gizmo_used = true;
+    }
     if (!m_.is_gizmo_used) {
       m_.select_tool.start_box_select(math::Vec2f(window_->mouse_pos()));
     }
@@ -915,7 +916,7 @@ bool MiniCadApp::on_mouse_released(const os::MouseButtonReleasedEvent& ev) {
   m_.cursor->stop_movement();
   m_.orbiting_camera_operator.stop_rot();
   m_.orbiting_camera_operator.stop_pan();
-
+  m_.is_gizmo_used = false;
   if (ev.is_on_ui()) {
     return true;
   }
