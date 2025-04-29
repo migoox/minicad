@@ -219,25 +219,25 @@ void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
   }
 }
 
-void BSplineCurve::set_bernstein_point(PointListObject& base, size_t ind, eray::math::Vec3f point) {
-  if (bernstein_points_.size() <= ind) {
+void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point) {
+  if (bernstein_points_.size() <= idx) {
     return;
   }
-  bernstein_points_[ind] = point;
+  bernstein_points_[idx] = point;
 
-  size_t cp_ind = ind / 4;
+  size_t cp_idx = idx / 3;
 
   auto de_boor_control_points_windows = base.points() | std::ranges::views::slide(4);
-  auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_ind));
+  auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_idx));
   auto& p0                            = de_boor_points_to_update[0];
   auto& p1                            = de_boor_points_to_update[1];
   auto& p2                            = de_boor_points_to_update[2];
   auto& p3                            = de_boor_points_to_update[3];
 
-  const auto& bp0 = bernstein_points_[3 * cp_ind];
-  const auto& bp1 = bernstein_points_[3 * cp_ind + 1];
-  const auto& bp2 = bernstein_points_[3 * cp_ind + 2];
-  const auto& bp3 = bernstein_points_[3 * cp_ind + 3];
+  const auto& bp0 = bernstein_points_[3 * cp_idx];
+  const auto& bp1 = bernstein_points_[3 * cp_idx + 1];
+  const auto& bp2 = bernstein_points_[3 * cp_idx + 2];
+  const auto& bp3 = bernstein_points_[3 * cp_idx + 3];
 
   p0.transform.set_local_pos(6 * bp0 - 7 * bp1 + 2 * bp2);
   p1.transform.set_local_pos(2 * bp1 - bp2);

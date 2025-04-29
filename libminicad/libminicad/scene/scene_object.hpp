@@ -121,7 +121,7 @@ class BSplineCurve {
     return std::nullopt;
   }
 
-  void set_bernstein_point(PointListObject& base, size_t ind, eray::math::Vec3f point);
+  void set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point);
 
   bool contains(size_t ind) { return bernstein_points_.size() > ind; }
 
