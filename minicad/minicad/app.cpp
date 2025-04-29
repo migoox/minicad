@@ -853,6 +853,7 @@ bool MiniCadApp::on_tool_action_end() {
         m_.scene.renderer().sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
                                                   static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
     on_selection_clear();
+    on_point_list_selection_clear();
 
     if (ids.size() == 1) {
       int point_list_id   = 0;
