@@ -181,7 +181,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   }
 
   if (auto obj = scene.get_obj(handle)) {
-    auto point_ids = obj.value()->points() | views::transform([](const SceneObject& ph) { return ph.id(); }) |
+    auto point_ids = obj.value()->point_objects() | views::transform([](const SceneObject& ph) { return ph.id(); }) |
                      ranges::to<std::vector>();
 
     rs.point_lists.at(handle).polyline_ebo.buffer_data(std::span{point_ids}, gl::DataUsage::StaticDraw);

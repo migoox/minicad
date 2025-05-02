@@ -86,12 +86,12 @@ class SceneObject {
   Scene& scene_;  // NOLINT
 };
 
-class Polyline {
+struct Polyline {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Polyline"; }
 };
 
-class MultisegmentBezierCurve {
+struct MultisegmentBezierCurve {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment C0 Bezier Curve"; }
 };
@@ -100,7 +100,7 @@ class MultisegmentBezierCurve {
  * @brief The scene point objects represent the de Boor points of the BSplineCurve.
  *
  */
-class BSplineCurve {
+struct BSplineCurve {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "B-Spline Curve"; }
 
@@ -150,7 +150,36 @@ class BSplineCurve {
   std::vector<eray::math::Vec3f> bernstein_points_;
 };
 
-using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve>;
+class NaturalSplineCurve {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Natural Spline Curve"; }
+
+  /**
+   * @brief Describes one segment in the natural spline using a power basis.
+   *
+   */
+  struct Segment {
+    eray::math::Vec3f a, b, c, d;
+    float chord_length = 1.F;
+  };
+
+  /**
+   * @brief Update segments basing on the new position of the interpolating point with handle.
+   *
+   */
+  void update_point(PointListObject& base, const SceneObjectHandle& handle);
+
+  /**
+   * @brief Reset segments basing on the all interpolating points.
+   *
+   */
+  void reset_segments(PointListObject& base);
+
+ private:
+  std::vector<Segment> segments_;
+};
+
+using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;
 
 class PointListObject {
  public:
@@ -158,15 +187,19 @@ class PointListObject {
   explicit PointListObject(PointListObjectHandle handle, Scene& scene) : handle_(handle), scene_(scene) {}
   ~PointListObject();
 
-  auto points() {
+  auto point_objects() {
     return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
   }
 
-  auto points() const {
+  auto point_objects() const {
     return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
   }
 
-  auto handles() { return points_map_ | std::views::keys; }
+  auto point_handles() { return points_map_ | std::views::keys; }
+
+  auto points() {
+    return point_objects() | std::views::transform([](auto& s) { return s.transform.pos(); });
+  }
 
   bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
 

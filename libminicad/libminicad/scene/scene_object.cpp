@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <expected>
 #include <liberay/util/logger.hpp>
+#include <liberay/util/panic.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
@@ -12,6 +13,7 @@
 namespace mini {
 
 namespace util = eray::util;
+namespace math = eray::math;
 
 SceneObject::~SceneObject() {
   scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
@@ -202,13 +204,14 @@ void PointListObject::update_indices_from(size_t start_idx) {
 }
 
 void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
-  auto de_boor_points_count = base.points().size();
+  auto de_boor_points_count = base.point_objects().size();
   if (de_boor_points_count < 4) {
     bernstein_points_.clear();
     return;
   }
 
-  auto de_boor_points = base.points() | std::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
+  auto de_boor_points = base.point_objects() |
+                        std::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
                         std::views::adjacent<3>;
 
   bernstein_points_.clear();
@@ -223,7 +226,7 @@ void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
 }
 
 void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_idx) {
-  auto de_boor_points = base.points();
+  auto de_boor_points = base.point_objects();
 
   if (cp_idx + 3 >= static_cast<int>(de_boor_points.size()) || cp_idx < 0) {
     return;
@@ -262,7 +265,7 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
 
   bernstein_points_[idx] = point;
 
-  auto de_boor_control_points_windows = base.points() | std::views::slide(4);
+  auto de_boor_control_points_windows = base.point_objects() | std::views::slide(4);
   auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_idx));
   auto& p0                            = de_boor_points_to_update[0];
   auto& p1                            = de_boor_points_to_update[1];
@@ -295,4 +298,70 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   update_bernstein_segment(base, cp_idx_int + 2);
 }
 
+void NaturalSplineCurve::update_point(PointListObject& /*base*/, const SceneObjectHandle& /*handle*/) {
+  util::panic("Not implemented yet");
+}
+
+void NaturalSplineCurve::reset_segments(PointListObject& base) {
+  auto points       = base.points();
+  auto points_count = points.size();
+
+  if (points_count < 2) {
+    segments_.clear();
+    return;
+  }
+  segments_.resize(points_count - 1);
+
+  // Find the lengths
+  for (auto it = segments_.begin(); const auto& [p0, p1] : points | std::views::adjacent<2>) {
+    it->chord_length = math::length(p1 - p0);
+    ++it;
+  }
+
+  // points: 0, ..., N-1
+  // segments: 0, ..., N-2
+  // coefficients: 0, ..., N-3
+
+  // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional copies
+  // The diagonal itself is always 2
+  // a.x denotes the lower diagonal coefficients
+  // a.y denotes the upper diagonal coefficients
+  segments_[0].a.x = 0;
+  segments_[0].a.y = segments_[0].chord_length / (segments_[0].chord_length + segments_[1].chord_length);
+  for (auto i = 1U; i < points_count - 3; ++i) {
+    float denom      = segments_[i].chord_length + segments_[i + 1].chord_length;
+    segments_[i].a.x = segments_[i].chord_length / denom;
+    segments_[i].a.y = segments_[i + 1].chord_length / denom;
+  }
+  segments_[points_count - 3].a.x =
+      segments_[points_count - 3].chord_length /
+      (segments_[points_count - 3].chord_length + segments_[points_count - 2].chord_length);
+  segments_[points_count - 3].a.y = 0;
+
+  // b denotes the right hand vector 3-dimensional coefficients
+  for (auto i = 0U; const auto& [p0, p1, p2] : points | std::views::adjacent<3>) {
+    auto nom       = (p2 - p1) / segments_[i + 1].chord_length - (p1 - p0) / segments_[i].chord_length;
+    auto denom     = segments_[i + 1].chord_length + segments_[i].chord_length;
+    segments_[i].b = 3 * nom / denom;
+  }
+
+  // Based on: https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+  // Find the new coefficient
+  // a.z denotes the new upper diagonal coefficients
+  segments_[0].a.z = segments_[0].a.y / 2.F;
+  for (auto i = 1U; i < points_count - 2; ++i) {
+    segments_[i].a.z = segments_[i].a.y / (2.F - segments_[i].a.x * segments_[i - 1].a.z);
+  }
+
+  // d denotes the new right hand vector 3-dimensional coefficients
+  segments_[0].d = segments_[0].d / 2.F;
+  for (auto i = 1U; i < points_count - 2; ++i) {
+    auto nom       = (segments_[i].b - segments_[i].a.x * segments_[i - 1].d);
+    auto denom     = 2.F - segments_[i].a.x * segments_[i - 1].a.z;
+    segments_[i].d = nom / denom;
+  }
+
+  // Find the solution
+  // TODO(migoox)
+}
 }  // namespace mini
