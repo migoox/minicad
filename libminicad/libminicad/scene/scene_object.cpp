@@ -10,6 +10,8 @@
 #include <ranges>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -311,18 +313,18 @@ void NaturalSplineCurve::update_point(PointListObject& /*base*/, const SceneObje
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
-  auto points       = base.points();
-  auto points_count = points.size();
-  // TEMPORARY
-  segments_.resize(points_count - 1);
-  return;
-  // ENDTEMPORARY
+  auto points = base.points();
+  auto n      = points.size();
 
-  if (points_count < 2) {
-    segments_.clear();
+  // Indices
+  //   - points: 0, 1, ..., n-1
+  //   - segments: 0, 1, ..., n-2
+  //   - matrix coefficients: 0, 1, ..., n-3
+
+  segments_.resize(n - 1);
+  if (n < 3) {
     return;
   }
-  segments_.resize(points_count - 1);
 
   // Find the lengths
   for (auto it = segments_.begin(); const auto& [p0, p1] : points | std::views::adjacent<2>) {
@@ -330,70 +332,77 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
     ++it;
   }
 
-  // points: 0, ..., N-1
-  // segments: 0, ..., N-2
-  // coefficients: 0, ..., N-3
-
-  // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional copies
-  // The diagonal itself is always 2
-  // a.x denotes the lower diagonal coefficients
-  // a.y denotes the upper diagonal coefficients
-  segments_[0].a.x = 0;
+  // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional memory allocation:
+  //  - The diagonal itself has all cell values equal 2
+  //  - a.x denotes the lower diagonal coefficients
+  //  - a.y denotes the upper diagonal coefficients
+  segments_[0].a.x = 0;  // not used, we assume that the c_0=c_{n-1}=0
   segments_[0].a.y = segments_[0].chord_length / (segments_[0].chord_length + segments_[1].chord_length);
-  for (auto i = 1U; i < points_count - 3; ++i) {
+  for (auto i = 1U; i < n - 3; ++i) {
     float denom      = segments_[i].chord_length + segments_[i + 1].chord_length;
     segments_[i].a.x = segments_[i].chord_length / denom;
     segments_[i].a.y = segments_[i + 1].chord_length / denom;
   }
-  segments_[points_count - 3].a.x =
-      segments_[points_count - 3].chord_length /
-      (segments_[points_count - 3].chord_length + segments_[points_count - 2].chord_length);
-  segments_[points_count - 3].a.y = 0;
+  segments_[n - 3].a.x =
+      segments_[n - 3].chord_length / (segments_[n - 3].chord_length + segments_[n - 2].chord_length);
+  segments_[n - 3].a.y = 0;  // not used, we assume that the c_0=c_{n-1}=0
 
-  // b denotes the right hand vector 3-dimensional coefficients
+  // b denotes the right hand 3-dimensional coefficient vector
   for (auto i = 0U; const auto& [p0, p1, p2] : points | std::views::adjacent<3>) {
     auto nom       = (p2 - p1) / segments_[i + 1].chord_length - (p1 - p0) / segments_[i].chord_length;
     auto denom     = segments_[i + 1].chord_length + segments_[i].chord_length;
-    segments_[i].b = 3 * nom / denom;
+    segments_[i].b = 3.F * nom / denom;
   }
 
-  // Based on: https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
-  // Find the new coefficient
+  // Solving the tridiagonal matrix. Based on: https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+  //
+  // 1. Find the new coefficients
+  //
   // a.z denotes the new upper diagonal coefficients
   segments_[0].a.z = segments_[0].a.y / 2.F;
-  for (auto i = 1U; i < points_count - 2; ++i) {
+  for (auto i = 1U; i < n - 2; ++i) {
     segments_[i].a.z = segments_[i].a.y / (2.F - segments_[i].a.x * segments_[i - 1].a.z);
   }
-
-  // d denotes the new right hand vector 3-dimensional coefficients
+  //
+  // d denotes the new right hand 3-dimensional coefficients vector
+  //
   segments_[0].d = segments_[0].d / 2.F;
-  for (auto i = 1U; i < points_count - 2; ++i) {
+  for (auto i = 1U; i < n - 2; ++i) {
     auto nom       = (segments_[i].b - segments_[i].a.x * segments_[i - 1].d);
     auto denom     = 2.F - segments_[i].a.x * segments_[i - 1].a.z;
     segments_[i].d = nom / denom;
   }
-
-  // Find the solution -- c power basis coefficients
-  segments_[points_count - 2].c = segments_[points_count - 2].d;
-  for (auto i = static_cast<int>(points_count - 3); i >= 0; --i) {
-    segments_[points_count - 2].c = segments_[i].d - segments_[i].a.z * segments_[i + 1].c;
+  //
+  // 2. Find the solution -- c power basis coefficients
+  //
+  segments_[0].c = segments_[n - 2].c = eray::math::Vec3f::filled(0.F);  // from assumption
+  segments_[n - 3].c                  = segments_[n - 3].d;
+  for (auto i = static_cast<int>(n) - 4; i >= 1; --i) {
+    auto idx           = static_cast<size_t>(i);
+    segments_[n - 2].c = segments_[idx].d - segments_[idx].a.z * segments_[idx + 1].c;
   }
 
-  // Find the a, b, d power basis coefficients
-  for (auto i = 0U; i < points_count - 1; ++i) {
-    segments_[i].d = (segments_[i + 1].c - segments_[i].c) / (3.F * segments_[i].chord_length);
-  }
-
-  auto points_without_start_end = points | std::views::drop(1);
+  // Find the a power basis coefficients from the fact that a_i = P_i (interpolation constraint)
+  auto points_without_start_end = points | std::views::take(n - 1);  // skip the last point
   for (auto it = segments_.begin(); const auto& p : points_without_start_end) {
     it->a = p;
     ++it;
   }
 
-  for (auto i = 0U; i < points_count - 1; ++i) {
-    segments_[i].b = (segments_[i + 1].a - segments_[i].a) / segments_[i].chord_length -
+  // Find the d power basis coefficients from the C^2 constraint
+  for (auto i = 0U; i < n - 2; ++i) {
+    segments_[i].d = (segments_[i + 1].c - segments_[i].c) / (3.F * segments_[i].chord_length);
+  }
+  segments_[n - 2].d = (segments_[n - 2].c) / (3.F * segments_[n - 2].chord_length);  // NOT SURE
+
+  // Find the b power basis coefficients from the C^0 constraint
+  auto point_it = points.begin();
+  ++point_it;  // skip the first point
+  for (auto i = 0U; i < n - 1; ++i) {
+    segments_[i].b = (*point_it - segments_[i].a) / segments_[i].chord_length -
                      segments_[i].c * segments_[i].chord_length -
                      segments_[i].d * segments_[i].chord_length * segments_[i].chord_length;
+    ++point_it;
   }
 }
 }  // namespace mini

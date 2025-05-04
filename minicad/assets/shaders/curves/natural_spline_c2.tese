@@ -7,19 +7,19 @@ uniform int u_bezier_degree = 3;
 
 patch in float isolinesCount;
 
-vec3 find_power_degree_3(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t) {
-    return p0 + p1*t + p2*t*t + p3*t*t*t;
+vec3 find_power_degree_3(vec3 a, vec3 b, vec3 c, vec3 d, float t) {
+    return a + b*t + c*t*t + d*t*t*t;
 }
 
 void main()
 {
     float t = gl_TessCoord.x  / isolinesCount + gl_TessCoord.y;
-    vec3 p0 = gl_in[0].gl_Position.xyz;
-    vec3 p1 = gl_in[1].gl_Position.xyz;
-    vec3 p2 = gl_in[2].gl_Position.xyz;
-    vec3 p3 = gl_in[3].gl_Position.xyz;
+    vec3 a = gl_in[0].gl_Position.xyz;
+    vec3 b = gl_in[1].gl_Position.xyz;
+    vec3 c = gl_in[2].gl_Position.xyz;
+    vec3 d = gl_in[3].gl_Position.xyz;
 
-    vec3 p = find_power_degree_3(p0, p1, p2, p3, t);
+    vec3 p = find_power_degree_3(a, b, c, d, t);
 
     gl_Position = u_pvMat*vec4(p, 1.0);
 }
