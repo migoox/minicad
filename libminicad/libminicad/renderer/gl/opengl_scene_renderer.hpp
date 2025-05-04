@@ -44,6 +44,7 @@ struct PointListObjectRSCommandHandler {
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
   void operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&);
+  void operator()(const PointListObjectRSCommand::UpdateNaturalSplineSegments&);
 
   // NOLINTBEGIN
   OpenGLSceneRenderer& renderer;

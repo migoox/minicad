@@ -240,9 +240,18 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
               std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
                   .de_boor_points_ebo.buffer_data(std::span{de_boor_points}, gl::DataUsage::StaticDraw);
             },
-            [](auto&) {},
+            [&](NaturalSplineCurve&) {
+              // Assert that correct rendering state is attached to the handle
+              if (!rs.point_lists.at(handle).specialized_rs ||
+                  !std::holds_alternative<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)) {
+                rs.point_lists.at(handle).specialized_rs = NaturalSplineCurveRS::create();
+              }
 
-        },
+              // Update the segments info
+              auto& nsc_rs = std::get<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs);
+              nsc_rs.reset_buffer(*obj.value());
+            },
+            [](auto&) {}},
         obj.value()->object);
   } else {
     rs.point_lists.erase(handle);
@@ -296,6 +305,29 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
     std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
         .bernstein_points_vao.vbo()
         .buffer_data(std::span(vertices, sizeof(float) * curve.bernstein_points().size()), gl::DataUsage::StaticDraw);
+  }
+}
+
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateNaturalSplineSegments&) {
+  auto& rs           = renderer.point_lists_rs_;
+  const auto& handle = cmd_ctx.handle;
+
+  if (!rs.point_lists.contains(handle)) {
+    return;
+  }
+
+  if (auto obj = scene.get_obj(handle)) {
+    if (!rs.point_lists.at(handle).specialized_rs ||
+        !std::holds_alternative<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs) ||
+        !std::holds_alternative<NaturalSplineCurve>(obj.value()->object)) {
+      eray::util::Logger::warn(
+          "OpenGL SceneRenderer: Cannot update Natural Spline segments due to rendering state mismatch.");
+      return;
+    }
+
+    // Update the segments info
+    auto& nsc_rs = std::get<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs);
+    nsc_rs.reset_buffer(*obj.value());
   }
 }
 

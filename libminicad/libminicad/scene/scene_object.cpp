@@ -27,14 +27,7 @@ SceneObject::~SceneObject() {
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + static_cast<int>(ind));
         pl.value()->update_indices_from(ind);
-
-        if (std::holds_alternative<Point>(object)) {
-          if (std::holds_alternative<BSplineCurve>(pl.value()->object)) {
-            std::get<BSplineCurve>(pl.value()->object).reset_bernstein_points(*pl.value());
-            scene_.renderer().push_object_rs_cmd(
-                PointListObjectRSCommand(pl_h, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
-          }
-        }
+        update_point_list(*pl.value());
       }
     }
   }
@@ -43,20 +36,35 @@ SceneObject::~SceneObject() {
 void SceneObject::mark_dirty() {
   scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
 
+  // Only points might be a part of the point lists
   if (std::holds_alternative<Point>(object)) {
-    for (const auto& pl : this->point_lists_) {
-      if (auto o = scene_.get_obj(pl)) {
-        if (std::holds_alternative<BSplineCurve>(o.value()->object)) {
-          std::get<BSplineCurve>(o.value()->object).reset_bernstein_points(*o.value());
-          scene_
-              .renderer()
-
-              .push_object_rs_cmd(
-                  PointListObjectRSCommand(pl, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
-        }
+    for (const auto& pl_h : this->point_lists_) {
+      if (auto pl = scene_.get_obj(pl_h)) {
+        update_point_list(*pl.value());
       }
     }
   }
+}
+
+void SceneObject::update_point_list(PointListObject& obj) {
+  // Only points might be a part of the point lists
+  if (!std::holds_alternative<Point>(object)) {
+    return;
+  }
+
+  std::visit(eray::util::match{//
+                               [&](BSplineCurve& curve) {
+                                 curve.reset_bernstein_points(obj);
+                                 scene_.renderer().push_object_rs_cmd(PointListObjectRSCommand(
+                                     obj.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+                               },  //
+                               [&](NaturalSplineCurve& curve) {
+                                 curve.reset_segments(obj);
+                                 scene_.renderer().push_object_rs_cmd(PointListObjectRSCommand(
+                                     obj.handle(), PointListObjectRSCommand::UpdateNaturalSplineSegments{}));
+                               },  //
+                               [](auto&) {}},
+             obj.object);
 }
 
 PointListObject::~PointListObject() {
@@ -305,6 +313,10 @@ void NaturalSplineCurve::update_point(PointListObject& /*base*/, const SceneObje
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
   auto points       = base.points();
   auto points_count = points.size();
+  // TEMPORARY
+  segments_.resize(points_count - 1);
+  return;
+  // ENDTEMPORARY
 
   if (points_count < 2) {
     segments_.clear();
@@ -361,7 +373,27 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
     segments_[i].d = nom / denom;
   }
 
-  // Find the solution
-  // TODO(migoox)
+  // Find the solution -- c power basis coefficients
+  segments_[points_count - 2].c = segments_[points_count - 2].d;
+  for (auto i = static_cast<int>(points_count - 3); i >= 0; --i) {
+    segments_[points_count - 2].c = segments_[i].d - segments_[i].a.z * segments_[i + 1].c;
+  }
+
+  // Find the a, b, d power basis coefficients
+  for (auto i = 0U; i < points_count - 1; ++i) {
+    segments_[i].d = (segments_[i + 1].c - segments_[i].c) / (3.F * segments_[i].chord_length);
+  }
+
+  auto points_without_start_end = points | std::views::drop(1);
+  for (auto it = segments_.begin(); const auto& p : points_without_start_end) {
+    it->a = p;
+    ++it;
+  }
+
+  for (auto i = 0U; i < points_count - 1; ++i) {
+    segments_[i].b = (segments_[i + 1].a - segments_[i].a) / segments_[i].chord_length -
+                     segments_[i].c * segments_[i].chord_length -
+                     segments_[i].d * segments_[i].chord_length * segments_[i].chord_length;
+  }
 }
 }  // namespace mini

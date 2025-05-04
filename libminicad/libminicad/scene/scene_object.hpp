@@ -75,6 +75,9 @@ class SceneObject {
   SceneObjectVariant object;
 
  private:
+  void update_point_list(PointListObject& obj);
+
+ private:
   friend Scene;
   friend PointListObject;
 
@@ -175,6 +178,8 @@ class NaturalSplineCurve {
    */
   void reset_segments(PointListObject& base);
 
+  const std::vector<Segment>& segments() const { return segments_; }
+
  private:
   std::vector<Segment> segments_;
 };
@@ -199,6 +204,10 @@ class PointListObject {
 
   auto points() {
     return point_objects() | std::views::transform([](auto& s) { return s.transform.pos(); });
+  }
+
+  auto points() const {
+    return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
   }
 
   bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }

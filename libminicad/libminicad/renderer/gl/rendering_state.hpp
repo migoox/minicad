@@ -1,14 +1,15 @@
 #pragma once
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/gl_handle.hpp>
+#include <liberay/driver/gl/vertex_array.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <variant>
 
-#include "liberay/driver/gl/gl_handle.hpp"
-#include "liberay/driver/gl/vertex_array.hpp"
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini::gl {
 
@@ -45,6 +46,18 @@ struct BSplineCurveRS {
   eray::driver::gl::ElementBuffer de_boor_points_ebo;
 };
 
+struct NaturalSplineCurveRS {
+  static constexpr int kMaxBSplineDegree    = 3;
+  static constexpr size_t kMaxBSplinePoints = kMaxBSplineDegree + 1;
+
+  static NaturalSplineCurveRS create();
+
+  void reset_buffer(const PointListObject& obj);
+
+  eray::driver::gl::VertexArray coefficients_vao;
+  std::vector<float> coefficients_buffer;
+};
+
 struct PointListObjectRS {
   static PointListObjectRS create(const eray::driver::gl::VertexBuffer& points_vao,
                                   const PointListObject& point_list_obj);
@@ -54,7 +67,7 @@ struct PointListObjectRS {
   eray::driver::gl::VertexArrayHandle vao;
   eray::driver::gl::ElementBuffer polyline_ebo;
 
-  std::optional<std::variant<MultisegmentBezierCurveRS, BSplineCurveRS>> specialized_rs;
+  std::optional<std::variant<MultisegmentBezierCurveRS, BSplineCurveRS, NaturalSplineCurveRS>> specialized_rs;
 };
 
 //----------------------------------------------------------------------------------------------------------------------

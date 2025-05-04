@@ -8,6 +8,8 @@
 #include <optional>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini::gl {
 
 MultisegmentBezierCurveRS MultisegmentBezierCurveRS::create() {
@@ -23,6 +25,63 @@ BSplineCurveRS BSplineCurveRS::create() {
       .bernstein_points_vao = std::move(vao),
       .de_boor_points_ebo   = eray::driver::gl::ElementBuffer::create(),
   };
+}
+
+NaturalSplineCurveRS NaturalSplineCurveRS::create() {
+  auto vbo_layout = eray::driver::gl::VertexBuffer::Layout();
+  vbo_layout.add_attribute<float>("coeff_a", 0, 3);
+  vbo_layout.add_attribute<float>("coeff_b", 1, 3);
+  vbo_layout.add_attribute<float>("coeff_c", 2, 3);
+  vbo_layout.add_attribute<float>("coeff_d", 3, 3);
+  vbo_layout.add_attribute<float>("segment_start", 4, 3);
+  vbo_layout.add_attribute<float>("segment_end", 5, 3);
+  auto vao = eray::driver::gl::VertexArray::create(eray::driver::gl::VertexBuffer::create(std::move(vbo_layout)),
+                                                   eray::driver::gl::ElementBuffer::create());
+
+  return {.coefficients_vao = std::move(vao), .coefficients_buffer = std::vector<float>()};
+}
+
+void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
+  std::visit(eray::util::match{//
+                               [&](const NaturalSplineCurve& nsc) {
+                                 coefficients_buffer.resize(nsc.segments().size() * 6);
+                                 for (auto i = 0U; const auto& segment : nsc.segments()) {
+                                   coefficients_buffer[3 * i]     = segment.a.x;
+                                   coefficients_buffer[3 * i + 1] = segment.a.y;
+                                   coefficients_buffer[3 * i + 2] = segment.a.z;
+
+                                   coefficients_buffer[3 * (i + 1)]     = segment.b.x;
+                                   coefficients_buffer[3 * (i + 1) + 1] = segment.b.y;
+                                   coefficients_buffer[3 * (i + 1) + 2] = segment.b.z;
+
+                                   coefficients_buffer[3 * (i + 2)]     = segment.c.x;
+                                   coefficients_buffer[3 * (i + 2) + 1] = segment.c.y;
+                                   coefficients_buffer[3 * (i + 2) + 2] = segment.c.z;
+
+                                   coefficients_buffer[3 * (i + 3)]     = segment.d.x;
+                                   coefficients_buffer[3 * (i + 3) + 1] = segment.d.y;
+                                   coefficients_buffer[3 * (i + 3) + 2] = segment.d.z;
+                                   i += 6;
+                                 }
+                                 for (auto i = 0U; const auto& [p0, p1] : obj.points() | std::views::adjacent<2>) {
+                                   coefficients_buffer[3 * (i + 4)]     = p0.x;
+                                   coefficients_buffer[3 * (i + 4) + 1] = p0.y;
+                                   coefficients_buffer[3 * (i + 4) + 2] = p0.z;
+
+                                   coefficients_buffer[3 * (i + 5)]     = p1.x;
+                                   coefficients_buffer[3 * (i + 5) + 1] = p1.y;
+                                   coefficients_buffer[3 * (i + 5) + 2] = p1.z;
+                                   i += 6;
+                                 }
+                                 coefficients_vao.vbo().buffer_data(std::span{coefficients_buffer},
+                                                                    eray::driver::gl::DataUsage::StaticDraw);
+                               },
+                               [](const auto&) {
+                                 eray::util::Logger::warn(
+                                     "Requested NaturalSplineCurveRS update, but the PointListObject does not store "
+                                     "the NaturalSplineCurve.");
+                               }},
+             obj.object);
 }
 
 PointListObjectRS PointListObjectRS::create(const eray::driver::gl::VertexBuffer& points_vao,
