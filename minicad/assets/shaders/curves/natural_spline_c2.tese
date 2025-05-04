@@ -18,8 +18,10 @@ void main()
     vec3 b = gl_in[1].gl_Position.xyz;
     vec3 c = gl_in[2].gl_Position.xyz;
     vec3 d = gl_in[3].gl_Position.xyz;
+    vec3 start = gl_in[4].gl_Position.xyz;
+    vec3 end = gl_in[5].gl_Position.xyz;
 
-    vec3 p = find_power_degree_3(a, b, c, d, t);
+    vec3 p = find_power_degree_3(a, b, c, d, t * distance(start, end));
 
     gl_Position = u_pvMat*vec4(p, 1.0);
 }
