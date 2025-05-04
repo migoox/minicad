@@ -2,13 +2,12 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/variant_match.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
 #include <optional>
 #include <variant>
-
-#include "libminicad/renderer/rendering_command.hpp"
 
 namespace mini {
 
@@ -231,6 +230,7 @@ std::expected<PointListObjectHandle, Scene::ObjectCreationError> Scene::create_l
                  [&obj, obj_ind](Polyline&) { obj.name = std::format("Polyline {}", obj_ind); },
                  [&obj, obj_ind](MultisegmentBezierCurve&) { obj.name = std::format("Bezier {}", obj_ind); },
                  [&obj, obj_ind](BSplineCurve&) { obj.name = std::format("B-Spline {}", obj_ind); },
+                 [&obj, obj_ind](NaturalSplineCurve&) { obj.name = std::format("Natural Spline {}", obj_ind); },
              },
              variant);
   obj.object = std::move(variant);
