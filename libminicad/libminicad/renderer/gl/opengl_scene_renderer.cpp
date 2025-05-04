@@ -459,6 +459,15 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                                       std::move(bspline_frag), std::move(bspline_tesc),
                                                                       std::move(bspline_tese)));
 
+  TRY_UNWRAP_ASSET(natural_spline_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
+  TRY_UNWRAP_ASSET(natural_spline_tesc, manager.load_shader(shaders_path / "curves" / "natural_spline_c2.tesc"));
+  TRY_UNWRAP_ASSET(natural_spline_tese, manager.load_shader(shaders_path / "curves" / "natural_spline_c2.tese"));
+  TRY_UNWRAP_ASSET(natural_spline_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
+  TRY_UNWRAP_PROGRAM(natural_spline_prog,
+                     gl::RenderingShaderProgram::create("natural spline_shader", std::move(natural_spline_vert),
+                                                        std::move(natural_spline_frag), std::move(natural_spline_tesc),
+                                                        std::move(natural_spline_tese)));
+
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
   TRY_UNWRAP_PROGRAM(
@@ -499,6 +508,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .polyline         = std::move(polyline_prog),                   //
       .bezier           = std::move(bezier_prog),                     //
       .bspline          = std::move(bspline_prog),                    //
+      .natural_spline   = std::move(natural_spline_prog),             //
       .sprite           = std::move(sprite_prog),                     //
       .instanced_sprite = std::move(instanced_sprite_prog),           //
       .helper_points    = std::move(instanced_no_state_sprite_prog),  //
@@ -602,7 +612,6 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   framebuffer_->clear_pick_render();
 
   // Prepare the framebuffer
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
@@ -611,6 +620,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Render tori
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
   shaders_.param->set_uniform("u_vMat", camera.view_matrix());
   shaders_.param->set_uniform("u_pMat", camera.proj_matrix());
   shaders_.param->bind();
@@ -684,6 +694,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   shaders_.bspline->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
   shaders_.bspline->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
   shaders_.bspline->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  glPatchParameteri(GL_PATCH_VERTICES, 4);
   for (auto& point_list : point_lists_rs_.point_lists) {
     if (!point_list.second.specialized_rs) {
       continue;
@@ -694,6 +705,28 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                      glVertexArrayElementBuffer(point_list.second.vao.get(), s.de_boor_points_ebo.raw_gl_id());
                      glBindVertexArray(point_list.second.vao.get());
                      glDrawElements(GL_PATCHES, s.de_boor_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
+                   },
+                   [](const auto&) {},
+               },
+               *point_list.second.specialized_rs);
+  }
+
+  // Render Natural Splines
+  shaders_.natural_spline->bind();
+  shaders_.natural_spline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.natural_spline->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
+  shaders_.natural_spline->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
+  shaders_.natural_spline->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  glPatchParameteri(GL_PATCH_VERTICES, 6);
+  for (auto& point_list : point_lists_rs_.point_lists) {
+    if (!point_list.second.specialized_rs) {
+      continue;
+    }
+
+    std::visit(util::match{
+                   [&](const NaturalSplineCurveRS& s) {
+                     s.coefficients_vao.bind();
+                     glDrawArrays(GL_PATCHES, 0, s.coefficients_buffer.size() / 3);
                    },
                    [](const auto&) {},
                },

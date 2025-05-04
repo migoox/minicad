@@ -114,14 +114,16 @@ void MiniCadApp::gui_objects_list_window() {
     Polyline                = 2,
     MultisegmentBezierCurve = 3,
     BSplineCurve            = 4,
-    _Count                  = 5,  // NOLINT
+    NaturalSplineCurve      = 5,
+    _Count                  = 6,  // NOLINT
   };
 
   enum class PointListObjectType : uint8_t {
     Polyline                = 0,
     MultisegmentBezierCurve = 1,
     BSplineCurve            = 2,
-    _Count                  = 3,  // NOLINT
+    NaturalSplineCurve      = 3,
+    _Count                  = 4,  // NOLINT
   };
 
   static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<ObjectType>({
@@ -130,12 +132,14 @@ void MiniCadApp::gui_objects_list_window() {
       {ObjectType::Polyline, "Polyline"},
       {ObjectType::MultisegmentBezierCurve, "Bezier"},
       {ObjectType::BSplineCurve, "B-Spline"},
+      {ObjectType::NaturalSplineCurve, "Natural Spline"},
   });
 
   static constexpr auto kPointListObjectNames = eray::util::StringEnumMapper<PointListObjectType>({
-      {PointListObjectType::Polyline, "Polyline"},               //
-      {PointListObjectType::MultisegmentBezierCurve, "Bezier"},  //
-      {PointListObjectType::BSplineCurve, "B-Spline"}            //
+      {PointListObjectType::Polyline, "Polyline"},                 //
+      {PointListObjectType::MultisegmentBezierCurve, "Bezier"},    //
+      {PointListObjectType::BSplineCurve, "B-Spline"},             //
+      {PointListObjectType::NaturalSplineCurve, "Natural Spline"}  //
   });
 
   if (ImGui::BeginPopup("AddSceneObjectPopup")) {
@@ -156,6 +160,9 @@ void MiniCadApp::gui_objects_list_window() {
             break;
           case ObjectType::BSplineCurve:
             on_point_list_object_added(BSplineCurve{});
+            break;
+          case ObjectType::NaturalSplineCurve:
+            on_point_list_object_added(NaturalSplineCurve{});
             break;
           case ObjectType::_Count:
             util::panic("AddSceneObjectPopup failed with object unexpected type");
@@ -267,6 +274,9 @@ void MiniCadApp::gui_objects_list_window() {
               break;
             case PointListObjectType::BSplineCurve:
               on_point_list_object_added_from_points_selection(BSplineCurve{});
+              break;
+            case PointListObjectType::NaturalSplineCurve:
+              on_point_list_object_added_from_points_selection(NaturalSplineCurve{});
               break;
             case PointListObjectType::_Count:
               util::panic("AddPointListObjectPopup failed with object unexpected type");

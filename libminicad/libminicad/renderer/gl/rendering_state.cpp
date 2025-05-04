@@ -29,12 +29,7 @@ BSplineCurveRS BSplineCurveRS::create() {
 
 NaturalSplineCurveRS NaturalSplineCurveRS::create() {
   auto vbo_layout = eray::driver::gl::VertexBuffer::Layout();
-  vbo_layout.add_attribute<float>("coeff_a", 0, 3);
-  vbo_layout.add_attribute<float>("coeff_b", 1, 3);
-  vbo_layout.add_attribute<float>("coeff_c", 2, 3);
-  vbo_layout.add_attribute<float>("coeff_d", 3, 3);
-  vbo_layout.add_attribute<float>("segment_start", 4, 3);
-  vbo_layout.add_attribute<float>("segment_end", 5, 3);
+  vbo_layout.add_attribute<float>("pos", 0, 3);
   auto vao = eray::driver::gl::VertexArray::create(eray::driver::gl::VertexBuffer::create(std::move(vbo_layout)),
                                                    eray::driver::gl::ElementBuffer::create());
 
@@ -44,7 +39,7 @@ NaturalSplineCurveRS NaturalSplineCurveRS::create() {
 void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
   std::visit(eray::util::match{//
                                [&](const NaturalSplineCurve& nsc) {
-                                 coefficients_buffer.resize(nsc.segments().size() * 6);
+                                 coefficients_buffer.resize(nsc.segments().size() * 6 * 3);
                                  for (auto i = 0U; const auto& segment : nsc.segments()) {
                                    coefficients_buffer[3 * i]     = segment.a.x;
                                    coefficients_buffer[3 * i + 1] = segment.a.y;
