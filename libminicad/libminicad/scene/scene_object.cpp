@@ -322,7 +322,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   points_.reserve(all_points_count);
   points_.clear();
   for (const auto& [p0, p1] : base.points() | std::views::adjacent<2>) {
-    if (math::distance(p0, p1) > 0.00001F) {
+    if (math::distance(p0, p1) > NaturalSplineCurve::Segment::kLengthEpsilon) {
       points_.push_back(p0);
     }
   }

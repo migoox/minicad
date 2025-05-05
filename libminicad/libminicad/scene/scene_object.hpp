@@ -166,6 +166,8 @@ class NaturalSplineCurve {
   struct Segment {
     eray::math::Vec3f a, b, c, d;
     float chord_length = 1.F;
+
+    static constexpr float kLengthEpsilon = 0.0001F;
   };
 
   /**
@@ -181,7 +183,7 @@ class NaturalSplineCurve {
   void reset_segments(PointListObject& base);
 
   const std::vector<Segment>& segments() const { return segments_; }
-  const std::vector<eray::math::Vec3f>& points() const { return points_; }
+  const std::vector<eray::math::Vec3f>& used_points() const { return points_; }
 
  private:
   std::vector<Segment> segments_;

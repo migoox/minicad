@@ -58,7 +58,7 @@ void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
                                    coefficients_buffer[3 * (i + 3) + 2] = segment.d.z;
                                    i += 6;
                                  }
-                                 for (auto i = 0U; const auto& [p0, p1] : nsc.points() | std::views::adjacent<2>) {
+                                 for (auto i = 0U; const auto& [p0, p1] : nsc.used_points() | std::views::adjacent<2>) {
                                    coefficients_buffer[3 * (i + 4)]     = p0.x;
                                    coefficients_buffer[3 * (i + 4) + 1] = p0.y;
                                    coefficients_buffer[3 * (i + 4) + 2] = p0.z;
