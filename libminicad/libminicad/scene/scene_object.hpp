@@ -12,6 +12,8 @@
 #include <unordered_set>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 using SceneObjectId     = std::uint32_t;
@@ -179,9 +181,11 @@ class NaturalSplineCurve {
   void reset_segments(PointListObject& base);
 
   const std::vector<Segment>& segments() const { return segments_; }
+  const std::vector<eray::math::Vec3f>& points() const { return points_; }
 
  private:
   std::vector<Segment> segments_;
+  std::vector<eray::math::Vec3f> points_;
 };
 
 using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;

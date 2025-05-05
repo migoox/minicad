@@ -312,8 +312,23 @@ void NaturalSplineCurve::update_point(PointListObject& /*base*/, const SceneObje
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
-  auto points = base.points();
-  auto n      = points.size();
+  auto all_points_count = base.point_objects().size();
+
+  if (all_points_count == 0) {
+    segments_.clear();
+    return;
+  }
+
+  points_.reserve(all_points_count);
+  points_.clear();
+  for (const auto& [p0, p1] : base.points() | std::views::adjacent<2>) {
+    if (math::distance(p0, p1) > 0.00001F) {
+      points_.push_back(p0);
+    }
+  }
+  points_.push_back(*(--base.points().cend()));
+
+  auto n = points_.size();
 
   // Indices
   //   - points: 0, 1, ..., n-1
@@ -323,8 +338,8 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   segments_.clear();
   segments_.resize(n - 1, {});
   if (n == 2) {
-    auto p0                   = *points.begin();
-    auto p1                   = *(++points.begin());
+    auto p0                   = *points_.begin();
+    auto p1                   = *(++points_.begin());
     segments_[0].chord_length = math::distance(p0, p1);
     segments_[0].a            = p0;
     segments_[0].b            = p1 / segments_[0].chord_length;
@@ -337,7 +352,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   }
 
   // Find the lengths
-  for (auto it = segments_.begin(); const auto& [p0, p1] : points | std::views::adjacent<2>) {
+  for (auto it = segments_.begin(); const auto& [p0, p1] : points_ | std::views::adjacent<2>) {
     it->chord_length = math::length(p1 - p0);
     ++it;
   }
@@ -355,7 +370,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   segments_[n - 3].a.y = 0;
 
   // b denotes the right hand 3-dimensional coefficient vector
-  for (auto i = 0U; const auto& [p0, p1, p2] : points | std::views::adjacent<3>) {
+  for (auto i = 0U; const auto& [p0, p1, p2] : points_ | std::views::adjacent<3>) {
     auto nom       = (p2 - p1) / segments_[i + 1].chord_length - (p1 - p0) / segments_[i].chord_length;
     auto denom     = segments_[i + 1].chord_length + segments_[i].chord_length;
     segments_[i].b = 3.F * nom / denom;
@@ -391,7 +406,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   }
 
   // Find the a power basis coefficients from the fact that a_i = P_i, (interpolation constraint)
-  auto points_without_start_end = points | std::views::take(n - 1);  // skip the last point
+  auto points_without_start_end = points_ | std::views::take(n - 1);  // skip the last point
   for (auto it = segments_.begin(); const auto& p : points_without_start_end) {
     it->a = p;
     ++it;
@@ -403,7 +418,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   }
 
   // Find the b power basis coefficients from the C^0 constraint (excluding n-2)
-  auto point_it = ++points.cbegin();  // skip the first point
+  auto point_it = ++points_.cbegin();  // skip the first point
   for (auto i = 0U; i < n - 2; ++i) {
     segments_[i].b = (*point_it - segments_[i].a) / segments_[i].chord_length -
                      segments_[i].c * segments_[i].chord_length -
@@ -415,7 +430,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   segments_[n - 2].b = segments_[n - 3].b + 2.F * segments_[n - 3].c * segments_[n - 3].chord_length +
                        3.F * segments_[n - 3].d * segments_[n - 3].chord_length * segments_[n - 3].chord_length;
 
-  auto last_point = *(--points.cend());
+  auto last_point = *(--points_.cend());
   auto l          = segments_[n - 2].chord_length;
   segments_[n - 2].d =
       (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
