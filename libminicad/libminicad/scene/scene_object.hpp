@@ -183,11 +183,11 @@ class NaturalSplineCurve {
   void reset_segments(PointListObject& base);
 
   const std::vector<Segment>& segments() const { return segments_; }
-  const std::vector<eray::math::Vec3f>& used_points() const { return points_; }
+  const std::vector<eray::math::Vec3f>& unique_points() const { return unique_points_; }
 
  private:
   std::vector<Segment> segments_;
-  std::vector<eray::math::Vec3f> points_;
+  std::vector<eray::math::Vec3f> unique_points_;
 };
 
 using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;

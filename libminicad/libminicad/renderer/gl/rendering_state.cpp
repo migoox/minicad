@@ -54,7 +54,7 @@ void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
                                    write_point(idx + 3, segment.d);
                                  }
                                  for (const auto& [i, points] :
-                                      nsc.used_points() | std::views::adjacent<2> | std::views::enumerate) {
+                                      nsc.unique_points() | std::views::adjacent<2> | std::views::enumerate) {
                                    size_t idx           = static_cast<size_t>(i) * 6;
                                    const auto& [p0, p1] = points;
 
