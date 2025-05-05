@@ -6,9 +6,8 @@
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
+#include <ranges>
 #include <variant>
-
-#include "liberay/math/vec_fwd.hpp"
 
 namespace mini::gl {
 
@@ -37,36 +36,30 @@ NaturalSplineCurveRS NaturalSplineCurveRS::create() {
 }
 
 void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
+  auto write_point = [&](size_t index, const auto& point) {
+    coefficients_buffer[3 * index]     = point.x;
+    coefficients_buffer[3 * index + 1] = point.y;
+    coefficients_buffer[3 * index + 2] = point.z;
+  };
+
   std::visit(eray::util::match{//
                                [&](const NaturalSplineCurve& nsc) {
                                  coefficients_buffer.resize(nsc.segments().size() * 6 * 3, 0.F);
-                                 for (auto i = 0U; const auto& segment : nsc.segments()) {
-                                   coefficients_buffer[3 * i]     = segment.a.x;
-                                   coefficients_buffer[3 * i + 1] = segment.a.y;
-                                   coefficients_buffer[3 * i + 2] = segment.a.z;
+                                 for (const auto& [i, segment] : nsc.segments() | std::views::enumerate) {
+                                   size_t idx = static_cast<size_t>(i) * 6;
 
-                                   coefficients_buffer[3 * (i + 1)]     = segment.b.x;
-                                   coefficients_buffer[3 * (i + 1) + 1] = segment.b.y;
-                                   coefficients_buffer[3 * (i + 1) + 2] = segment.b.z;
-
-                                   coefficients_buffer[3 * (i + 2)]     = segment.c.x;
-                                   coefficients_buffer[3 * (i + 2) + 1] = segment.c.y;
-                                   coefficients_buffer[3 * (i + 2) + 2] = segment.c.z;
-
-                                   coefficients_buffer[3 * (i + 3)]     = segment.d.x;
-                                   coefficients_buffer[3 * (i + 3) + 1] = segment.d.y;
-                                   coefficients_buffer[3 * (i + 3) + 2] = segment.d.z;
-                                   i += 6;
+                                   write_point(idx, segment.a);
+                                   write_point(idx + 1, segment.b);
+                                   write_point(idx + 2, segment.c);
+                                   write_point(idx + 3, segment.d);
                                  }
-                                 for (auto i = 0U; const auto& [p0, p1] : nsc.used_points() | std::views::adjacent<2>) {
-                                   coefficients_buffer[3 * (i + 4)]     = p0.x;
-                                   coefficients_buffer[3 * (i + 4) + 1] = p0.y;
-                                   coefficients_buffer[3 * (i + 4) + 2] = p0.z;
+                                 for (const auto& [i, points] :
+                                      nsc.used_points() | std::views::adjacent<2> | std::views::enumerate) {
+                                   size_t idx           = static_cast<size_t>(i) * 6;
+                                   const auto& [p0, p1] = points;
 
-                                   coefficients_buffer[3 * (i + 5)]     = p1.x;
-                                   coefficients_buffer[3 * (i + 5) + 1] = p1.y;
-                                   coefficients_buffer[3 * (i + 5) + 2] = p1.z;
-                                   i += 6;
+                                   write_point(idx + 4, p0);
+                                   write_point(idx + 5, p1);
                                  }
                                  coefficients_vao.vbo().buffer_data(std::span{coefficients_buffer},
                                                                     eray::driver::gl::DataUsage::StaticDraw);

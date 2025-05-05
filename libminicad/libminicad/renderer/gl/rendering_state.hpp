@@ -9,8 +9,6 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini::gl {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -52,6 +50,11 @@ struct NaturalSplineCurveRS {
 
   static NaturalSplineCurveRS create();
 
+  /**
+   * @brief Fills the GPU coefficients vbo basing on the provided point list object
+   *
+   * @param obj
+   */
   void reset_buffer(const PointListObject& obj);
 
   eray::driver::gl::VertexArray coefficients_vao;
