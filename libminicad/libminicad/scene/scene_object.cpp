@@ -352,9 +352,11 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   }
 
   // Find the lengths
-  for (auto it = segments_.begin(); const auto& [p0, p1] : points_ | std::views::adjacent<2>) {
-    it->chord_length = math::length(p1 - p0);
-    ++it;
+  for (const auto& [i, ps] : points_ | std::views::adjacent<2> | std::views::enumerate) {
+    auto [p0, p1] = ps;
+    auto idx      = static_cast<size_t>(i);
+
+    segments_[idx].chord_length = math::distance(p0, p1);
   }
 
   // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional memory allocation:
@@ -370,11 +372,13 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   segments_[n - 3].a.y = 0;
 
   // b denotes the right hand 3-dimensional coefficient vector
-  for (auto i = 0U; const auto& [p0, p1, p2] : points_ | std::views::adjacent<3>) {
-    auto nom       = (p2 - p1) / segments_[i + 1].chord_length - (p1 - p0) / segments_[i].chord_length;
-    auto denom     = segments_[i + 1].chord_length + segments_[i].chord_length;
-    segments_[i].b = 3.F * nom / denom;
-    ++i;
+  for (const auto& [i, ps] : points_ | std::views::adjacent<3> | std::views::enumerate) {
+    const auto& [p0, p1, p2] = ps;
+    auto idx                 = static_cast<size_t>(i);
+
+    auto nom         = (p2 - p1) / segments_[idx + 1].chord_length - (p1 - p0) / segments_[idx].chord_length;
+    auto denom       = segments_[idx + 1].chord_length + segments_[idx].chord_length;
+    segments_[idx].b = 3.F * nom / denom;
   }
 
   // Solving the tridiagonal matrix. Based on: https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
