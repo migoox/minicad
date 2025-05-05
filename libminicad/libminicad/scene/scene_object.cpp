@@ -340,10 +340,6 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   for (auto it = segments_.begin(); const auto& [p0, p1] : points | std::views::adjacent<2>) {
     it->chord_length = math::length(p1 - p0);
     ++it;
-
-    if (it->chord_length < 0.001F) {
-      it->chord_length = 1.F;
-    }
   }
 
   // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional memory allocation:
