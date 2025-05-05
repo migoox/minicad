@@ -39,7 +39,7 @@ NaturalSplineCurveRS NaturalSplineCurveRS::create() {
 void NaturalSplineCurveRS::reset_buffer(const PointListObject& obj) {
   std::visit(eray::util::match{//
                                [&](const NaturalSplineCurve& nsc) {
-                                 coefficients_buffer.resize(nsc.segments().size() * 6 * 3);
+                                 coefficients_buffer.resize(nsc.segments().size() * 6 * 3, 0.F);
                                  for (auto i = 0U; const auto& segment : nsc.segments()) {
                                    coefficients_buffer[3 * i]     = segment.a.x;
                                    coefficients_buffer[3 * i + 1] = segment.a.y;
