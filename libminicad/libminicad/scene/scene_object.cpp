@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <expected>
+#include <liberay/math/vec.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/try.hpp>
@@ -9,8 +10,6 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <ranges>
 #include <variant>
-
-#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
@@ -323,6 +322,16 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
 
   segments_.clear();
   segments_.resize(n - 1, {});
+  if (n == 2) {
+    auto p0                   = *points.begin();
+    auto p1                   = *(++points.begin());
+    segments_[0].chord_length = math::distance(p0, p1);
+    segments_[0].a            = p0;
+    segments_[0].b            = p1 / segments_[0].chord_length;
+    segments_[0].c            = math::Vec3f::filled(0.F);
+    segments_[0].d            = math::Vec3f::filled(0.F);
+  }
+
   if (n < 3) {
     return;
   }
@@ -331,6 +340,10 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   for (auto it = segments_.begin(); const auto& [p0, p1] : points | std::views::adjacent<2>) {
     it->chord_length = math::length(p1 - p0);
     ++it;
+
+    if (it->chord_length < 0.001F) {
+      it->chord_length = 1.F;
+    }
   }
 
   // Find the tridiagonal matrix coefficients, using the Segment struct to avoid additional memory allocation:
@@ -381,7 +394,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
     segments_[idx].c = segments_[idx - 1].d - segments_[idx - 1].a.z * segments_[idx + 1].c;
   }
 
-  // Find the a power basis coefficients from the fact that a_i = P_i (interpolation constraint)
+  // Find the a power basis coefficients from the fact that a_i = P_i, (interpolation constraint)
   auto points_without_start_end = points | std::views::take(n - 1);  // skip the last point
   for (auto it = segments_.begin(); const auto& p : points_without_start_end) {
     it->a = p;
@@ -403,14 +416,13 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   }
 
   // Find the constrains for n-2
-  segments_[n - 2].b = segments_[n - 3].b +                                                                       //
-                       2.F * segments_[n - 3].c * segments_[n - 3].chord_length +                                 //
-                       3.F * segments_[n - 3].d * segments_[n - 3].chord_length * segments_[n - 3].chord_length;  //
+  segments_[n - 2].b = segments_[n - 3].b + 2.F * segments_[n - 3].c * segments_[n - 3].chord_length +
+                       3.F * segments_[n - 3].d * segments_[n - 3].chord_length * segments_[n - 3].chord_length;
 
-  auto last_point    = *(--points.cend());
-  auto l             = segments_[n - 2].chord_length;
-  segments_[n - 2].d = (last_point - segments_[n - 2].a) / (l * l * l) -  //
-                       segments_[n - 2].b / (l * l);
+  auto last_point = *(--points.cend());
+  auto l          = segments_[n - 2].chord_length;
+  segments_[n - 2].d =
+      (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
 }
 
 }  // namespace mini
