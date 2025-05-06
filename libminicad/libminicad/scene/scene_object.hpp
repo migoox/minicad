@@ -132,7 +132,7 @@ class SceneObject {
   std::unordered_set<PointListObjectHandle> point_lists_;
 
   SceneObjectHandle handle_;
-  Scene& scene_;  // NOLINT
+  Scene& scene_;  // NOLINT (lifetime of the scene always exceeds the lifetime of the scene object)
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -241,7 +241,7 @@ class NaturalSplineCurve {
   };
 
   /**
-   * @brief Reset segments basing on the all interpolating points.
+   * @brief Reset segments basing on all interpolating points.
    *
    */
   void reset_segments(PointListObject& base);
@@ -376,7 +376,7 @@ class PointListObject {
   friend SceneObject;
 
   PointListObjectHandle handle_;
-  Scene& scene_;  // NOLINT
+  Scene& scene_;  // NOLINT (lifetime of the scene always exceeds the lifetime of the point list object)
 
   size_t order_ind_{0};
 

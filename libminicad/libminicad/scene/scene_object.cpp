@@ -346,7 +346,7 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
       unique_points_.push_back(p0);
     }
   }
-  unique_points_.push_back(*(--base.points().cend()));
+  unique_points_.push_back(base.points().back());
 
   auto n = unique_points_.size();
 
@@ -358,11 +358,11 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   segments_.clear();
   segments_.resize(n - 1, {});
   if (n == 2) {
-    auto p0                   = *unique_points_.begin();
+    auto p0                   = unique_points_.front();
     auto p1                   = *(++unique_points_.begin());
     segments_[0].chord_length = math::distance(p0, p1);
     segments_[0].a            = p0;
-    segments_[0].b            = p1 / segments_[0].chord_length;
+    segments_[0].b            = (p1 - p0) / segments_[0].chord_length;
     segments_[0].c            = math::Vec3f::filled(0.F);
     segments_[0].d            = math::Vec3f::filled(0.F);
   }
