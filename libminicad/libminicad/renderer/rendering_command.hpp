@@ -48,6 +48,7 @@ struct PointListObjectRSCommand {
    *
    */
   struct ShowPolyline {
+    explicit ShowPolyline(bool _show) : show(_show) {}
     bool show;
   };
 

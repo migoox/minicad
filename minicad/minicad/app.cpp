@@ -42,6 +42,8 @@
 #include <ranges>
 #include <variant>
 
+#include "libminicad/renderer/gl/rendering_state.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -665,8 +667,9 @@ bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& han
 
 bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
+    auto name = o.value()->name;
     m_.scene.delete_obj(handle);
-    util::Logger::info("Deleted scene object \"{}\"", o.value()->name);
+    util::Logger::info("Deleted scene object \"{}\"", name);
     m_.scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(
         o.value()->handle(), SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   } else {
@@ -681,7 +684,14 @@ bool MiniCadApp::on_point_list_object_added(PointListObjectVariant variant) {
     m_.point_list_selection->add(*handle);
     if (auto o = m_.scene.get_obj(*handle)) {
       Logger::info("Created point list object \"{}\"", o.value()->name);
+
+      // Natural splines don't need the polyline by default
+      if (o.value()->has_type<NaturalSplineCurve>()) {
+        m_.scene.renderer().push_object_rs_cmd(
+            PointListObjectRSCommand(o.value()->handle(), PointListObjectRSCommand::ShowPolyline(false)));
+      }
     }
+
     return true;
   }
 
@@ -711,8 +721,9 @@ bool MiniCadApp::on_point_list_object_added_from_points_selection(PointListObjec
 
 bool MiniCadApp::on_point_list_object_deleted(const PointListObjectHandle& handle) {
   if (auto o = m_.scene.get_obj(handle)) {
-    Logger::info("Deleted point list object \"{}\"", o.value()->name);
+    auto name = o.value()->name;
     m_.scene.delete_obj(handle);
+    Logger::info("Deleted point list object \"{}\"", name);
     return true;
   }
 

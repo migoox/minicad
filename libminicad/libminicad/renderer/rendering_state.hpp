@@ -12,7 +12,8 @@ struct BillboardRS {
 };
 
 struct PointListObjectRS {
-  explicit PointListObjectRS(VisibilityState visibility_state) : visibility(visibility_state) {}
+  explicit PointListObjectRS(VisibilityState visibility_state, bool _show_polyline = true)
+      : visibility(visibility_state), show_polyline(_show_polyline) {}
 
   VisibilityState visibility;
   bool show_polyline{true};

@@ -8,8 +8,6 @@
 #include <optional>
 #include <unordered_set>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 class PointListObjectsSelection {
