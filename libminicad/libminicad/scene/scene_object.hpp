@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <functional>
 #include <liberay/math/transform3.hpp>
@@ -39,6 +40,15 @@ using ObserverPtr = eray::util::ObserverPtr<T>;
 template <typename T>
 using OptionalObserverPtr = std::optional<eray::util::ObserverPtr<T>>;
 
+// ---------------------------------------------------------------------------------------------------------------------
+// - SceneObjectType ---------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+concept CSceneObjectType = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
+};
+
 class Point {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
@@ -56,6 +66,20 @@ class Torus {
 
 using SceneObjectVariant = std::variant<Point, Torus>;
 
+// Check if all of the variant types are valid
+template <typename Variant>
+struct ValidateSceneObjectVariantTypes;
+template <typename... Types>
+struct ValidateSceneObjectVariantTypes<std::variant<Types...>> {
+  static constexpr bool kAreVariantTypesValid = (CSceneObjectType<Types> && ...);
+};
+static_assert(ValidateSceneObjectVariantTypes<SceneObjectVariant>::kAreVariantTypesValid,
+              "Not all variant types satisfy CSceneObjectType");
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - SceneObject -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
 class SceneObject {
  public:
   SceneObject() = delete;
@@ -65,7 +89,7 @@ class SceneObject {
   SceneObjectId id() const { return handle_.obj_id; }
   const SceneObjectHandle& handle() const { return handle_; }
 
-  void mark_dirty();
+  void update();
   size_t order_ind() const { return order_ind_; }
   Scene& scene() { return scene_; }
   const Scene& scene() const { return scene_; }
@@ -84,8 +108,8 @@ class SceneObject {
    */
   template <typename Type>
     requires std::is_constructible_v<SceneObjectVariant, Type>
-  Type& get_obj() {
-    static_assert(std::holds_alternative<Type>(this->object), "PointListObject is not of the requested type.");
+  Type& get_variant() {
+    assert(std::holds_alternative<Type>(this->object) && "PointListObject is not of the requested type.");
     return std::get<Type>(this->object);
   }
 
@@ -100,9 +124,6 @@ class SceneObject {
   SceneObjectVariant object;
 
  private:
-  void update_point_list(PointListObject& obj);
-
- private:
   friend Scene;
   friend PointListObject;
 
@@ -114,14 +135,35 @@ class SceneObject {
   Scene& scene_;  // NOLINT
 };
 
+// ---------------------------------------------------------------------------------------------------------------------
+// - PointListObjectType -----------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+concept CPointListObjectType = requires(T t, PointListObject& base, const SceneObject& point_obj, const Point& point) {
+  { T::type_name() } -> std::same_as<zstring_view>;
+  { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_point_list_reorder(base) } -> std::same_as<void>;
+};
+
 struct Polyline {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Polyline"; }
+  void on_point_update(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_add(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_remove(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_list_reorder(PointListObject&) {}
 };
 
 struct MultisegmentBezierCurve {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment C0 Bezier Curve"; }
+  void on_point_update(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_add(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_remove(PointListObject&, const SceneObject&, const Point&) {}
+  void on_point_list_reorder(PointListObject&) {}
 };
 
 /**
@@ -164,6 +206,11 @@ struct BSplineCurve {
 
   bool contains(size_t idx) { return bernstein_points_.size() > idx; }
 
+  void on_point_update(PointListObject& base, const SceneObject&, const Point&);
+  void on_point_add(PointListObject& base, const SceneObject&, const Point&);
+  void on_point_remove(PointListObject& base, const SceneObject&, const Point&);
+  void on_point_list_reorder(PointListObject& base);
+
  private:
   /**
    * @brief Updates the bernstein points basing on the de Boor points (scene point objects). Invoked automatically
@@ -194,12 +241,6 @@ class NaturalSplineCurve {
   };
 
   /**
-   * @brief Update segments basing on the new position of the interpolating point with handle.
-   *
-   */
-  void update_point(PointListObject& base, const SceneObjectHandle& handle);
-
-  /**
    * @brief Reset segments basing on the all interpolating points.
    *
    */
@@ -208,12 +249,34 @@ class NaturalSplineCurve {
   const std::vector<Segment>& segments() const { return segments_; }
   const std::vector<eray::math::Vec3f>& unique_points() const { return unique_points_; }
 
+  void on_point_update(PointListObject& base, const SceneObject&, const Point&) { update(base); }
+  void on_point_add(PointListObject& base, const SceneObject&, const Point&) { update(base); }
+  void on_point_remove(PointListObject& base, const SceneObject&, const Point&) { update(base); }
+  void on_point_list_reorder(PointListObject& base) { update(base); }
+
+ private:
+  void update(PointListObject& base);
+
  private:
   std::vector<Segment> segments_;
   std::vector<eray::math::Vec3f> unique_points_;
 };
 
 using PointListObjectVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;
+
+// Check if all of the variant types are valid
+template <typename Variant>
+struct ValidatePointListObjectVariantTypes;
+template <typename... Types>
+struct ValidatePointListObjectVariantTypes<std::variant<Types...>> {
+  static constexpr bool kAreVariantTypesValid = (CPointListObjectType<Types> && ...);
+};
+static_assert(ValidatePointListObjectVariantTypes<PointListObjectVariant>::kAreVariantTypesValid,
+              "Not all variant types satisfy CPointListObjectType");
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - PointListObject ---------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 class PointListObject {
  public:
@@ -271,7 +334,7 @@ class PointListObject {
   PointListObjectId id() const { return handle_.obj_id; }
   const PointListObjectHandle& handle() const { return handle_; }
 
-  void mark_dirty();
+  void update();
   size_t order_ind() const { return order_ind_; }
 
   Scene& scene() { return scene_; }
@@ -291,8 +354,8 @@ class PointListObject {
    */
   template <typename Type>
     requires std::is_constructible_v<PointListObjectVariant, Type>
-  Type& get_obj() {
-    static_assert(std::holds_alternative<Type>(this->object), "PointListObject is not of the requested type.");
+  Type& get_variant() {
+    assert(std::holds_alternative<Type>(this->object) && "PointListObject is not of the requested type.");
     return std::get<Type>(this->object);
   }
 

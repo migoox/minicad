@@ -24,48 +24,34 @@ SceneObject::~SceneObject() {
       auto it = pl.value()->points_map_.find(handle_);
       if (it != pl.value()->points_map_.end()) {
         auto ind = it->second;
-        pl.value()->mark_dirty();
+        pl.value()->update();
         pl.value()->points_map_.erase(it);
         pl.value()->points_.erase(pl.value()->points_.begin() + static_cast<int>(ind));
         pl.value()->update_indices_from(ind);
-        update_point_list(*pl.value());
+
+        // Only points might be a part of the point lists
+        if (has_type<Point>()) {
+          std::visit(
+              eray::util::match{[&](auto& obj) { obj.on_point_remove(*pl.value(), *this, get_variant<Point>()); }},
+              pl.value()->object);
+        }
       }
     }
   }
 }
 
-void SceneObject::mark_dirty() {
+void SceneObject::update() {
   scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
 
   // Only points might be a part of the point lists
-  if (std::holds_alternative<Point>(object)) {
+  if (has_type<Point>()) {
     for (const auto& pl_h : this->point_lists_) {
       if (auto pl = scene_.get_obj(pl_h)) {
-        update_point_list(*pl.value());
+        std::visit(eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, get_variant<Point>()); }},
+                   pl.value()->object);
       }
     }
   }
-}
-
-void SceneObject::update_point_list(PointListObject& obj) {
-  // Only points might be a part of the point lists
-  if (!std::holds_alternative<Point>(object)) {
-    return;
-  }
-
-  std::visit(eray::util::match{//
-                               [&](BSplineCurve& curve) {
-                                 curve.reset_bernstein_points(obj);
-                                 scene_.renderer().push_object_rs_cmd(PointListObjectRSCommand(
-                                     obj.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
-                               },  //
-                               [&](NaturalSplineCurve& curve) {
-                                 curve.reset_segments(obj);
-                                 scene_.renderer().push_object_rs_cmd(PointListObjectRSCommand(
-                                     obj.handle(), PointListObjectRSCommand::UpdateNaturalSplineSegments{}));
-                               },  //
-                               [](auto&) {}},
-             obj.object);
 }
 
 PointListObject::~PointListObject() {
@@ -76,7 +62,7 @@ PointListObject::~PointListObject() {
   }
 }
 
-void PointListObject::mark_dirty() {
+void PointListObject::update() {
   scene_.renderer().push_object_rs_cmd(
       PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
 }
@@ -103,8 +89,10 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::add(cons
       scene_.renderer().push_object_rs_cmd(
           PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
     }
-
-    mark_dirty();
+    std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+               this->object);
+    scene_.renderer().push_object_rs_cmd(
+        PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
 
     return {};
   }
@@ -128,7 +116,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
   }
 
   auto& obj = *scene_.scene_objects_.at(handle.obj_id)->first;
-  if (std::holds_alternative<Point>(obj.object)) {
+  if (obj.has_type<Point>()) {
     auto it = points_map_.find(handle);
     if (it != points_map_.end()) {
       auto idx = it->second;
@@ -141,7 +129,10 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
     if (obj_it != obj.point_lists_.end()) {
       obj.point_lists_.erase(obj_it);
     }
-    mark_dirty();
+    std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+               this->object);
+    scene_.renderer().push_object_rs_cmd(
+        PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
 
     return {};
   }
@@ -173,6 +164,10 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_bef
   points_.insert(points_.begin() + static_cast<int>(dest_idx), std::ref(obj_ref));
   update_indices_from(std::min(dest_idx, obj_idx));
 
+  std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
+  scene_.renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+
   return {};
 }
 
@@ -202,6 +197,10 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_aft
   insert_pos = std::min(insert_pos, points_.size());
   points_.insert(points_.begin() + static_cast<int>(insert_pos), std::ref(obj_ref));
   update_indices_from(std::min(insert_pos, obj_idx));
+
+  std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
+  scene_.renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
 
   return {};
 }
@@ -256,9 +255,9 @@ void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_
 void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle) {
   if (auto o = base.point_idx(handle)) {
     auto cp_idx = static_cast<int>(o.value());
+    update_bernstein_segment(base, cp_idx - 2);
     update_bernstein_segment(base, cp_idx - 1);
     update_bernstein_segment(base, cp_idx);
-    update_bernstein_segment(base, cp_idx + 1);
   }
 }
 
@@ -291,6 +290,7 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   p2.transform.set_local_pos(-bp1 + 2 * bp2);
   p3.transform.set_local_pos(2 * bp1 - 7 * bp2 + 6 * bp3);
 
+  // TODO(migoox): update points list that depend on these points
   base.scene().renderer().push_object_rs_cmd(
       SceneObjectRSCommand(p0.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
   base.scene().renderer().push_object_rs_cmd(
@@ -307,8 +307,28 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   update_bernstein_segment(base, cp_idx_int + 2);
 }
 
-void NaturalSplineCurve::update_point(PointListObject& /*base*/, const SceneObjectHandle& /*handle*/) {
-  util::panic("Not implemented yet");
+void BSplineCurve::on_point_update(PointListObject& base, const SceneObject& point, const Point&) {
+  update_bernstein_points(base, point.handle());
+  base.scene().renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+}
+
+void BSplineCurve::on_point_add(PointListObject& base, const SceneObject&, const Point&) {
+  reset_bernstein_points(base);
+  base.scene().renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+}
+
+void BSplineCurve::on_point_remove(PointListObject& base, const SceneObject&, const Point&) {
+  reset_bernstein_points(base);
+  base.scene().renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+}
+
+void BSplineCurve::on_point_list_reorder(PointListObject& base) {
+  reset_bernstein_points(base);
+  base.scene().renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
@@ -438,6 +458,12 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
   auto l          = segments_[n - 2].chord_length;
   segments_[n - 2].d =
       (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
+}
+
+void NaturalSplineCurve::update(PointListObject& base) {
+  reset_segments(base);
+  base.scene().renderer().push_object_rs_cmd(
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateNaturalSplineSegments{}));
 }
 
 }  // namespace mini

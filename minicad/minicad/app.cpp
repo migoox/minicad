@@ -326,7 +326,7 @@ void MiniCadApp::gui_selection_window() {
           },
           scene_obj.value()->object);
 
-      ImGui::mini::Transform(scene_obj.value()->transform, [&]() { scene_obj.value()->mark_dirty(); });
+      ImGui::mini::Transform(scene_obj.value()->transform, [&]() { scene_obj.value()->update(); });
 
       std::visit(eray::util::match{
                      [](Point& /*p*/) {
@@ -346,16 +346,16 @@ void MiniCadApp::gui_selection_window() {
                      },
                      [&](Torus& t) {
                        if (ImGui::SliderInt("Tess Level X", &t.tess_level.x, kMinTessLevel, kMaxTessLevel)) {
-                         scene_obj.value()->mark_dirty();
+                         scene_obj.value()->update();
                        }
                        if (ImGui::SliderInt("Tess Level Y", &t.tess_level.y, kMinTessLevel, kMaxTessLevel)) {
-                         scene_obj.value()->mark_dirty();
+                         scene_obj.value()->update();
                        }
                        if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, t.major_radius)) {
-                         scene_obj.value()->mark_dirty();
+                         scene_obj.value()->update();
                        }
                        if (ImGui::SliderFloat("Rad Major", &t.major_radius, t.minor_radius, 5.F)) {
-                         scene_obj.value()->mark_dirty();
+                         scene_obj.value()->update();
                        }
                      },
                  },
@@ -586,7 +586,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     } else if (m_.selection->is_single_selection()) {
       if (auto o = m_.scene.get_obj(m_.selection->first())) {
         if (ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
-                                          [&]() { o.value()->mark_dirty(); })) {
+                                          [&]() { o.value()->update(); })) {
           m_.select_tool.end_box_select();
         }
       }
@@ -633,7 +633,7 @@ bool MiniCadApp::on_scene_object_created(SceneObjectVariant variant) {
 
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
-    o.value()->mark_dirty();
+    o.value()->update();
     on_selection_clear();
     on_selection_add(*obj_handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
@@ -653,7 +653,7 @@ bool MiniCadApp::on_point_created_in_point_list(const PointListObjectHandle& han
   if (auto o = m_.scene.get_obj(*obj_handle)) {
     m_.scene.add_to_list(*obj_handle, handle);
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
-    o.value()->mark_dirty();
+    o.value()->update();
     on_selection_clear();
     on_selection_add(*obj_handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
@@ -727,7 +727,7 @@ bool MiniCadApp::on_points_reorder(const PointListObjectHandle& handle, const st
       if (!obj.value()->move_before(*before_dest, *source)) {
         util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
       }
-      obj.value()->mark_dirty();
+      obj.value()->update();
       return true;
     }
 
@@ -735,7 +735,7 @@ bool MiniCadApp::on_points_reorder(const PointListObjectHandle& handle, const st
       if (!obj.value()->move_after(*after_dest, *source)) {
         util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
       }
-      obj.value()->mark_dirty();
+      obj.value()->update();
       return true;
     }
   }
