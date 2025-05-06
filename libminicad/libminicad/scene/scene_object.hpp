@@ -10,9 +10,8 @@
 #include <ranges>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
-
-#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
@@ -70,6 +69,30 @@ class SceneObject {
   size_t order_ind() const { return order_ind_; }
   Scene& scene() { return scene_; }
   const Scene& scene() const { return scene_; }
+
+  template <typename Type>
+    requires std::is_constructible_v<SceneObjectVariant, Type>
+  bool has_type() {
+    return std::holds_alternative<Type>(this->object);
+  }
+
+  /**
+   * @brief If the SceneObject is not of the requested Type, this function will fail. Use with caution.
+   *
+   * @tparam Type
+   * @return requires&
+   */
+  template <typename Type>
+    requires std::is_constructible_v<SceneObjectVariant, Type>
+  Type& get_obj() {
+    static_assert(std::holds_alternative<Type>(this->object), "PointListObject is not of the requested type.");
+    return std::get<Type>(this->object);
+  }
+
+  template <typename Visitor>
+  void visit(Visitor&& visitor) {
+    std::visit(std::forward(visitor), this->object);
+  }
 
  public:
   eray::math::Transform3f transform;
@@ -253,6 +276,30 @@ class PointListObject {
 
   Scene& scene() { return scene_; }
   const Scene& scene() const { return scene_; }
+
+  template <typename Type>
+    requires std::is_constructible_v<PointListObjectVariant, Type>
+  bool has_type() {
+    return std::holds_alternative<Type>(this->object);
+  }
+
+  /**
+   * @brief If the PointListObject is not of the requested Type, this function will fail. Use with caution.
+   *
+   * @tparam Type
+   * @return requires&
+   */
+  template <typename Type>
+    requires std::is_constructible_v<PointListObjectVariant, Type>
+  Type& get_obj() {
+    static_assert(std::holds_alternative<Type>(this->object), "PointListObject is not of the requested type.");
+    return std::get<Type>(this->object);
+  }
+
+  template <typename Visitor>
+  void visit(Visitor&& visitor) {
+    std::visit(std::forward(visitor), this->object);
+  }
 
  private:
   void update_indices_from(size_t start_idx);
