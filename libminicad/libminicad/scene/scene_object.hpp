@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <generator>
 #include <liberay/math/transform3.hpp>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
@@ -18,6 +19,8 @@ namespace mini {
 
 using SceneObjectId     = std::uint32_t;
 using PointListObjectId = std::uint32_t;
+template <typename T>
+using ref = std::reference_wrapper<T>;
 
 class Scene;
 
@@ -140,12 +143,14 @@ class SceneObject {
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <typename T>
-concept CPointListObjectType = requires(T t, PointListObject& base, const SceneObject& point_obj, const Point& point) {
+concept CPointListObjectType = requires(T t, PointListObject& base, ref<PointListObject> base_ref,
+                                        const SceneObject& point_obj, const Point& point) {
   { T::type_name() } -> std::same_as<zstring_view>;
   { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
   { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
   { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
   { t.on_point_list_reorder(base) } -> std::same_as<void>;
+  { t.bezier3_points(base_ref) } -> std::same_as<std::generator<eray::math::Vec3f>>;
 };
 
 struct Polyline {
@@ -155,6 +160,7 @@ struct Polyline {
   void on_point_add(PointListObject&, const SceneObject&, const Point&) {}
   void on_point_remove(PointListObject&, const SceneObject&, const Point&) {}
   void on_point_list_reorder(PointListObject&) {}
+  std::generator<eray::math::Vec3f> bezier3_points(ref<PointListObject> base);
 };
 
 struct MultisegmentBezierCurve {
@@ -164,6 +170,7 @@ struct MultisegmentBezierCurve {
   void on_point_add(PointListObject&, const SceneObject&, const Point&) {}
   void on_point_remove(PointListObject&, const SceneObject&, const Point&) {}
   void on_point_list_reorder(PointListObject&) {}
+  std::generator<eray::math::Vec3f> bezier3_points(ref<PointListObject> base);
 };
 
 /**
@@ -192,11 +199,11 @@ struct BSplineCurve {
    */
   void update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle);
 
-  const std::vector<eray::math::Vec3f>& bernstein_points() const { return bernstein_points_; }
+  const std::vector<eray::math::Vec3f>& bernstein_points() const { return bezier_points_; }
 
   std::optional<eray::math::Vec3f> bernstein_point(size_t idx) const {
-    if (bernstein_points_.size() > idx) {
-      return bernstein_points_[idx];
+    if (bezier_points_.size() > idx) {
+      return bezier_points_[idx];
     }
 
     return std::nullopt;
@@ -204,12 +211,13 @@ struct BSplineCurve {
 
   void set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point);
 
-  bool contains(size_t idx) { return bernstein_points_.size() > idx; }
+  bool contains(size_t idx) { return bezier_points_.size() > idx; }
 
   void on_point_update(PointListObject& base, const SceneObject&, const Point&);
   void on_point_add(PointListObject& base, const SceneObject&, const Point&);
   void on_point_remove(PointListObject& base, const SceneObject&, const Point&);
   void on_point_list_reorder(PointListObject& base);
+  std::generator<eray::math::Vec3f> bezier3_points(ref<PointListObject> base);
 
  private:
   /**
@@ -222,7 +230,7 @@ struct BSplineCurve {
   void update_bernstein_segment(const PointListObject& base, int cp_idx);
 
  private:
-  std::vector<eray::math::Vec3f> bernstein_points_;
+  std::vector<eray::math::Vec3f> bezier_points_;
 };
 
 class NaturalSplineCurve {
@@ -253,6 +261,7 @@ class NaturalSplineCurve {
   void on_point_add(PointListObject& base, const SceneObject&, const Point&) { update(base); }
   void on_point_remove(PointListObject& base, const SceneObject&, const Point&) { update(base); }
   void on_point_list_reorder(PointListObject& base) { update(base); }
+  std::generator<eray::math::Vec3f> bezier3_points(ref<PointListObject> base);
 
  private:
   void update(PointListObject& base);
@@ -301,6 +310,8 @@ class PointListObject {
   auto points() const {
     return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
   }
+
+  std::generator<eray::math::Vec3f> bezier3_points();
 
   bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
 

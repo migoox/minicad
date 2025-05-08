@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <expected>
+#include <generator>
 #include <liberay/math/vec.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
@@ -211,10 +212,43 @@ void PointListObject::update_indices_from(size_t start_idx) {
   }
 }
 
+std::generator<eray::math::Vec3f> PointListObject::bezier3_points() {
+  return std::visit(eray::util::match{[&](auto& o) { return o.bezier3_points(*this); }}, this->object);
+}
+
+std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<PointListObject> /*base*/) { co_return; }
+
+std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<PointListObject> base) {
+  auto&& points = base.get().points();
+  auto count    = points.size();
+  if (points.empty()) {
+    co_return;
+  }
+
+  auto bezier_range = points | std::views::slide(4) | std::views::stride(3) | std::views::join;
+  for (const auto& p : bezier_range) {
+    co_yield p;
+  }
+
+  // Fill up the rest points
+  auto padding = (count - 1) % 3;
+  if (padding != 0) {
+    auto last_points = points | std::views::drop(count - padding);
+    auto last_point  = *std::ranges::prev(last_points.end());
+    for (const auto& p : last_points) {
+      co_yield p;
+    }
+    padding = 3 - padding;
+    for (auto i = 0U; i < padding; ++i) {
+      co_yield last_point;
+    }
+  }
+}
+
 void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
   auto de_boor_points_count = base.point_objects().size();
   if (de_boor_points_count < 4) {
-    bernstein_points_.clear();
+    bezier_points_.clear();
     return;
   }
 
@@ -222,12 +256,12 @@ void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
                         std::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
                         std::views::adjacent<3>;
 
-  bernstein_points_.clear();
+  bezier_points_.clear();
   for (auto i = 0U; const auto& [p0, p1, p2] : de_boor_points) {
-    bernstein_points_.push_back((p0 + 4 * p1 + p2) / 6.0);
+    bezier_points_.push_back((p0 + 4 * p1 + p2) / 6.0);
     if (de_boor_points_count - i > 3) {
-      bernstein_points_.push_back((4 * p1 + 2 * p2) / 6.0);
-      bernstein_points_.push_back((2 * p1 + 4 * p2) / 6.0);
+      bezier_points_.push_back((4 * p1 + 2 * p2) / 6.0);
+      bezier_points_.push_back((2 * p1 + 4 * p2) / 6.0);
     }
     ++i;
   }
@@ -245,11 +279,11 @@ void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_
   auto p2 = de_boor_points[cp_idx + 2].transform.pos();
   auto p3 = de_boor_points[cp_idx + 3].transform.pos();
 
-  auto cp_idx_u                       = static_cast<size_t>(cp_idx);
-  bernstein_points_[3 * cp_idx_u]     = (p0 + 4 * p1 + p2) / 6.0;
-  bernstein_points_[3 * cp_idx_u + 1] = (4 * p1 + 2 * p2) / 6.0;
-  bernstein_points_[3 * cp_idx_u + 2] = (2 * p1 + 4 * p2) / 6.0;
-  bernstein_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
+  auto cp_idx_u                    = static_cast<size_t>(cp_idx);
+  bezier_points_[3 * cp_idx_u]     = (p0 + 4 * p1 + p2) / 6.0;
+  bezier_points_[3 * cp_idx_u + 1] = (4 * p1 + 2 * p2) / 6.0;
+  bezier_points_[3 * cp_idx_u + 2] = (2 * p1 + 4 * p2) / 6.0;
+  bezier_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
 }
 
 void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle) {
@@ -262,16 +296,16 @@ void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObj
 }
 
 void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point) {
-  if (bernstein_points_.size() <= idx) {
+  if (bezier_points_.size() <= idx) {
     return;
   }
 
   size_t cp_idx = idx / 3;
-  if (idx == bernstein_points_.size() - 1) {
+  if (idx == bezier_points_.size() - 1) {
     --cp_idx;
   }
 
-  bernstein_points_[idx] = point;
+  bezier_points_[idx] = point;
 
   auto de_boor_control_points_windows = base.point_objects() | std::views::slide(4);
   auto de_boor_points_to_update       = *(de_boor_control_points_windows.begin() + static_cast<int>(cp_idx));
@@ -280,10 +314,10 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   auto& p2                            = de_boor_points_to_update[2];
   auto& p3                            = de_boor_points_to_update[3];
 
-  const auto& bp0 = bernstein_points_[3 * cp_idx];
-  const auto& bp1 = bernstein_points_[3 * cp_idx + 1];
-  const auto& bp2 = bernstein_points_[3 * cp_idx + 2];
-  const auto& bp3 = bernstein_points_[3 * cp_idx + 3];
+  const auto& bp0 = bezier_points_[3 * cp_idx];
+  const auto& bp1 = bezier_points_[3 * cp_idx + 1];
+  const auto& bp2 = bezier_points_[3 * cp_idx + 2];
+  const auto& bp3 = bezier_points_[3 * cp_idx + 3];
 
   p0.transform.set_local_pos(6 * bp0 - 7 * bp1 + 2 * bp2);
   p1.transform.set_local_pos(2 * bp1 - bp2);
@@ -329,6 +363,12 @@ void BSplineCurve::on_point_list_reorder(PointListObject& base) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(
       PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+}
+
+std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<PointListObject> /*base*/) {
+  for (const auto& b : bezier_points_) {
+    co_yield b;
+  }
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
@@ -464,6 +504,15 @@ void NaturalSplineCurve::update(PointListObject& base) {
   reset_segments(base);
   base.scene().renderer().push_object_rs_cmd(
       PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateNaturalSplineSegments{}));
+}
+
+std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<PointListObject> /*base*/) {
+  for (const auto& s : segments_) {
+    co_yield s.a;
+    co_yield s.a + 1.F / 3.F * s.b;
+    co_yield s.a + 2.F / 3.F * s.b + 1.F / 3.F * s.c;
+    co_yield s.a + s.b + s.c + s.d;
+  }
 }
 
 }  // namespace mini
