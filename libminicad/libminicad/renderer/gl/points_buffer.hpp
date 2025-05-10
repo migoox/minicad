@@ -40,7 +40,7 @@ class PointsBuffer {
     is_dirty_ = false;
   }
 
-  void add_points_owner(const Handle& handle, std::generator<eray::math::Vec3f> points, size_t count) {
+  void update_points_owner(const Handle& handle, std::generator<eray::math::Vec3f> points, size_t count) {
     if (points_range_.contains(handle)) {
       update_points(handle, std::move(points), count);
       return;
@@ -93,6 +93,12 @@ class PointsBuffer {
     is_dirty_ = true;
   }
 
+  void bind() { vao_.bind(); }
+
+  [[nodiscard]] size_t points_count() { return points_.size() / 3; }
+  [[nodiscard]] size_t size() { return points_.size(); }
+
+ private:
   void update_points(const Handle& handle, std::generator<eray::math::Vec3f> points, size_t count) {
     auto it = points_range_.find(handle);
     if (it == points_range_.end()) {
@@ -128,12 +134,6 @@ class PointsBuffer {
     is_dirty_ = true;
   }
 
-  void bind() { vao_.bind(); }
-
-  [[nodiscard]] size_t points_count() { return points_.size() / 3; }
-  [[nodiscard]] size_t size() { return points_.size(); }
-
- private:
   explicit PointsBuffer(eray::driver::gl::VertexArray vao) : is_dirty_(false), vao_(std::move(vao)) {}
 
  private:

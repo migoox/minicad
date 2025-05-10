@@ -281,15 +281,14 @@ class PointListObject {
     return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
   }
 
-  auto point_handles() { return points_map_ | std::views::keys; }
-
-  auto points() {
-    return point_objects() | std::views::transform([](auto& s) { return s.transform.pos(); });
-  }
+  auto point_handles() const { return points_map_ | std::views::keys; }
 
   auto points() const {
     return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
   }
+
+  std::generator<eray::math::Vec3f> polyline_points() const;
+  size_t polyline_points_count() const;
 
   std::generator<eray::math::Vec3f> bezier3_points() const;
   size_t bezier3_points_count() const;
@@ -372,7 +371,7 @@ class PointListObject {
 
   size_t order_ind_{0};
 
-  std::vector<std::reference_wrapper<SceneObject>> points_;
+  std::vector<ref<SceneObject>> points_;
   std::unordered_map<SceneObjectHandle, size_t> points_map_;
 };
 

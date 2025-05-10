@@ -15,12 +15,14 @@ namespace mini::gl {
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {
   const auto& handle = cmd_ctx.handle;
-  renderer.curves_.add_points_owner(handle, obj.bezier3_points(), obj.bezier3_points_count());
+  renderer.curves_.update_points_owner(handle, obj.bezier3_points(), obj.bezier3_points_count());
+  renderer.polylines_.update_points_owner(handle, obj.polyline_points(), obj.polyline_points_count());
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&) {
   const auto& handle = cmd_ctx.handle;
-  renderer.curves_.update_points(handle, obj.bezier3_points(), obj.bezier3_points_count());
+  renderer.curves_.update_points_owner(handle, obj.bezier3_points(), obj.bezier3_points_count());
+  renderer.polylines_.update_points_owner(handle, obj.polyline_points(), obj.polyline_points_count());
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectVisibility& cmd) {
@@ -29,6 +31,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   }
   const auto& handle = cmd_ctx.handle;
   renderer.curves_to_delete_.push_back(handle);
+  renderer.polylines_to_delete_.push_back(handle);
   obj_rs.visibility = cmd.new_visibility_state;
 }
 
@@ -36,8 +39,8 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   if (obj_rs.show_polyline == cmd.show) {
     return;
   }
-  const auto& handle = cmd_ctx.handle;  // NOLINT
-  // TODO(migoox): polylines
+  const auto& handle = cmd_ctx.handle;
+  renderer.polylines_.update_points_owner(handle, obj.polyline_points(), obj.polyline_points_count());
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {
@@ -94,7 +97,13 @@ void PointListsRenderer::update(Scene& scene) {
     curves_to_delete_.clear();
   }
 
-  // Sync the buffer
+  if (!polylines_to_delete_.empty()) {
+    polylines_.delete_points_owners(std::span{polylines_to_delete_});
+    polylines_to_delete_.clear();
+  }
+
+  // Sync the buffers
+  polylines_.sync();
   curves_.sync();
 }
 
@@ -106,8 +115,7 @@ void PointListsRenderer::render_polylines() {
 void PointListsRenderer::render_curves() {
   glPatchParameteri(GL_PATCH_VERTICES, 4);
   curves_.bind();
-  auto p = curves_.points_count();
-  glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(p));
+  glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(curves_.points_count()));
 }
 
 void PointListsRenderer::render_helper_points() {

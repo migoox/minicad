@@ -441,16 +441,9 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                           nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
 
   // Render polylines
-  //   shaders_.polyline->bind();
-  //   shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  //   for (auto& point_list : point_lists_rs_.point_lists) {
-  //     if (point_list.second.state.show_polyline) {
-  //       glVertexArrayElementBuffer(point_list.second.vao.get(), point_list.second.polyline_ebo.raw_gl_id());
-  //       glBindVertexArray(point_list.second.vao.get());
-  //       glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.polyline_ebo.count()), GL_UNSIGNED_INT,
-  //                      nullptr);
-  //     }
-  //   }
+  shaders_.polyline->bind();
+  shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  point_list_renderer_.render_polylines();
 
   // Render Curves
   shaders_.bezier->bind();

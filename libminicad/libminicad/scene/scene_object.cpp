@@ -222,6 +222,16 @@ size_t PointListObject::bezier3_points_count() const {
   return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points_count(*this); }}, this->object);
 }
 
+std::generator<eray::math::Vec3f> PointListObject::polyline_points() const {
+  auto lines = points() | std::views::adjacent<2>;
+  for (const auto& [p0, p1] : lines) {
+    co_yield p0;
+    co_yield p1;
+  }
+}
+
+size_t PointListObject::polyline_points_count() const { return 2 * (points_.size() - 1); }
+
 std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<const PointListObject> base) const {
   auto&& points = base.get().points();
   auto lines    = points | std::views::adjacent<2>;
