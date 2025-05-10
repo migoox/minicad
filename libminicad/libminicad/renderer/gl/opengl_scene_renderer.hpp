@@ -6,6 +6,8 @@
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
+#include <libminicad/renderer/gl/point_lists_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
@@ -29,27 +31,6 @@ struct SceneObjectRSCommandHandler {
   OpenGLSceneRenderer& renderer;
   Scene& scene;
   const SceneObjectRSCommand& cmd_ctx;
-  // NOLINTEND
-};
-
-struct PointListObjectRSCommandHandler {
-  explicit PointListObjectRSCommandHandler(OpenGLSceneRenderer& _renderer, Scene& _scene,
-                                           const PointListObjectRSCommand& _cmd_ctx)
-      : renderer(_renderer), scene(_scene), cmd_ctx(_cmd_ctx) {}
-
-  void operator()(const PointListObjectRSCommand::Internal::AddObject&);
-  void operator()(const PointListObjectRSCommand::UpdateObjectMembers&);
-  void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
-  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&);
-  void operator()(const PointListObjectRSCommand::ShowPolyline&);
-  void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
-  void operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&);
-  void operator()(const PointListObjectRSCommand::UpdateNaturalSplineSegments&);
-
-  // NOLINTBEGIN
-  OpenGLSceneRenderer& renderer;
-  Scene& scene;
-  const PointListObjectRSCommand& cmd_ctx;
   // NOLINTEND
 };
 
@@ -95,8 +76,6 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bspline;
-    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> natural_spline;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> helper_points;
@@ -126,16 +105,13 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unordered_map<SceneObjectHandle, SceneObjectRS> scene_objects_rs;
   } scene_objs_rs_;
 
-  struct PointListObjectsRS {
-    std::unordered_map<PointListObjectHandle, PointListObjectRS> point_lists;
-    std::vector<PointListObjectRSCommand> cmds;
-  } point_lists_rs_;
+  PointListsRenderer point_list_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
 
  private:
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRS&& objs_rs,
-                               PointListObjectsRS&& point_list_objs_rs,
+                               PointListsRenderer&& point_list_objs_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer);
 };
 

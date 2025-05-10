@@ -24,6 +24,9 @@ vec3 find_bezier_degree_2(vec3 p0, vec3 p1, vec3 p2, float t) {
     return p0*b0 + p1*b1 + p2*b2;
 }
 
+float distance2(vec3 p0, vec3 p1) {
+    return dot(p0 - p1, p0 - p1);
+}
 
 void main()
 {
@@ -33,11 +36,11 @@ void main()
     vec3 p2 = gl_in[2].gl_Position.xyz;
     vec3 p3 = gl_in[3].gl_Position.xyz;
 
-    const float Epsilon = 0.000001; 
+    const float Epsilon = 0.0000001; 
 
-    float eps01 = dot(p0, p1);
-    float eps12 = dot(p1, p2);
-    float eps23 = dot(p2, p3);
+    float eps01 = distance2(p0, p1); 
+    float eps12 = distance2(p1, p2);
+    float eps23 = distance2(p2, p3);
 
     vec3 p;
     if (eps01 < Epsilon && eps12 < Epsilon && eps23 < Epsilon) {

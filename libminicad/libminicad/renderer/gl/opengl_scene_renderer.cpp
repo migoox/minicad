@@ -11,7 +11,6 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <ranges>
 #include <variant>
 
 namespace mini::gl {
@@ -161,176 +160,6 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
              rs.scene_objects_rs.at(handle).specialized_rs);
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-  if (auto obj = scene.get_obj(handle)) {
-    rs.point_lists.insert({handle, PointListObjectRS::create(renderer.scene_objs_rs_.points_vao.vbo(), *obj.value())});
-  }
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectMembers&) {
-  namespace views  = std::views;
-  namespace ranges = std::ranges;
-
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (!rs.point_lists.contains(handle)) {
-    return;
-  }
-
-  if (auto obj = scene.get_obj(handle)) {
-    auto point_ids = obj.value()->point_objects() | views::transform([](const SceneObject& ph) { return ph.id(); }) |
-                     ranges::to<std::vector>();
-
-    rs.point_lists.at(handle).polyline_ebo.buffer_data(std::span{point_ids}, gl::DataUsage::StaticDraw);
-
-    std::visit(
-        util::match{
-            [&](MultisegmentBezierCurve&) {
-              static auto constexpr kMaxDegree  = MultisegmentBezierCurveRS::kMaxBezierDegree;
-              static auto constexpr kWindowSize = MultisegmentBezierCurveRS::kMaxBezierPoints;
-
-              auto thrd_degree_bezier_control_points = point_ids | views::slide(kWindowSize) |
-                                                       views::stride(kWindowSize - 1) | views::join |
-                                                       ranges::to<std::vector>();
-
-              // Add the last window that has length less than 4
-              auto n        = point_ids.size();
-              auto last_ind = ((n - 1) / kMaxDegree) * kMaxDegree;
-              int degree    = static_cast<int>(n - last_ind - 1);
-              for (auto i = last_ind; i < n; ++i) {
-                thrd_degree_bezier_control_points.push_back(point_ids[i]);
-              }
-
-              // Fill up the last window, so that it has exactly 4 elements
-              if (n > 0 && degree > 0) {
-                for (int i = 0; i < kMaxDegree - degree; ++i) {
-                  thrd_degree_bezier_control_points.push_back(thrd_degree_bezier_control_points.back());
-                }
-              }
-
-              // Assert that correct rendering state is attached to the handle
-              if (!rs.point_lists.at(handle).specialized_rs ||
-                  !std::holds_alternative<MultisegmentBezierCurveRS>(*rs.point_lists.at(handle).specialized_rs)) {
-                rs.point_lists.at(handle).specialized_rs = MultisegmentBezierCurveRS::create();
-              }
-
-              // Update the rendering state
-              std::get<MultisegmentBezierCurveRS>(*rs.point_lists.at(handle).specialized_rs).last_bezier_degree =
-                  degree;
-              std::get<MultisegmentBezierCurveRS>(*rs.point_lists.at(handle).specialized_rs)
-                  .control_points_ebo.buffer_data(std::span{thrd_degree_bezier_control_points},
-                                                  gl::DataUsage::StaticDraw);
-            },
-            [&](BSplineCurve&) {
-              static auto constexpr kWindowSize = BSplineCurveRS::kMaxBSplinePoints;
-
-              auto de_boor_points =
-                  point_ids | views::slide(kWindowSize) | views::stride(1) | views::join | ranges::to<std::vector>();
-
-              // Assert that correct rendering state is attached to the handle
-              if (!rs.point_lists.at(handle).specialized_rs ||
-                  !std::holds_alternative<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)) {
-                rs.point_lists.at(handle).specialized_rs = BSplineCurveRS::create();
-              }
-
-              // Update the rendering state
-              std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
-                  .de_boor_points_ebo.buffer_data(std::span{de_boor_points}, gl::DataUsage::StaticDraw);
-            },
-            [&](NaturalSplineCurve&) {
-              // Assert that correct rendering state is attached to the handle
-              if (!rs.point_lists.at(handle).specialized_rs ||
-                  !std::holds_alternative<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)) {
-                rs.point_lists.at(handle).specialized_rs = NaturalSplineCurveRS::create();
-              }
-
-              // Update the segments info
-              auto& nsc_rs = std::get<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs);
-              nsc_rs.reset_buffer(*obj.value());
-            },
-            [](auto&) {}},
-        obj.value()->object);
-  } else {
-    rs.point_lists.erase(handle);
-  }
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectVisibility&) {
-  // TODO(migoox): implement object visibility for point lists
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  rs.point_lists.erase(handle);
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowPolyline& cmd) {
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  rs.point_lists.at(handle).state.show_polyline = cmd.show;
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (!rs.point_lists.contains(handle)) {
-    return;
-  }
-
-  if (auto obj = scene.get_obj(handle)) {
-    if (!rs.point_lists.at(handle).specialized_rs ||
-        !std::holds_alternative<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs) ||
-        !std::holds_alternative<BSplineCurve>(obj.value()->object)) {
-      eray::util::Logger::warn("OpenGL SceneRenderer: Cannot update Bernstein Control Points position.");
-      return;
-    }
-    auto& curve = std::get<BSplineCurve>(obj.value()->object);
-
-    auto indices = std::views::iota(0U, static_cast<uint32_t>(curve.bernstein_points().size())) |
-                   std::ranges::to<std::vector<uint32_t>>();
-    std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
-        .bernstein_points_vao.ebo()
-        .buffer_data(std::span{indices}, gl::DataUsage::StaticDraw);
-
-    const auto* vertices = reinterpret_cast<const float*>(curve.bernstein_points().data());
-    std::get<BSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs)
-        .bernstein_points_vao.vbo()
-        .buffer_data(std::span(vertices, sizeof(float) * curve.bernstein_points().size()), gl::DataUsage::StaticDraw);
-  }
-}
-
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateNaturalSplineSegments&) {
-  auto& rs           = renderer.point_lists_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (!rs.point_lists.contains(handle)) {
-    return;
-  }
-
-  if (auto obj = scene.get_obj(handle)) {
-    if (!rs.point_lists.at(handle).specialized_rs ||
-        !std::holds_alternative<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs) ||
-        !std::holds_alternative<NaturalSplineCurve>(obj.value()->object)) {
-      eray::util::Logger::warn(
-          "OpenGL SceneRenderer: Cannot update Natural Spline segments due to rendering state mismatch.");
-      return;
-    }
-
-    // Update the segments info
-    auto& nsc_rs = std::get<NaturalSplineCurveRS>(*rs.point_lists.at(handle).specialized_rs);
-    nsc_rs.reset_buffer(*obj.value());
-  }
-}
-
 namespace {
 
 gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
@@ -404,12 +233,13 @@ gl::TextureHandle create_texture(const res::Image& image) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image.width(), image.height(), 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8,
-               image.raw());
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(image.width()), static_cast<GLsizei>(image.height()), 0,
+               GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, image.raw());
   glBindTexture(GL_TEXTURE_2D, 0);
 
   return gl::TextureHandle(texture);
 }
+
 }  // namespace
 
 std::expected<std::unique_ptr<ISceneRenderer>, OpenGLSceneRenderer::SceneRendererCreationError>
@@ -444,29 +274,12 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                                        std::move(polyline_frag)));
 
   TRY_UNWRAP_ASSET(bezier_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
-  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(shaders_path / "curves" / "bezier_c0.tesc"));
-  TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(shaders_path / "curves" / "bezier_c0.tese"));
+  TRY_UNWRAP_ASSET(bezier_tesc, manager.load_shader(shaders_path / "curves" / "bezier.tesc"));
+  TRY_UNWRAP_ASSET(bezier_tese, manager.load_shader(shaders_path / "curves" / "bezier.tese"));
   TRY_UNWRAP_ASSET(bezier_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
   TRY_UNWRAP_PROGRAM(bezier_prog,
                      gl::RenderingShaderProgram::create("bezier_shader", std::move(bezier_vert), std::move(bezier_frag),
                                                         std::move(bezier_tesc), std::move(bezier_tese)));
-
-  TRY_UNWRAP_ASSET(bspline_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
-  TRY_UNWRAP_ASSET(bspline_tesc, manager.load_shader(shaders_path / "curves" / "bspline_c2.tesc"));
-  TRY_UNWRAP_ASSET(bspline_tese, manager.load_shader(shaders_path / "curves" / "bspline_c2.tese"));
-  TRY_UNWRAP_ASSET(bspline_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
-  TRY_UNWRAP_PROGRAM(bspline_prog, gl::RenderingShaderProgram::create("bspline_shader", std::move(bspline_vert),
-                                                                      std::move(bspline_frag), std::move(bspline_tesc),
-                                                                      std::move(bspline_tese)));
-
-  TRY_UNWRAP_ASSET(natural_spline_vert, manager.load_shader(shaders_path / "curves" / "curve.vert"));
-  TRY_UNWRAP_ASSET(natural_spline_tesc, manager.load_shader(shaders_path / "curves" / "natural_spline_c2.tesc"));
-  TRY_UNWRAP_ASSET(natural_spline_tese, manager.load_shader(shaders_path / "curves" / "natural_spline_c2.tese"));
-  TRY_UNWRAP_ASSET(natural_spline_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
-  TRY_UNWRAP_PROGRAM(natural_spline_prog,
-                     gl::RenderingShaderProgram::create("natural spline_shader", std::move(natural_spline_vert),
-                                                        std::move(natural_spline_frag), std::move(natural_spline_tesc),
-                                                        std::move(natural_spline_tese)));
 
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
@@ -507,8 +320,6 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .grid             = std::move(grid_prog),                       //
       .polyline         = std::move(polyline_prog),                   //
       .bezier           = std::move(bezier_prog),                     //
-      .bspline          = std::move(bspline_prog),                    //
-      .natural_spline   = std::move(natural_spline_prog),             //
       .sprite           = std::move(sprite_prog),                     //
       .instanced_sprite = std::move(instanced_sprite_prog),           //
       .helper_points    = std::move(instanced_no_state_sprite_prog),  //
@@ -528,22 +339,18 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .cmds             = {},                                //
   };
 
-  auto point_list_objs = PointListObjectsRS{
-      .point_lists = {},
-      .cmds        = {},
-  };
-
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
-      std::move(shaders), std::move(global_rs), std::move(scene_objs_rs), std::move(point_list_objs),
+      std::move(shaders), std::move(global_rs), std::move(scene_objs_rs), PointListsRenderer::create(),
       std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
+
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRS&& objs_rs,
-                                         PointListObjectsRS&& point_list_objs_rs,
+                                         PointListsRenderer&& point_list_objs_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
       scene_objs_rs_(std::move(objs_rs)),
-      point_lists_rs_(std::move(point_list_objs_rs)),
+      point_list_renderer_(std::move(point_list_objs_rs)),
       framebuffer_(std::move(framebuffer)) {}
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_rs_.cmds.push_back(cmd); }
@@ -563,21 +370,15 @@ void OpenGLSceneRenderer::set_object_rs(const SceneObjectHandle& handle, const :
 }
 
 std::optional<::mini::PointListObjectRS> OpenGLSceneRenderer::object_rs(const PointListObjectHandle& handle) {
-  if (!point_lists_rs_.point_lists.contains(handle)) {
-    return std::nullopt;
-  }
-
-  return point_lists_rs_.point_lists.at(handle).state;
+  return point_list_renderer_.object_rs(handle);
 }
 
 void OpenGLSceneRenderer::set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state) {
-  if (point_lists_rs_.point_lists.contains(handle)) {
-    point_lists_rs_.point_lists.at(handle).state = state;
-  }
+  point_list_renderer_.set_object_rs(handle, state);
 }
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const PointListObjectRSCommand& cmd) {
-  point_lists_rs_.cmds.push_back(cmd);
+  point_list_renderer_.push_cmd(cmd);
 }
 
 void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
@@ -587,7 +388,9 @@ void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Imag
 
 ::mini::BillboardRS& OpenGLSceneRenderer::billboard(zstring_view name) { return global_rs_.billboards.at(name).state; }
 
-void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) { framebuffer_->resize(win_size.x, win_size.y); }
+void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
+  framebuffer_->resize(static_cast<size_t>(win_size.x), static_cast<size_t>(win_size.y));
+}
 
 void OpenGLSceneRenderer::update(Scene& scene) {
   for (const auto& cmd_ctx : scene_objs_rs_.cmds) {
@@ -595,10 +398,7 @@ void OpenGLSceneRenderer::update(Scene& scene) {
   }
   scene_objs_rs_.cmds.clear();
 
-  for (const auto& cmd_ctx : point_lists_rs_.cmds) {
-    std::visit(PointListObjectRSCommandHandler(*this, scene, cmd_ctx), cmd_ctx.cmd);
-  }
-  point_lists_rs_.cmds.clear();
+  point_list_renderer_.update(scene);
 }
 
 std::unordered_set<int> OpenGLSceneRenderer::sample_mouse_pick_box(size_t x, size_t y, size_t width,
@@ -641,97 +441,24 @@ void OpenGLSceneRenderer::render(Camera& camera) {
                           nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
 
   // Render polylines
-  shaders_.polyline->bind();
-  shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  for (auto& point_list : point_lists_rs_.point_lists) {
-    if (point_list.second.state.show_polyline) {
-      glVertexArrayElementBuffer(point_list.second.vao.get(), point_list.second.polyline_ebo.raw_gl_id());
-      glBindVertexArray(point_list.second.vao.get());
-      glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.polyline_ebo.count()), GL_UNSIGNED_INT,
-                     nullptr);
-    }
-  }
+  //   shaders_.polyline->bind();
+  //   shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  //   for (auto& point_list : point_lists_rs_.point_lists) {
+  //     if (point_list.second.state.show_polyline) {
+  //       glVertexArrayElementBuffer(point_list.second.vao.get(), point_list.second.polyline_ebo.raw_gl_id());
+  //       glBindVertexArray(point_list.second.vao.get());
+  //       glDrawElements(GL_LINE_STRIP, static_cast<GLsizei>(point_list.second.polyline_ebo.count()), GL_UNSIGNED_INT,
+  //                      nullptr);
+  //     }
+  //   }
 
-  // Render Beziers
+  // Render Curves
   shaders_.bezier->bind();
   shaders_.bezier->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
   shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
   shaders_.bezier->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
-  for (auto& point_list : point_lists_rs_.point_lists) {
-    if (!point_list.second.specialized_rs) {
-      continue;
-    }
-
-    std::visit(util::match{
-                   [&](const MultisegmentBezierCurveRS& s) {
-                     glVertexArrayElementBuffer(point_list.second.vao.get(), s.control_points_ebo.raw_gl_id());
-                     glBindVertexArray(point_list.second.vao.get());
-
-                     shaders_.bezier->set_uniform("u_bezier_degree", 3);
-                     if (s.last_bezier_degree > 0) {
-                       glDrawElements(GL_PATCHES,
-                                      s.control_points_ebo.count() - MultisegmentBezierCurveRS::kMaxBezierPoints,
-                                      GL_UNSIGNED_INT, nullptr);
-
-                       shaders_.bezier->set_uniform("u_bezier_degree", s.last_bezier_degree);
-                       glDrawElements(GL_PATCHES, MultisegmentBezierCurveRS::kMaxBezierPoints, GL_UNSIGNED_INT,
-                                      (const void*)(sizeof(GLuint) * (s.control_points_ebo.count() -
-                                                                      MultisegmentBezierCurveRS::kMaxBezierPoints)));
-                     } else {
-                       glDrawElements(GL_PATCHES, s.control_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
-                     }
-                   },
-                   [](const auto&) {},
-               },
-               *point_list.second.specialized_rs);
-  }
-
-  // Render B-Splines
-  shaders_.bspline->bind();
-  shaders_.bspline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.bspline->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
-  shaders_.bspline->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
-  shaders_.bspline->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
-  for (auto& point_list : point_lists_rs_.point_lists) {
-    if (!point_list.second.specialized_rs) {
-      continue;
-    }
-
-    std::visit(util::match{
-                   [&](const BSplineCurveRS& s) {
-                     glVertexArrayElementBuffer(point_list.second.vao.get(), s.de_boor_points_ebo.raw_gl_id());
-                     glBindVertexArray(point_list.second.vao.get());
-                     glDrawElements(GL_PATCHES, s.de_boor_points_ebo.count(), GL_UNSIGNED_INT, nullptr);
-                   },
-                   [](const auto&) {},
-               },
-               *point_list.second.specialized_rs);
-  }
-
-  // Render Natural Splines
-  shaders_.natural_spline->bind();
-  shaders_.natural_spline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.natural_spline->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
-  shaders_.natural_spline->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
-  shaders_.natural_spline->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
-  glPatchParameteri(GL_PATCH_VERTICES, 6);
-  for (auto& point_list : point_lists_rs_.point_lists) {
-    if (!point_list.second.specialized_rs) {
-      continue;
-    }
-
-    std::visit(util::match{
-                   [&](const NaturalSplineCurveRS& s) {
-                     s.coefficients_vao.bind();
-                     glDrawArrays(GL_PATCHES, 0, s.coefficients_buffer.size() / 3);
-                   },
-                   [](const auto&) {},
-               },
-               *point_list.second.specialized_rs);
-  }
+  point_list_renderer_.render_curves();
 
   // Render grid
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -748,30 +475,30 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render Bernstein control points for B-Splines
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  framebuffer_->begin_pick_render();
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get());
-  shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.helper_points->set_uniform("u_scale", 0.02F);
-  shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
-  shaders_.helper_points->set_uniform("u_textureSampler", 0);
-  shaders_.helper_points->bind();
-  for (auto& point_list : point_lists_rs_.point_lists) {
-    if (!point_list.second.specialized_rs) {
-      continue;
-    }
+  //   framebuffer_->begin_pick_render();
+  //   glActiveTexture(GL_TEXTURE0);
+  //   glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get());
+  //   shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  //   shaders_.helper_points->set_uniform("u_scale", 0.02F);
+  //   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
+  //   shaders_.helper_points->set_uniform("u_textureSampler", 0);
+  //   shaders_.helper_points->bind();
+  //   for (auto& point_list : point_lists_rs_.point_lists) {
+  //     if (!point_list.second.specialized_rs) {
+  //       continue;
+  //     }
 
-    std::visit(util::match{
-                   [&](const BSplineCurveRS& s) {
-                     shaders_.helper_points->set_uniform("u_parent_id", static_cast<int>(point_list.first.obj_id));
-                     s.bernstein_points_vao.bind();
-                     glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT, nullptr);
-                   },
-                   [](const auto&) {},
-               },
-               *point_list.second.specialized_rs);
-  }
-  framebuffer_->end_pick_render();
+  //     std::visit(util::match{
+  //                    [&](const BSplineCurveRS& s) {
+  //                      shaders_.helper_points->set_uniform("u_parent_id", static_cast<int>(point_list.first.obj_id));
+  //                      s.bernstein_points_vao.bind();
+  //                      glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT, nullptr);
+  //                    },
+  //                    [](const auto&) {},
+  //                },
+  //                *point_list.second.specialized_rs);
+  //   }
+  //   framebuffer_->end_pick_render();
 
   // Render points
   framebuffer_->begin_pick_render();

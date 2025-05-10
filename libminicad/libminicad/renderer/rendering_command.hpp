@@ -33,9 +33,8 @@ struct PointListObjectRSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};
+    struct UpdateControlPoints {};
   };
-
-  struct UpdateObjectMembers {};
 
   struct UpdateObjectVisibility {
     explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
@@ -66,21 +65,16 @@ struct PointListObjectRSCommand {
    */
   struct UpdateBernsteinControlPoints {};
 
-  /**
-   * @brief If the point list is a NaturalSpline, this command will update its segments.
-   *
-   */
-  struct UpdateNaturalSplineSegments {};
-
   using CommandVariant =
-      std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility,
-                   ShowPolyline, ShowBernsteinControlPoints, UpdateBernsteinControlPoints, UpdateNaturalSplineSegments>;
+      std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints, UpdateObjectVisibility,
+                   ShowPolyline, ShowBernsteinControlPoints, UpdateBernsteinControlPoints>;
 
-  explicit PointListObjectRSCommand(PointListObjectHandle _handle, CommandVariant _cmd) : handle(_handle), cmd(_cmd) {}
+  explicit PointListObjectRSCommand(PointListObjectHandle _handle, CommandVariant _cmd)
+      : handle(_handle), variant(_cmd) {}
   PointListObjectRSCommand() = delete;
 
   PointListObjectHandle handle;
-  CommandVariant cmd;
+  CommandVariant variant;
 };
 
 }  // namespace mini

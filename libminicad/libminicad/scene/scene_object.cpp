@@ -48,6 +48,8 @@ void SceneObject::update() {
   if (has_type<Point>()) {
     for (const auto& pl_h : this->point_lists_) {
       if (auto pl = scene_.get_obj(pl_h)) {
+        scene_.renderer().push_object_rs_cmd(
+            PointListObjectRSCommand(pl_h, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
         std::visit(eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, get_variant<Point>()); }},
                    pl.value()->object);
       }
@@ -65,7 +67,7 @@ PointListObject::~PointListObject() {
 
 void PointListObject::update() {
   scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
 }
 
 std::expected<void, PointListObject::SceneObjectError> PointListObject::add(const SceneObjectHandle& handle) {
@@ -93,7 +95,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::add(cons
     std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
                this->object);
     scene_.renderer().push_object_rs_cmd(
-        PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+        PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
 
     return {};
   }
@@ -133,7 +135,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(c
     std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
                this->object);
     scene_.renderer().push_object_rs_cmd(
-        PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+        PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
 
     return {};
   }
@@ -167,7 +169,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_bef
 
   std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
   scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
 
   return {};
 }
@@ -201,7 +203,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_aft
 
   std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
   scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateObjectMembers{}));
+      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
 
   return {};
 }
@@ -212,13 +214,30 @@ void PointListObject::update_indices_from(size_t start_idx) {
   }
 }
 
-std::generator<eray::math::Vec3f> PointListObject::bezier3_points() {
-  return std::visit(eray::util::match{[&](auto& o) { return o.bezier3_points(*this); }}, this->object);
+std::generator<eray::math::Vec3f> PointListObject::bezier3_points() const {
+  return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points(*this); }}, this->object);
 }
 
-std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<PointListObject> /*base*/) { co_return; }
+size_t PointListObject::bezier3_points_count() const {
+  return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points_count(*this); }}, this->object);
+}
 
-std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<PointListObject> base) {
+std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<const PointListObject> base) const {
+  auto&& points = base.get().points();
+  auto lines    = points | std::views::adjacent<2>;
+  for (const auto& [p0, p1] : lines) {
+    co_yield p0;
+    co_yield p1;
+    co_yield p1;
+    co_yield p1;
+  }
+}
+
+size_t Polyline::bezier3_points_count(ref<const PointListObject> base) const {
+  return (base.get().points().size() - 1) * 4;
+}
+
+std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<const PointListObject> base) const {
   auto&& points = base.get().points();
   auto count    = points.size();
   if (points.empty()) {
@@ -231,18 +250,29 @@ std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<Po
   }
 
   // Fill up the rest points
-  auto padding = (count - 1) % 3;
-  if (padding != 0) {
-    auto last_points = points | std::views::drop(count - padding);
-    auto last_point  = *std::ranges::prev(last_points.end());
+  auto reminder   = (count - 1) % 3;
+  auto last_point = *std::ranges::prev(points.end());
+  if (reminder > 0) {
+    auto last_points = points | std::views::drop(count - (reminder + 1));
     for (const auto& p : last_points) {
       co_yield p;
     }
-    padding = 3 - padding;
-    for (auto i = 0U; i < padding; ++i) {
+    for (auto i = 0U; i < 3 - reminder; ++i) {
       co_yield last_point;
     }
   }
+}
+
+size_t MultisegmentBezierCurve::bezier3_points_count(ref<const PointListObject> base) const {
+  auto cp_count = base.get().point_objects().size();
+  if (cp_count == 0) {
+    return 0;
+  }
+
+  if ((cp_count - 1) % 3 != 0) {
+    return cp_count / 3 * 4 + 4;
+  }
+  return cp_count / 3 * 4;
 }
 
 void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
@@ -365,10 +395,18 @@ void BSplineCurve::on_point_list_reorder(PointListObject& base) {
       PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
 }
 
-std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<PointListObject> /*base*/) {
-  for (const auto& b : bezier_points_) {
+std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const PointListObject> /*base*/) const {
+  for (auto i = 0U; const auto& b : bezier_points_) {
     co_yield b;
+    if (i % 3 == 0 && i != 0) {
+      co_yield b;
+    }
+    ++i;
   }
+}
+
+size_t BSplineCurve::bezier3_points_count(ref<const PointListObject> /*base*/) const {
+  return bezier_points_.size() / 3 * 4;
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {
@@ -500,19 +538,19 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
       (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
 }
 
-void NaturalSplineCurve::update(PointListObject& base) {
-  reset_segments(base);
-  base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateNaturalSplineSegments{}));
-}
+void NaturalSplineCurve::update(PointListObject& base) { reset_segments(base); }
 
-std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<PointListObject> /*base*/) {
+std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const PointListObject> /*base*/) const {
   for (const auto& s : segments_) {
     co_yield s.a;
     co_yield s.a + 1.F / 3.F * s.b;
     co_yield s.a + 2.F / 3.F * s.b + 1.F / 3.F * s.c;
     co_yield s.a + s.b + s.c + s.d;
   }
+}
+
+size_t NaturalSplineCurve::bezier3_points_count(ref<const PointListObject> /*base*/) const {
+  return segments_.size() * 4;
 }
 
 }  // namespace mini
