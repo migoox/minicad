@@ -1,6 +1,6 @@
 #pragma once
 #include <liberay/driver/gl/vertex_array.hpp>
-#include <libminicad/renderer/gl/points_buffer.hpp>
+#include <libminicad/renderer/gl/buffer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>

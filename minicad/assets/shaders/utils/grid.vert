@@ -1,7 +1,7 @@
 // USAGE:
 // 1. Remember to set
-//      glEnable(GL_BLEND);
-//      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//      ERAY_GL_CALL( glEnable(GL_BLEND) );
+//      ERAY_GL_CALL( glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) );
 //
 // 2. To draw the grid, bind the shader, fill the u_pvMat, u_vInvMat and u_camWorldPos uniforms and
 // invoke glDrawArrays(GL_TRIANGLES, 0, 6)

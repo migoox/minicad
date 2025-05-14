@@ -1,8 +1,8 @@
 #include <glad/gl.h>
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <libminicad/renderer/gl/buffer.hpp>
 #include <libminicad/renderer/gl/point_lists_renderer.hpp>
-#include <libminicad/renderer/gl/points_buffer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
@@ -109,13 +109,13 @@ void PointListsRenderer::update(Scene& scene) {
 
 void PointListsRenderer::render_polylines() {
   polylines_.bind();
-  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(polylines_.points_count()));
+  ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(polylines_.points_count())));
 }
 
 void PointListsRenderer::render_curves() {
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
   curves_.bind();
-  glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(curves_.points_count()));
+  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(curves_.points_count())));
 }
 
 void PointListsRenderer::render_helper_points() {

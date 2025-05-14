@@ -227,15 +227,15 @@ gl::VertexArray create_points_vao() {
 
 gl::TextureHandle create_texture(const res::Image& image) {
   GLuint texture = 0;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  ERAY_GL_CALL(glGenTextures(1, &texture));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, texture));
+  ERAY_GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+  ERAY_GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+  ERAY_GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+  ERAY_GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(image.width()), static_cast<GLsizei>(image.height()), 0,
                GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, image.raw());
-  glBindTexture(GL_TEXTURE_2D, 0);
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
 
   return gl::TextureHandle(texture);
 }
@@ -412,31 +412,31 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   framebuffer_->clear_pick_render();
 
   // Prepare the framebuffer
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glClearColor(0.09, 0.05, 0.09, 1.F);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
+  ERAY_GL_CALL(glEnable(GL_DEPTH_TEST));
+  ERAY_GL_CALL(glEnable(GL_BLEND));
+  ERAY_GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+  ERAY_GL_CALL(glClearColor(0.09, 0.05, 0.09, 1.F));
+  ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
   // Render tori
-  glPatchParameteri(GL_PATCH_VERTICES, 4);
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
   shaders_.param->set_uniform("u_vMat", camera.view_matrix());
   shaders_.param->set_uniform("u_pMat", camera.proj_matrix());
   shaders_.param->bind();
   scene_objs_rs_.torus_vao.bind();
 
   framebuffer_->begin_pick_render();
-  glDepthMask(GL_FALSE);
+  ERAY_GL_CALL(glDepthMask(GL_FALSE));
   shaders_.param->set_uniform("u_fill", true);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(scene_objs_rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT,
                           nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
-  glDepthMask(GL_TRUE);
+  ERAY_GL_CALL(glDepthMask(GL_TRUE));
   framebuffer_->end_pick_render();
 
   shaders_.param->set_uniform("u_fill", false);
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
   glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(scene_objs_rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT,
                           nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
 
@@ -454,23 +454,23 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   point_list_renderer_.render_curves();
 
   // Render grid
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   if (global_rs_.show_grid) {
     shaders_.grid->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
     shaders_.grid->set_uniform("u_vInvMat", camera.inverse_view_matrix());
     shaders_.grid->set_uniform("u_camWorldPos", camera.transform.pos());
     shaders_.grid->bind();
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   }
 
-  glClear(GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_DEPTH_TEST);
+  ERAY_GL_CALL(glClear(GL_DEPTH_BUFFER_BIT));
+  ERAY_GL_CALL(glEnable(GL_DEPTH_TEST));
 
   // Render Bernstein control points for B-Splines
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   //   framebuffer_->begin_pick_render();
-  //   glActiveTexture(GL_TEXTURE0);
-  //   glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get());
+  //   ERAY_GL_CALL( glActiveTexture(GL_TEXTURE0) );
+  //   ERAY_GL_CALL( glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get()) );
   //   shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   //   shaders_.helper_points->set_uniform("u_scale", 0.02F);
   //   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
@@ -485,7 +485,8 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   //                    [&](const BSplineCurveRS& s) {
   //                      shaders_.helper_points->set_uniform("u_parent_id", static_cast<int>(point_list.first.obj_id));
   //                      s.bernstein_points_vao.bind();
-  //                      glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT, nullptr);
+  //                      ERAY_GL_CALL( glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT,
+  //                      nullptr) );
   //                    },
   //                    [](const auto&) {},
   //                },
@@ -495,44 +496,44 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render points
   framebuffer_->begin_pick_render();
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.point_txt.get());
+  ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.point_txt.get()));
   shaders_.instanced_sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
   shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
   shaders_.instanced_sprite->bind();
   scene_objs_rs_.points_vao.bind();
-  glDrawElements(GL_POINTS, scene_objs_rs_.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr);
+  ERAY_GL_CALL(glDrawElements(GL_POINTS, scene_objs_rs_.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr));
   framebuffer_->end_pick_render();
 
   // Render billboards
-  glDisable(GL_DEPTH_TEST);
+  ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
   for (auto& [name, billboard] : global_rs_.billboards) {
     if (!billboard.state.show) {
       continue;
     }
 
-    glBindTexture(GL_TEXTURE_2D, billboard.texture.get());
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, billboard.texture.get()));
     shaders_.sprite->set_uniform("u_worldPos", billboard.state.position);
     shaders_.sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
     shaders_.sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.sprite->set_uniform("u_scale", billboard.state.scale);
     shaders_.sprite->set_uniform("u_textureSampler", 0);
     shaders_.sprite->bind();
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   }
-  glBindTexture(GL_TEXTURE_2D, 0);
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
 
   // Render to the default framebuffer
-  glDisable(GL_DEPTH_TEST);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glBindTexture(GL_TEXTURE_2D, framebuffer_->color_texture());
-  glClearColor(1.0F, 1.0F, 1.0F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT);
+  ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+  ERAY_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, framebuffer_->color_texture()));
+  ERAY_GL_CALL(glClearColor(1.0F, 1.0F, 1.0F, 1.0F));
+  ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT));
   shaders_.screen_quad->bind();
   shaders_.screen_quad->set_uniform("u_textureSampler", 0);
-  glDrawArrays(GL_TRIANGLES, 0, 6);
+  ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
 }
 
 }  // namespace mini::gl
