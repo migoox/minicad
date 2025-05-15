@@ -239,16 +239,7 @@ SceneObjectsRenderer SceneObjectsRenderer::create() {
 
 SceneObjectsRenderer::SceneObjectsRenderer(Members&& members) : m_(std::move(members)) {}
 
-void SceneObjectsRenderer::update(Scene& scene) {
-  // TODO(migoox): add commands preprocessing
-
-  // Flush the commands and invoke handler
-  for (const auto& cmd : cmds_) {
-    auto handler = SceneObjectRSCommandHandler(cmd, *this, scene);
-    std::visit(handler, cmd.variant);
-  }
-  cmds_.clear();
-}
+void SceneObjectsRenderer::update_impl(Scene& /*scene*/) {}
 
 void SceneObjectsRenderer::render_control_points() const {
   m_.points_vao.bind();

@@ -2,7 +2,6 @@
 
 #include <concepts>
 #include <cstdint>
-#include <functional>
 #include <generator>
 #include <liberay/math/transform3.hpp>
 #include <liberay/util/object_handle.hpp>

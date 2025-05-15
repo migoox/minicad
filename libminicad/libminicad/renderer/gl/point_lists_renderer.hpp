@@ -13,13 +13,13 @@ namespace mini::gl {
 class PointListsRenderer;
 
 struct PointListObjectRSCommandHandler {
-  explicit PointListObjectRSCommandHandler(const PointListObjectRSCommand& _cmd_ctx, PointListsRenderer& _rs,
-                                           PointListObject& _obj, PointListObjectRS& _obj_rs)
-      : cmd_ctx(_cmd_ctx), renderer(_rs), obj(_obj), obj_rs(_obj_rs) {}
+  explicit PointListObjectRSCommandHandler(const PointListObjectRSCommand& _cmd_ctx, PointListsRenderer& _renderer,
+                                           Scene& _scene)
+      : cmd_ctx(_cmd_ctx), renderer(_renderer), scene(_scene) {}
 
   void operator()(const PointListObjectRSCommand::Internal::AddObject&);
   void operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&);
-  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {}  // handled during flush
+  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&);
   void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
@@ -28,8 +28,7 @@ struct PointListObjectRSCommandHandler {
   // NOLINTBEGIN
   const PointListObjectRSCommand& cmd_ctx;
   PointListsRenderer& renderer;
-  PointListObject& obj;
-  PointListObjectRS& obj_rs;
+  Scene& scene;
   // NOLINTEND
 };
 
@@ -40,13 +39,14 @@ using PointsChunksBuffer =
       target[2] = vec.z;
     }>;
 
-class PointListsRenderer : public SubRenderer<PointListObjectHandle, PointListObjectRS, PointListObjectRSCommand> {
+class PointListsRenderer : public SubRenderer<PointListsRenderer, PointListObjectHandle, PointListObjectRS,
+                                              PointListObjectRSCommand, PointListObjectRSCommandHandler> {
  public:
   PointListsRenderer() = delete;
 
   static PointListsRenderer create();
 
-  void update(Scene& scene);
+  void update_impl(Scene& scene);
 
   std::optional<std::pair<PointListObjectHandle, size_t>> find_helper_point_by_idx(size_t idx) const;
 

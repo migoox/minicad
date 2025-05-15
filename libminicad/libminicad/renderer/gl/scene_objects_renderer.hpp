@@ -26,15 +26,16 @@ struct SceneObjectRSCommandHandler {
   // NOLINTEND
 };
 
-class SceneObjectsRenderer : public SubRenderer<SceneObjectHandle, SceneObjectRS, SceneObjectRSCommand> {
+class SceneObjectsRenderer : public SubRenderer<SceneObjectsRenderer, SceneObjectHandle, SceneObjectRS,
+                                                SceneObjectRSCommand, SceneObjectRSCommandHandler> {
  public:
   static SceneObjectsRenderer create();
-
-  void update(Scene& scene);
 
   void render_control_points() const;
   void render_parameterized_surfaces() const;
   void render_parameterized_surfaces_filled() const;
+
+  void update_impl(Scene& scene);
 
  private:
   friend SceneObjectRSCommandHandler;

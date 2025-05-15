@@ -15,34 +15,77 @@
 
 namespace mini::gl {
 
+namespace util = eray::util;
+
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {
   const auto& handle = cmd_ctx.handle;
-  renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
-  renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+
+  renderer.rs_.emplace(handle, mini::PointListObjectRS(VisibilityState::Visible));
+
+  if (auto o = scene.get_obj(handle)) {
+    auto& obj = *o.value();
+
+    renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+  }
+}
+
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {
+  const auto& handle = cmd_ctx.handle;
+  renderer.m_.polylines.delete_chunk(handle);
+  renderer.m_.curves.delete_chunk(handle);
+  renderer.m_.helper_points.delete_chunk(handle);
+  renderer.rs_.erase(handle);
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&) {
   const auto& handle = cmd_ctx.handle;
-  renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
-  renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+  if (auto o = scene.get_obj(handle)) {
+    auto& obj = *o.value();
+
+    renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+  } else {
+    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+  }
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectVisibility& cmd) {
+  const auto& handle = cmd_ctx.handle;
+  if (!renderer.rs_.contains(handle)) {
+    util::Logger::warn(
+        "OpenGL Renderer received update UpdateObjectVisibility command but there is no rendering state created");
+    return;
+  }
+
+  auto& obj_rs = renderer.rs_.at(handle);
   if (obj_rs.visibility == cmd.new_visibility_state) {
     return;
   }
-  const auto& handle = cmd_ctx.handle;
   renderer.m_.curves.delete_chunk(handle);
   renderer.m_.polylines.delete_chunk(handle);
   obj_rs.visibility = cmd.new_visibility_state;
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowPolyline& cmd) {
+  const auto& handle = cmd_ctx.handle;
+  if (!renderer.rs_.contains(handle)) {
+    util::Logger::warn(
+        "OpenGL Renderer received update UpdateObjectVisibility command but there is no rendering state created");
+    return;
+  }
+
+  auto& obj_rs = renderer.rs_.at(handle);
   if (obj_rs.show_polyline == cmd.show) {
     return;
   }
-  const auto& handle = cmd_ctx.handle;
-  renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+
+  if (auto o = scene.get_obj(handle)) {
+    auto& obj = *o.value();
+    renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+  } else {
+    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+  }
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {
@@ -50,16 +93,22 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateHelperPoints&) {
-  std::visit(eray::util::match{
-                 [&](const BSplineCurve& curve) {
-                   renderer.m_.helper_points.update_chunk(obj.handle(), curve.unique_bezier3_points(obj),
-                                                          curve.unique_bezier3_points_count(obj));
-                 },
-                 [](const auto&) {},
-             },
-             obj.object);
-  renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points(), obj.bezier3_points_count());
-  renderer.m_.polylines.update_chunk(obj.handle(), obj.polyline_points(), obj.polyline_points_count());
+  const auto& handle = cmd_ctx.handle;
+  if (auto o = scene.get_obj(handle)) {
+    auto& obj = *o.value();
+    std::visit(eray::util::match{
+                   [&](const BSplineCurve& curve) {
+                     renderer.m_.helper_points.update_chunk(handle, curve.unique_bezier3_points(obj),
+                                                            curve.unique_bezier3_points_count(obj));
+                   },
+                   [](const auto&) {},
+               },
+               obj.object);
+    renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.polylines.update_chunk(obj.handle(), obj.polyline_points(), obj.polyline_points_count());
+  } else {
+    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+  }
 }
 
 PointListsRenderer PointListsRenderer::create() {
@@ -86,37 +135,7 @@ PointListsRenderer PointListsRenderer::create() {
 
 PointListsRenderer::PointListsRenderer(Members&& members) : m_(std::move(members)) {}
 
-void PointListsRenderer::update(Scene& scene) {
-  // TODO(migoox): add commands preprocessing to remove repetitions
-
-  // Flush the commands and invoke handler
-  for (const auto& cmd : cmds_) {
-    auto add_obj    = std::holds_alternative<PointListObjectRSCommand::Internal::AddObject>(cmd.variant);
-    auto delete_obj = std::holds_alternative<PointListObjectRSCommand::Internal::DeleteObject>(cmd.variant);
-
-    if (add_obj) {
-      rs_.emplace(cmd.handle, mini::PointListObjectRS(VisibilityState::Visible));
-    }
-    if (delete_obj) {
-      m_.polylines.delete_chunk(cmd.handle);
-      m_.curves.delete_chunk(cmd.handle);
-      m_.helper_points.delete_chunk(cmd.handle);
-      rs_.erase(cmd.handle);
-    }
-    if (!rs_.contains(cmd.handle)) {
-      continue;
-    }
-
-    if (auto obj = scene.get_obj(cmd.handle)) {
-      auto handler = PointListObjectRSCommandHandler(cmd, *this, *obj.value(), rs_.at(cmd.handle));
-      std::visit(handler, cmd.variant);
-    } else {
-      rs_.erase(cmd.handle);
-    }
-  }
-  cmds_.clear();
-
-  // Sync the buffers
+void PointListsRenderer::update_impl(Scene& /*scene*/) {
   m_.polylines.sync(m_.polylines_vao.vbo().handle());
   m_.curves.sync(m_.curves_vao.vbo().handle());
   m_.helper_points.sync(m_.helper_points_vao.vbo().handle());
