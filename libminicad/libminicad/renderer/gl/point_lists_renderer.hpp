@@ -5,6 +5,8 @@
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "liberay/util/ruleof.hpp"
+
 namespace mini::gl {
 
 struct PointListsRenderer;
@@ -16,7 +18,7 @@ struct PointListObjectRSCommandHandler {
 
   void operator()(const PointListObjectRSCommand::Internal::AddObject&);
   void operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&);
-  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {}
+  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {}  // handled during flush
   void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
@@ -30,6 +32,13 @@ struct PointListObjectRSCommandHandler {
   // NOLINTEND
 };
 
+using PointsChunksBuffer =
+    ChunksBuffer<PointListObjectHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
+      target[0] = vec.x;
+      target[1] = vec.y;
+      target[2] = vec.z;
+    }>;
+
 struct PointListsRenderer {
   PointListsRenderer() = delete;
 
@@ -41,26 +50,27 @@ struct PointListsRenderer {
   std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle);
   void set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state);
 
-  void render_polylines();
-  void render_curves();
-  void render_helper_points();
+  void render_polylines() const;
+  void render_curves() const;
+  void render_helper_points() const;
 
  private:
   friend PointListObjectRSCommandHandler;
 
-  PointListsRenderer(PointsBuffer<PointListObjectHandle>&& helper_points,
-                     PointsBuffer<PointListObjectHandle>&& polylines, PointsBuffer<PointListObjectHandle>&& curves);
+  struct Members {
+    // PointsChunksBuffer helper_points;
 
-  PointsBuffer<PointListObjectHandle> helper_points_;
+    eray::driver::gl::VertexArray polylines_vao;
+    PointsChunksBuffer polylines;
 
-  PointsBuffer<PointListObjectHandle> polylines_;
-  std::vector<PointListObjectHandle> polylines_to_delete_;
+    eray::driver::gl::VertexArray curves_vao;
+    PointsChunksBuffer curves;
 
-  PointsBuffer<PointListObjectHandle> curves_;
-  std::vector<PointListObjectHandle> curves_to_delete_;
+    std::unordered_map<PointListObjectHandle, ::mini::PointListObjectRS> point_lists;
+    std::vector<PointListObjectRSCommand> cmds;
+  } m_;
 
-  std::unordered_map<PointListObjectHandle, ::mini::PointListObjectRS> point_lists_;
-  std::vector<PointListObjectRSCommand> cmds_;
+  explicit PointListsRenderer(Members&& m);
 };
 
 }  // namespace mini::gl

@@ -3,151 +3,174 @@
 #include <algorithm>
 #include <generator>
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/gl_handle.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/vec.hpp>
+#include <liberay/util/generator.hpp>
+#include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <ranges>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace mini::gl {
 
 /**
- * @brief Synchronizes CPU and GPU buffers of points.
+ * @brief Represents a generic contiguous buffer of GPU primitives organized into chunks stored on CPU. Each
+ * chunk corresponds to rendered entity. This class is particularily useful for batched rendering. To synchronize
+ * the buffer with GPU, use sync() method, note that only DSA OpenGL buffers are supported in this method.
  *
- * @tparam Handle
+ * @tparam ChunkOwnerHandle
+ * @tparam CPUSourceType
+ * @tparam GPUTargetPrimitiveType
+ * @tparam GPUTargetPrimitiveCount
+ * @tparam (*TypeInserter)(const CPUSourceType&, GPUTargetPrimitiveType*)
  */
-template <::mini::CObjectHandle Handle>
-class PointsBuffer {
+template <::mini::CObjectHandle ChunkOwnerHandle, typename CPUSourceType, typename GPUTargetPrimitiveType,
+          std::size_t GPUTargetPrimitiveCount, void (*TypeInserter)(const CPUSourceType&, GPUTargetPrimitiveType*)>
+class ChunksBuffer {
  public:
-  PointsBuffer() = delete;
+  ERAY_DEFAULT_MOVE(ChunksBuffer)
+  ERAY_DISABLE_COPY(ChunksBuffer)
 
-  static PointsBuffer create() {
-    auto layout = eray::driver::gl::VertexBuffer::Layout();
-    layout.add_attribute<float>("pos", 0, 3);
-
-    return PointsBuffer<Handle>(eray::driver::gl::VertexArray::create(
-        eray::driver::gl::VertexBuffer::create(std::move(layout)), eray::driver::gl::ElementBuffer::create()));
+  static ChunksBuffer create() {
+    return ChunksBuffer<ChunkOwnerHandle, CPUSourceType, GPUTargetPrimitiveType, GPUTargetPrimitiveCount,
+                        TypeInserter>();
   }
 
+  static constexpr std::size_t kGPUTargetPrimitiveCount = GPUTargetPrimitiveCount;
+
   /**
-   * @brief Synchronizes CPU and GPU buffers of points if the CPU buffer is dirty. Call it after
-   * all of the required buffer modifications are applied.
+   * @brief Synchronizes CPU and GPU buffers if the CPU buffer is dirty. Call it after
+   * all of the required buffer modifications are applied. DSA buffer is expected.
    *
    */
-  void sync() {
-    vao_.vbo().buffer_data(std::span{points_}, eray::driver::gl::DataUsage::StaticDraw);
+  void sync(const eray::driver::gl::BufferHandle& buffer) {
+    if (is_dirty_) {
+      if (!expired_chunks_.empty()) {
+        delete_expired_chunks();
+      }
+
+      ERAY_GL_CALL(glNamedBufferData(buffer.get(),
+                                     static_cast<GLsizeiptr>(data_.size() * sizeof(GPUTargetPrimitiveType)),
+                                     reinterpret_cast<const void*>(data_.data()), GL_STATIC_DRAW));
+    }
     is_dirty_ = false;
   }
 
-  void update_points_owner(const Handle& handle, std::generator<eray::math::Vec3f> points, size_t count) {
-    if (points_range_.contains(handle)) {
-      update_points(handle, std::move(points), count);
+  void update_chunk(const ChunkOwnerHandle& owner, const std::vector<CPUSourceType>& data) {
+    update_chunk(owner, std::move(eray::util::container_to_generator(data)), data.size());
+  }
+
+  void update_chunk(const ChunkOwnerHandle& owner, std::generator<CPUSourceType> data, size_t count) {
+    if (chunk_range_.contains(owner)) {
+      update_chunk_values(owner, std::move(data), count);
       return;
     }
 
-    auto begin_idx = points_.size();
+    auto begin_idx = data_.size();
     auto end_idx   = begin_idx;
-    for (const auto& p : points) {
-      points_.push_back(p.x);
-      points_.push_back(p.y);
-      points_.push_back(p.z);
-      end_idx += 3;
+    for (const auto& p : data) {
+      data_.resize(data_.size() + kGPUTargetPrimitiveCount);
+      TypeInserter(p, &data_[data_.size() - kGPUTargetPrimitiveCount]);
+      end_idx += kGPUTargetPrimitiveCount;
     }
 
-    points_range_.emplace(handle, PointsRange{.begin_idx = begin_idx, .end_idx = end_idx});
+    chunk_range_.emplace(owner, Chunk{.begin_idx = begin_idx, .end_idx = end_idx});
     is_dirty_ = true;
   }
 
-  void delete_points_owners(std::span<Handle> handles) {
+  void delete_chunk(const ChunkOwnerHandle& owner) { expired_chunks_.insert(owner); }
+
+  [[nodiscard]] size_t chunks_count() const { return data_.size() / kGPUTargetPrimitiveCount; }
+  [[nodiscard]] size_t size() const { return data_.size(); }
+
+ private:
+  ChunksBuffer() = default;
+
+  void update_chunk_values(const ChunkOwnerHandle& owner, std::generator<CPUSourceType> data, size_t count) {
+    auto it = chunk_range_.find(owner);
+    if (it == chunk_range_.end()) {
+      return;
+    }
+    auto range = it->second;
+
+    if (count == range.begin_idx) {
+      for (auto i = range.begin_idx; const auto& p : data) {
+        TypeInserter(p, &data_[i]);
+        i += kGPUTargetPrimitiveCount;
+      }
+
+    } else {
+      for (auto i = range.begin_idx, j = range.end_idx; j < data_.size(); ++i, ++j) {
+        data_[i] = data_[j];
+      }
+      data_.resize(data_.size() - range.size());
+
+      auto begin_idx = data_.size();
+      auto end_idx   = begin_idx;
+      for (const auto& p : data) {
+        data_.resize(data_.size() + kGPUTargetPrimitiveCount);
+        TypeInserter(p, &data_[data_.size() - kGPUTargetPrimitiveCount]);
+        end_idx += kGPUTargetPrimitiveCount;
+      }
+      it->second = Chunk{.begin_idx = begin_idx, .end_idx = end_idx};
+    }
+
+    is_dirty_ = true;
+  }
+
+  void delete_expired_chunks() {
     namespace v = std::views;
     namespace r = std::ranges;
 
-    auto point_its = handles                                                                  //
-                     | v::transform([&](const auto& h) { return points_range_.find(h); })     //
-                     | v::filter([&](const auto& it) { return it != points_range_.end(); });  //
+    if (expired_chunks_.empty()) {
+      return;
+    }
+
+    auto point_its = expired_chunks_                                                         //
+                     | v::transform([&](const auto& h) { return chunk_range_.find(h); })     //
+                     | v::filter([&](const auto& it) { return it != chunk_range_.end(); });  //
 
     auto point_ranges = point_its                                                   //
                         | v::transform([&](const auto& it) { return it->second; })  //
-                        | r::to<std::vector<PointsRange>>();                        //
+                        | r::to<std::vector<Chunk>>();                              //
 
     r::sort(point_ranges, [](const auto& pr1, const auto& pr2) { return pr1.begin_idx < pr2.begin_idx; });
     point_ranges.push_back({
-        .begin_idx = points_.size(),
-        .end_idx   = points_.size(),
+        .begin_idx = data_.size(),
+        .end_idx   = data_.size(),
     });
 
     auto point_ranges_pairs   = point_ranges | v::adjacent<2>;
     auto removed_points_count = 0U;
     for (const auto& [left, right] : point_ranges_pairs) {
       for (auto i = left.begin_idx, j = right.begin_idx; j < right.end_idx; ++i, ++j) {
-        points_[i] = points_[j];
+        data_[i] = data_[j];
       }
       removed_points_count += left.size();
     }
-    points_.resize(points_.size() - removed_points_count);
+    data_.resize(data_.size() - removed_points_count);
 
     for (auto it : point_its) {
-      points_range_.erase(it);
+      chunk_range_.erase(it);
     }
     is_dirty_ = true;
   }
 
-  void bind() { vao_.bind(); }
-
-  [[nodiscard]] size_t points_count() { return points_.size() / 3; }
-  [[nodiscard]] size_t size() { return points_.size(); }
-
  private:
-  void update_points(const Handle& handle, std::generator<eray::math::Vec3f> points, size_t count) {
-    auto it = points_range_.find(handle);
-    if (it == points_range_.end()) {
-      return;
-    }
-    auto range = it->second;
-
-    if (count == range.begin_idx) {
-      for (auto i = range.begin_idx; const auto& p : points) {
-        points_[i]     = p.x;
-        points_[i + 1] = p.y;
-        points_[i + 2] = p.z;
-        i += 3;
-      }
-
-    } else {
-      for (auto i = range.begin_idx, j = range.end_idx; j < points_.size(); ++i, ++j) {
-        points_[i] = points_[j];
-      }
-      points_.resize(points_.size() - range.size());
-
-      auto begin_idx = points_.size();
-      auto end_idx   = begin_idx;
-      for (const auto& p : points) {
-        points_.push_back(p.x);
-        points_.push_back(p.y);
-        points_.push_back(p.z);
-        end_idx += 3;
-      }
-      it->second = PointsRange{.begin_idx = begin_idx, .end_idx = end_idx};
-    }
-
-    is_dirty_ = true;
-  }
-
-  explicit PointsBuffer(eray::driver::gl::VertexArray vao) : is_dirty_(false), vao_(std::move(vao)) {}
-
- private:
-  struct PointsRange {
+  struct Chunk {
     size_t begin_idx;
     size_t end_idx;  // non-inclusive
 
     size_t size() { return end_idx - begin_idx; }
   };
 
-  bool is_dirty_;
-  std::vector<float> points_;
-  std::unordered_map<Handle, PointsRange> points_range_;
-  eray::driver::gl::VertexArray vao_;
+  std::vector<GPUTargetPrimitiveType> data_;
+  std::unordered_set<ChunkOwnerHandle> expired_chunks_;
+  std::unordered_map<ChunkOwnerHandle, Chunk> chunk_range_;
+  bool is_dirty_{};
 };
 
 }  // namespace mini::gl
