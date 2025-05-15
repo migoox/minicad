@@ -59,15 +59,11 @@ struct PointListObjectRSCommand {
     bool show;
   };
 
-  /**
-   * @brief If the point list is a BSpline, this command will update the bernstein control points.
-   *
-   */
-  struct UpdateBernsteinControlPoints {};
+  struct UpdateHelperPoints {};
 
   using CommandVariant =
       std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints, UpdateObjectVisibility,
-                   ShowPolyline, ShowBernsteinControlPoints, UpdateBernsteinControlPoints>;
+                   ShowPolyline, ShowBernsteinControlPoints, UpdateHelperPoints>;
 
   explicit PointListObjectRSCommand(PointListObjectHandle _handle, CommandVariant _cmd)
       : handle(_handle), variant(_cmd) {}

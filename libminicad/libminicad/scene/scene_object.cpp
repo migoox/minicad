@@ -90,7 +90,7 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::add(cons
     if (std::holds_alternative<BSplineCurve>(this->object)) {
       std::get<BSplineCurve>(this->object).reset_bernstein_points(*this);
       scene_.renderer().push_object_rs_cmd(
-          PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+          PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateHelperPoints{}));
     }
     std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
                this->object);
@@ -384,25 +384,25 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
 void BSplineCurve::on_point_update(PointListObject& base, const SceneObject& point, const Point&) {
   update_bernstein_points(base, point.handle());
   base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
 }
 
 void BSplineCurve::on_point_add(PointListObject& base, const SceneObject&, const Point&) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
 }
 
 void BSplineCurve::on_point_remove(PointListObject& base, const SceneObject&, const Point&) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
 }
 
 void BSplineCurve::on_point_list_reorder(PointListObject& base) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
 }
 
 std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const PointListObject> /*base*/) const {
@@ -415,8 +415,18 @@ std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const PointLi
   }
 }
 
+std::generator<eray::math::Vec3f> BSplineCurve::unique_bezier3_points(ref<const PointListObject> /*base*/) const {
+  for (const auto& b : bezier_points_) {
+    co_yield b;
+  }
+}
+
 size_t BSplineCurve::bezier3_points_count(ref<const PointListObject> /*base*/) const {
   return bezier_points_.size() / 3 * 4;
+}
+
+size_t BSplineCurve::unique_bezier3_points_count(ref<const PointListObject> /*base*/) const {
+  return bezier_points_.size();
 }
 
 void NaturalSplineCurve::reset_segments(PointListObject& base) {

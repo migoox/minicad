@@ -9,12 +9,20 @@
 #include <liberay/util/generator.hpp>
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <optional>
 #include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace mini::gl {
+
+struct Chunk {
+  size_t begin_idx;  // inclusive
+  size_t end_idx;    // non-inclusive
+
+  size_t size() const { return end_idx - begin_idx; }
+};
 
 /**
  * @brief Represents a generic contiguous buffer of GPU primitives organized into chunks stored on CPU. Each
@@ -82,6 +90,19 @@ class ChunksBuffer {
   }
 
   void delete_chunk(const ChunkOwnerHandle& owner) { expired_chunks_.insert(owner); }
+
+  std::optional<std::pair<ChunkOwnerHandle, size_t>> find_by_idx(size_t idx) const {
+    auto primitive_idx = idx * kGPUTargetPrimitiveCount;
+    // TODO(migoox): optimize it
+    for (const auto& [handle, chunk] : chunk_range_) {
+      if (primitive_idx >= chunk.begin_idx && primitive_idx < chunk.end_idx) {
+        auto offset = (primitive_idx - chunk.begin_idx) / kGPUTargetPrimitiveCount;
+        return std::pair(handle, offset);
+      }
+    }
+
+    return std::nullopt;
+  }
 
   [[nodiscard]] size_t chunks_count() const { return data_.size() / kGPUTargetPrimitiveCount; }
   [[nodiscard]] size_t size() const { return data_.size(); }
@@ -160,13 +181,6 @@ class ChunksBuffer {
   }
 
  private:
-  struct Chunk {
-    size_t begin_idx;
-    size_t end_idx;  // non-inclusive
-
-    size_t size() { return end_idx - begin_idx; }
-  };
-
   std::vector<GPUTargetPrimitiveType> data_;
   std::unordered_set<ChunkOwnerHandle> expired_chunks_;
   std::unordered_map<ChunkOwnerHandle, Chunk> chunk_range_;

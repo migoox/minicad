@@ -21,7 +21,7 @@ struct PointListObjectRSCommandHandler {
   void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
   void operator()(const PointListObjectRSCommand::ShowPolyline&);
   void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
-  void operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&);
+  void operator()(const PointListObjectRSCommand::UpdateHelperPoints&);
 
   // NOLINTBEGIN
   const PointListObjectRSCommand& cmd_ctx;
@@ -48,6 +48,8 @@ struct PointListsRenderer {
 
   std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle);
   void set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state);
+
+  std::optional<std::pair<PointListObjectHandle, size_t>> find_helper_point_by_idx(size_t idx) const;
 
   void render_polylines() const;
   void render_curves() const;

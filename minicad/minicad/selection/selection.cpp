@@ -168,7 +168,7 @@ void HelperPointSelection::set_point(Scene& scene, eray::math::Vec3f new_pos) {
     if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
       bspline->set_bernstein_point(*o.value(), selection_->helper_point, new_pos);
       scene.renderer().push_object_rs_cmd(
-          PointListObjectRSCommand(selection_->parent, PointListObjectRSCommand::UpdateBernsteinControlPoints{}));
+          PointListObjectRSCommand(selection_->parent, PointListObjectRSCommand::UpdateHelperPoints{}));
     }
   }
 }

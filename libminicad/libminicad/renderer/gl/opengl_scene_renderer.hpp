@@ -62,7 +62,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   bool is_grid_shown() const final { return global_rs_.show_grid; }
 
   void resize_viewport(eray::math::Vec2i win_size) final;
-  std::unordered_set<int> sample_mouse_pick_box(size_t x, size_t y, size_t width, size_t height) const final;
+  SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const final;
 
   void update(Scene& scene) final;
   void render(Camera& camera) final;

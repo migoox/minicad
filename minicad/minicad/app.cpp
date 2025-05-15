@@ -42,8 +42,6 @@
 #include <ranges>
 #include <variant>
 
-#include "libminicad/renderer/gl/rendering_state.hpp"
-
 namespace mini {
 
 namespace util = eray::util;
@@ -870,44 +868,29 @@ bool MiniCadApp::on_tool_action_end() {
     m_.select_tool.end_box_select();
     auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
 
-    auto ids =
-        m_.scene.renderer().sample_mouse_pick_box(static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y),
-                                                  static_cast<size_t>(box.size.x), static_cast<size_t>(box.size.y));
     on_selection_clear();
     on_point_list_selection_clear();
+    auto sampling_result = m_.scene.renderer().sample_mouse_pick_box(
+        m_.scene, static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y), static_cast<size_t>(box.size.x),
+        static_cast<size_t>(box.size.y));
 
-    if (ids.size() == 1) {
-      int point_list_id   = 0;
-      int helper_point_id = 0;
-      auto id             = *ids.begin();
-      if (id & (1 << 31)) {
-        point_list_id   = (id >> 18) & 0x1FFF;
-        helper_point_id = id & 0x3FFFF;
-
-        if (auto h = m_.scene.handle_by_point_list_obj_id(static_cast<PointListObjectId>(point_list_id))) {
-          if (auto o = m_.scene.get_obj(*h)) {
-            m_.helper_point_selection.set_selection(
-                HelperPoint{.parent = *h, .helper_point = static_cast<size_t>(helper_point_id)});
-          }
-        }
-        return true;
-      }
-    }
-
-    if (ids.empty()) {
+    if (!sampling_result) {
       return true;
     }
 
-    auto handles = std::vector<SceneObjectHandle>();
-    for (auto id : ids) {
-      if (auto h = m_.scene.handle_by_scene_obj_id(static_cast<SceneObjectId>(id))) {
-        handles.push_back(*h);
-      }
-    }
-    on_selection_add_many(handles.begin(), handles.end());
+    std::visit(util::match{
+                   [&](SampledHelperPoint& helper_point) {
+                     m_.helper_point_selection.set_selection(
+                         {.parent = helper_point.pl_handle, .helper_point = helper_point.helper_point_idx});
+                   },
+                   [&](SampledSceneObjects& scene_objs) {
+                     on_selection_add_many(scene_objs.handles.begin(), scene_objs.handles.end());
+                   },
+               },
+               *sampling_result);
+
     return true;
   }
-
   return false;
 }
 

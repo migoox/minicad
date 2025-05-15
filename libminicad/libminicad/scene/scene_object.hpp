@@ -196,7 +196,9 @@ struct BSplineCurve {
   void on_point_remove(PointListObject& base, const SceneObject&, const Point&);
   void on_point_list_reorder(PointListObject& base);
   std::generator<eray::math::Vec3f> bezier3_points(ref<const PointListObject> base) const;
+  std::generator<eray::math::Vec3f> unique_bezier3_points(ref<const PointListObject> base) const;
   size_t bezier3_points_count(ref<const PointListObject> base) const;
+  size_t unique_bezier3_points_count(ref<const PointListObject> base) const;
 
  private:
   /**

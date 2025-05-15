@@ -11,6 +11,7 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <optional>
 #include <variant>
 
 namespace mini::gl {
@@ -401,10 +402,35 @@ void OpenGLSceneRenderer::update(Scene& scene) {
   point_list_renderer_.update(scene);
 }
 
-std::unordered_set<int> OpenGLSceneRenderer::sample_mouse_pick_box(size_t x, size_t y, size_t width,
-                                                                   size_t height) const {
+SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width,
+                                                          size_t height) const {
   framebuffer_->bind();
-  return framebuffer_->sample_mouse_pick_box(x, y, width, height);
+  auto ids = framebuffer_->sample_mouse_pick_box(x, y, width, height);
+
+  if (ids.empty()) {
+    return std::nullopt;
+  }
+  if (ids.size() == 1) {
+    auto id = *ids.begin();
+    // Check if it's a helper point
+    if (id & (1 << 31)) {
+      auto helper_point_idx = id & ~(1 << 31);
+
+      if (auto result = this->point_list_renderer_.find_helper_point_by_idx(static_cast<size_t>(helper_point_idx))) {
+        return SampledHelperPoint{.pl_handle = result->first, .helper_point_idx = result->second};
+      }
+      return std::nullopt;
+    }
+  }
+
+  auto handles = std::vector<SceneObjectHandle>();
+  for (auto id : ids) {
+    if (auto h = scene.handle_by_scene_obj_id(static_cast<SceneObjectId>(id))) {
+      handles.push_back(*h);
+    }
+  }
+
+  return SampledSceneObjects{.handles = handles};
 }
 
 void OpenGLSceneRenderer::render(Camera& camera) {

@@ -8,8 +8,21 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
+#include <unordered_set>
 
 namespace mini {
+
+struct SampledHelperPoint {
+  PointListObjectHandle pl_handle;
+  size_t helper_point_idx;
+};
+
+struct SampledSceneObjects {
+  std::vector<SceneObjectHandle> handles;
+};
+
+using SamplingResult = std::optional<std::variant<SampledSceneObjects, SampledHelperPoint>>;
 
 /**
  * @brief Rendering API agnostic minicad scene renderer. The implementation of this interface is injected into the
@@ -34,8 +47,8 @@ class ISceneRenderer {
   virtual void show_grid(bool show_grid) = 0;
   virtual bool is_grid_shown() const     = 0;
 
-  virtual void resize_viewport(eray::math::Vec2i win_size)                                                     = 0;
-  virtual std::unordered_set<int> sample_mouse_pick_box(size_t x, size_t y, size_t width, size_t height) const = 0;
+  virtual void resize_viewport(eray::math::Vec2i win_size)                                                          = 0;
+  virtual SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const = 0;
 
   virtual void update(Scene& scene) = 0;
 

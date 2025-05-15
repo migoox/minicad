@@ -49,15 +49,17 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   // TODO(migoox): update bernstein points visibility
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {
+void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateHelperPoints&) {
   std::visit(eray::util::match{
                  [&](const BSplineCurve& curve) {
-                   renderer.m_.helper_points.update_chunk(obj.handle(), curve.bezier3_points(obj),
-                                                          curve.bezier3_points_count(obj));
+                   renderer.m_.helper_points.update_chunk(obj.handle(), curve.unique_bezier3_points(obj),
+                                                          curve.unique_bezier3_points_count(obj));
                  },
                  [](const auto&) {},
              },
              obj.object);
+  renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points(), obj.bezier3_points_count());
+  renderer.m_.polylines.update_chunk(obj.handle(), obj.polyline_points(), obj.polyline_points_count());
 }
 
 PointListsRenderer PointListsRenderer::create() {
@@ -121,6 +123,10 @@ void PointListsRenderer::update(Scene& scene) {
   m_.polylines.sync(m_.polylines_vao.vbo().handle());
   m_.curves.sync(m_.curves_vao.vbo().handle());
   m_.helper_points.sync(m_.helper_points_vao.vbo().handle());
+}
+
+std::optional<std::pair<PointListObjectHandle, size_t>> PointListsRenderer::find_helper_point_by_idx(size_t idx) const {
+  return m_.helper_points.find_by_idx(idx);
 }
 
 void PointListsRenderer::render_polylines() const {
