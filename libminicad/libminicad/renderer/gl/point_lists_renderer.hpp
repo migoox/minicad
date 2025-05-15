@@ -1,11 +1,10 @@
 #pragma once
 #include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/util/ruleof.hpp>
 #include <libminicad/renderer/gl/buffer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
-
-#include "liberay/util/ruleof.hpp"
 
 namespace mini::gl {
 
@@ -58,7 +57,8 @@ struct PointListsRenderer {
   friend PointListObjectRSCommandHandler;
 
   struct Members {
-    // PointsChunksBuffer helper_points;
+    eray::driver::gl::VertexArray helper_points_vao;
+    PointsChunksBuffer helper_points;
 
     eray::driver::gl::VertexArray polylines_vao;
     PointsChunksBuffer polylines;

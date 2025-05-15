@@ -2,6 +2,7 @@
 
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/buffer.hpp>
 #include <libminicad/renderer/gl/point_lists_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
@@ -49,7 +50,14 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
 }
 
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateBernsteinControlPoints&) {
-  // TODO(migoox)
+  std::visit(eray::util::match{
+                 [&](const BSplineCurve& curve) {
+                   renderer.m_.helper_points.update_chunk(obj.handle(), curve.bezier3_points(obj),
+                                                          curve.bezier3_points_count(obj));
+                 },
+                 [](const auto&) {},
+             },
+             obj.object);
 }
 
 PointListsRenderer PointListsRenderer::create() {
@@ -58,16 +66,21 @@ PointListsRenderer PointListsRenderer::create() {
   auto polylines_vao = eray::driver::gl::VertexArray::create(
       eray::driver::gl::VertexBuffer::create(eray::driver::gl::VertexBuffer::Layout(vbo_layout)),
       eray::driver::gl::ElementBuffer::create());
+  auto helper_points_vao = eray::driver::gl::VertexArray::create(
+      eray::driver::gl::VertexBuffer::create(eray::driver::gl::VertexBuffer::Layout(vbo_layout)),
+      eray::driver::gl::ElementBuffer::create());
   auto curves_vao = eray::driver::gl::VertexArray::create(eray::driver::gl::VertexBuffer::create(std::move(vbo_layout)),
                                                           eray::driver::gl::ElementBuffer::create());
 
   return PointListsRenderer(Members{
-      .polylines_vao = std::move(polylines_vao),
-      .polylines     = PointsChunksBuffer::create(),
-      .curves_vao    = std::move(curves_vao),
-      .curves        = PointsChunksBuffer::create(),
-      .point_lists   = {},
-      .cmds          = {},
+      .helper_points_vao = std::move(helper_points_vao),
+      .helper_points     = PointsChunksBuffer::create(),
+      .polylines_vao     = std::move(polylines_vao),
+      .polylines         = PointsChunksBuffer::create(),
+      .curves_vao        = std::move(curves_vao),
+      .curves            = PointsChunksBuffer::create(),
+      .point_lists       = {},
+      .cmds              = {},
   });
 }
 
@@ -89,6 +102,7 @@ void PointListsRenderer::update(Scene& scene) {
     if (delete_obj) {
       m_.polylines.delete_chunk(cmd.handle);
       m_.curves.delete_chunk(cmd.handle);
+      m_.helper_points.delete_chunk(cmd.handle);
     }
     if (!m_.point_lists.contains(cmd.handle)) {
       continue;
@@ -106,6 +120,7 @@ void PointListsRenderer::update(Scene& scene) {
   // Sync the buffers
   m_.polylines.sync(m_.polylines_vao.vbo().handle());
   m_.curves.sync(m_.curves_vao.vbo().handle());
+  m_.helper_points.sync(m_.helper_points_vao.vbo().handle());
 }
 
 void PointListsRenderer::render_polylines() const {
@@ -120,7 +135,8 @@ void PointListsRenderer::render_curves() const {
 }
 
 void PointListsRenderer::render_helper_points() const {
-  // TODO(migoox)
+  m_.helper_points_vao.bind();
+  ERAY_GL_CALL(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_.helper_points.chunks_count())));
 }
 
 std::optional<PointListObjectRS> PointListsRenderer::object_rs(const PointListObjectHandle& handle) {

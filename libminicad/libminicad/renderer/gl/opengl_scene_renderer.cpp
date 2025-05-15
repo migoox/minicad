@@ -468,31 +468,17 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render Bernstein control points for B-Splines
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-  //   framebuffer_->begin_pick_render();
-  //   ERAY_GL_CALL( glActiveTexture(GL_TEXTURE0) );
-  //   ERAY_GL_CALL( glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get()) );
-  //   shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  //   shaders_.helper_points->set_uniform("u_scale", 0.02F);
-  //   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
-  //   shaders_.helper_points->set_uniform("u_textureSampler", 0);
-  //   shaders_.helper_points->bind();
-  //   for (auto& point_list : point_lists_rs_.point_lists) {
-  //     if (!point_list.second.specialized_rs) {
-  //       continue;
-  //     }
 
-  //     std::visit(util::match{
-  //                    [&](const BSplineCurveRS& s) {
-  //                      shaders_.helper_points->set_uniform("u_parent_id", static_cast<int>(point_list.first.obj_id));
-  //                      s.bernstein_points_vao.bind();
-  //                      ERAY_GL_CALL( glDrawElements(GL_POINTS, s.bernstein_points_vao.ebo().count(), GL_UNSIGNED_INT,
-  //                      nullptr) );
-  //                    },
-  //                    [](const auto&) {},
-  //                },
-  //                *point_list.second.specialized_rs);
-  //   }
-  //   framebuffer_->end_pick_render();
+  framebuffer_->begin_pick_render();
+  ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get()));
+  shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.helper_points->set_uniform("u_scale", 0.02F);
+  shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
+  shaders_.helper_points->set_uniform("u_textureSampler", 0);
+  shaders_.helper_points->bind();
+  point_list_renderer_.render_helper_points();
+  framebuffer_->end_pick_render();
 
   // Render points
   framebuffer_->begin_pick_render();
