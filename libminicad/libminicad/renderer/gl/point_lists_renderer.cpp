@@ -70,21 +70,20 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
 void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowPolyline& cmd) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
-    util::Logger::warn(
-        "OpenGL Renderer received update UpdateObjectVisibility command but there is no rendering state created");
+    util::Logger::warn("OpenGL Renderer received update ShowPolyline command but there is no rendering state created");
     return;
   }
 
-  auto& obj_rs = renderer.rs_.at(handle);
-  if (obj_rs.show_polyline == cmd.show) {
-    return;
-  }
+  auto& obj_rs         = renderer.rs_.at(handle);
+  obj_rs.show_polyline = cmd.show;
 
-  if (auto o = scene.get_obj(handle)) {
-    auto& obj = *o.value();
-    renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+  if (!cmd.show) {
+    renderer.m_.polylines.delete_chunk(handle);
   } else {
-    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+    if (auto o = scene.get_obj(handle)) {
+      auto& obj = *o.value();
+      renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+    }
   }
 }
 

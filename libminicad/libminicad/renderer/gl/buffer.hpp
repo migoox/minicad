@@ -55,11 +55,10 @@ class ChunksBuffer {
    *
    */
   void sync(const eray::driver::gl::BufferHandle& buffer) {
+    if (!expired_chunks_.empty()) {
+      delete_expired_chunks();
+    }
     if (is_dirty_) {
-      if (!expired_chunks_.empty()) {
-        delete_expired_chunks();
-      }
-
       ERAY_GL_CALL(glNamedBufferData(buffer.get(),
                                      static_cast<GLsizeiptr>(data_.size() * sizeof(GPUTargetPrimitiveType)),
                                      reinterpret_cast<const void*>(data_.data()), GL_STATIC_DRAW));
@@ -177,7 +176,7 @@ class ChunksBuffer {
     for (auto it : point_its) {
       chunk_range_.erase(it);
     }
-    is_dirty_ = true;
+    expired_chunks_.clear();
   }
 
  private:

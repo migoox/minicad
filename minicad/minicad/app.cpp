@@ -396,7 +396,8 @@ void MiniCadApp::gui_point_list_window() {
         auto state = m_.scene.renderer().object_rs(obj.value()->handle());
         if (state) {
           if (ImGui::Checkbox("Polyline", &state->show_polyline)) {
-            m_.scene.renderer().set_object_rs(obj.value()->handle(), *state);
+            m_.scene.renderer().push_object_rs_cmd(PointListObjectRSCommand(
+                obj.value()->handle(), PointListObjectRSCommand::ShowPolyline(state->show_polyline)));
           }
         }
       }
