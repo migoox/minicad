@@ -6,225 +6,22 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
+#include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
-#include <variant>
 
 namespace mini::gl {
 
 namespace driver = eray::driver;
 namespace gl     = eray::driver::gl;
-namespace util   = eray::util;
 namespace res    = eray::res;
 namespace math   = eray::math;
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::AddObject&) {
-  auto& rs = renderer.scene_objs_rs_;
-
-  if (auto obj = scene.get_obj(cmd_ctx.handle)) {
-    rs.scene_objects_rs.insert({cmd_ctx.handle, SceneObjectRS::create(*obj.value())});
-
-    std::visit(eray::util::match{
-                   [&](const Point&) {
-                     auto i   = cmd_ctx.handle.obj_id;
-                     auto ind = static_cast<GLuint>(rs.transferred_points_buff.size());
-                     rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-                     rs.transferred_point_ind.insert({cmd_ctx.handle, ind});
-                     rs.transferred_points_buff.push_back(cmd_ctx.handle);
-                   },  //
-                   [&](const Torus&) {
-                     auto ind = rs.transferred_torus_buff.size();
-                     rs.transferred_torus_ind.insert({cmd_ctx.handle, ind});
-                     rs.transferred_torus_buff.push_back(cmd_ctx.handle);
-                   }  //
-               },
-               obj.value()->object);
-  }
-}
-
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectMembers&) {
-  auto& rs           = renderer.scene_objs_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (auto obj = scene.get_obj(handle)) {
-    std::visit(util::match{[&](const Point&) {
-                             auto p = obj.value()->transform.pos();
-                             rs.points_vao.vbo().set_attribute_value(handle.obj_id, "pos", p.raw_ptr());
-                           },
-                           [&](const Torus& t) {
-                             auto ind  = static_cast<GLuint>(rs.transferred_torus_ind.at(handle));
-                             auto mat  = obj.value()->transform.local_to_world_matrix();
-                             auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-                             auto tess = t.tess_level;
-                             auto id   = static_cast<int>(handle.obj_id);
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-                           }},
-               obj.value()->object);
-  }
-}
-
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectVisibility& cmd) {
-  auto& rs           = renderer.scene_objs_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (auto obj = scene.get_obj(handle)) {
-    if (!rs.scene_objects_rs.contains(handle)) {
-      rs.scene_objects_rs.insert({handle, SceneObjectRS::create(*obj.value())});
-      util::Logger::warn(
-          "OpenGL Renderer: Attempt to change the visibility state of object without it's rendering state.");
-    }
-
-    rs.scene_objects_rs.at(handle).state.visibility = cmd.new_visibility_state;
-    auto vs                                         = static_cast<int>(rs.scene_objects_rs.at(handle).state.visibility);
-    std::visit(util::match{                     //
-                           [&](const Point&) {  //
-                             rs.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
-                           },
-                           [&](const Torus&) {
-                             auto ind = static_cast<GLuint>(rs.transferred_torus_ind.at(handle));
-                             rs.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
-                           }},
-               obj.value()->object);
-  }
-}
-
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::DeleteObject&) {
-  auto& rs           = renderer.scene_objs_rs_;
-  const auto& handle = cmd_ctx.handle;
-
-  if (!rs.scene_objects_rs.contains(handle)) {
-    util::Logger::warn("OpenGL Renderer: Detected attempt to delete non-existent rendering state.");
-    return;
-  }
-
-  std::visit(eray::util::match{
-                 [&](const PointRS&) {
-                   if (rs.transferred_points_buff.size() - 1 == rs.transferred_point_ind.at(handle)) {
-                     rs.transferred_points_buff.pop_back();
-                     rs.transferred_point_ind.erase(handle);
-                     return;
-                   }
-
-                   auto ind = static_cast<GLuint>(rs.transferred_point_ind.at(handle));
-                   rs.transferred_point_ind.erase(handle);
-                   rs.transferred_points_buff[ind] = rs.transferred_points_buff[rs.transferred_points_buff.size() - 1];
-                   rs.transferred_point_ind[rs.transferred_points_buff[ind]] = ind;
-                   rs.transferred_points_buff.pop_back();
-
-                   auto i = rs.transferred_points_buff[ind].obj_id;
-                   rs.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-                 },
-                 [&](const SurfaceParametrizationRS&) {
-                   if (rs.transferred_torus_buff.size() - 1 == rs.transferred_torus_ind.at(handle)) {
-                     rs.transferred_torus_buff.pop_back();
-                     rs.transferred_torus_ind.erase(handle);
-                     return;
-                   }
-
-                   auto ind = static_cast<GLuint>(rs.transferred_torus_ind[handle]);
-                   rs.transferred_torus_ind.erase(handle);
-                   rs.transferred_torus_buff[ind] = rs.transferred_torus_buff[rs.transferred_torus_buff.size() - 1];
-                   rs.transferred_torus_ind[rs.transferred_torus_buff[ind]] = ind;
-                   rs.transferred_torus_buff.pop_back();
-                   auto id = static_cast<int>(handle.obj_id);
-
-                   if (auto o2 = scene.get_obj(rs.transferred_torus_buff[ind])) {
-                     auto mat = o2.value()->transform.local_to_world_matrix();
-                     std::visit(
-                         eray::util::match{
-                             [&](const Point&) {},
-                             [&](const Torus& t) {
-                               auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-                               auto tess = t.tess_level;
-                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
-                               rs.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
-                             },
-                         },
-                         o2.value()->object);
-                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
-                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
-                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
-                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
-                     rs.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-                   }
-                 }},
-             rs.scene_objects_rs.at(handle).specialized_rs);
-}
-
 namespace {
-
-gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
-  float vertices[] = {
-      0.5F * width,  0.5F * height,   //
-      -0.5F * width, 0.5F * height,   //
-      0.5F * width,  -0.5F * height,  //
-      -0.5F * width, -0.5F * height,  //
-  };
-
-  unsigned int indices[] = {
-      0, 1, 2, 3  //
-  };
-
-  auto vbo_layout = gl::VertexBuffer::Layout();
-  vbo_layout.add_attribute<float>("patchPos", 0, 2);
-  auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
-  vbo.buffer_data<float>(vertices, gl::DataUsage::StaticDraw);
-
-  auto mat_vbo_layout = gl::VertexBuffer::Layout();
-  mat_vbo_layout.add_attribute<float>("radii", 1, 2);
-  mat_vbo_layout.add_attribute<int>("tessLevel", 2, 2);
-  mat_vbo_layout.add_attribute<float>("worldMat", 3, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat1", 4, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat2", 5, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat3", 6, 4);
-  mat_vbo_layout.add_attribute<int>("id", 7, 1);
-  mat_vbo_layout.add_attribute<int>("state", 8, 1);
-  auto mat_vbo = gl::VertexBuffer::create(std::move(mat_vbo_layout));
-
-  auto data = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
-  mat_vbo.buffer_data(std::span<float>{data}, gl::DataUsage::StaticDraw);
-
-  auto ebo = gl::ElementBuffer::create();
-  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
-
-  auto m = std::unordered_map<zstring_view, gl::VertexBuffer>();
-  m.emplace("base", std::move(vbo));
-  m.emplace("matrices", std::move(mat_vbo));
-  auto vao = gl::VertexArrays::create(std::move(m), std::move(ebo));
-
-  vao.set_binding_divisor("base", 0);
-  vao.set_binding_divisor("matrices", 1);
-
-  return vao;
-}
-
-gl::VertexArray create_points_vao() {
-  auto points  = std::array<float, 3 * Scene::kMaxObjects>();
-  auto indices = std::array<uint32_t, Scene::kMaxObjects>();
-
-  auto vbo_layout = gl::VertexBuffer::Layout();
-  vbo_layout.add_attribute<float>("pos", 0, 3);
-  vbo_layout.add_attribute<int>("state", 1, 1);
-  auto vbo = gl::VertexBuffer::create(std::move(vbo_layout));
-
-  vbo.buffer_data<float>(points, gl::DataUsage::StaticDraw);
-
-  auto ebo = gl::ElementBuffer::create();
-  ebo.buffer_data(indices, gl::DataUsage::StaticDraw);
-
-  auto vao = gl::VertexArray::create(std::move(vbo), std::move(ebo));
-  return vao;
-}
 
 gl::TextureHandle create_texture(const res::Image& image) {
   GLuint texture = 0;
@@ -328,46 +125,34 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   };
 
   auto global_rs = GlobalRS{
-      .billboards = {},    //
-      .show_grid  = true,  //
-  };
-
-  auto scene_objs_rs = SceneObjectsRS{
-      .points_vao       = create_points_vao(),               //
-      .torus_vao        = create_torus_vao(),                //
+      .billboards       = {},                                //
       .point_txt        = create_texture(point_img),         //
       .helper_point_txt = create_texture(helper_point_img),  //
-      .cmds             = {},                                //
+      .show_grid        = true,                              //
   };
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
-      std::move(shaders), std::move(global_rs), std::move(scene_objs_rs), PointListsRenderer::create(),
+      std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), PointListsRenderer::create(),
       std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
 
-OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRS&& objs_rs,
+OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                          PointListsRenderer&& point_list_objs_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
-      scene_objs_rs_(std::move(objs_rs)),
       point_list_renderer_(std::move(point_list_objs_rs)),
+      scene_objs_renderer_(std::move(objs_rs)),
       framebuffer_(std::move(framebuffer)) {}
 
-void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_rs_.cmds.push_back(cmd); }
+void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_renderer_.push_cmd(cmd); }
 
 std::optional<::mini::SceneObjectRS> OpenGLSceneRenderer::object_rs(const SceneObjectHandle& handle) {
-  if (!scene_objs_rs_.scene_objects_rs.contains(handle)) {
-    return std::nullopt;
-  }
-
-  return scene_objs_rs_.scene_objects_rs.at(handle).state;
+  return scene_objs_renderer_.object_rs(handle);
 }
 
 void OpenGLSceneRenderer::set_object_rs(const SceneObjectHandle& handle, const ::mini::SceneObjectRS& state) {
-  if (scene_objs_rs_.scene_objects_rs.contains(handle)) {
-    scene_objs_rs_.scene_objects_rs.at(handle).state = state;
-  }
+  scene_objs_renderer_.set_object_rs(handle, state);
 }
 
 std::optional<::mini::PointListObjectRS> OpenGLSceneRenderer::object_rs(const PointListObjectHandle& handle) {
@@ -394,11 +179,7 @@ void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
 }
 
 void OpenGLSceneRenderer::update(Scene& scene) {
-  for (const auto& cmd_ctx : scene_objs_rs_.cmds) {
-    std::visit(SceneObjectRSCommandHandler(*this, scene, cmd_ctx), cmd_ctx.cmd);
-  }
-  scene_objs_rs_.cmds.clear();
-
+  scene_objs_renderer_.update(scene);
   point_list_renderer_.update(scene);
 }
 
@@ -426,7 +207,9 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
   auto handles = std::vector<SceneObjectHandle>();
   for (auto id : ids) {
     if (auto h = scene.handle_by_scene_obj_id(static_cast<SceneObjectId>(id))) {
-      handles.push_back(*h);
+      if (scene.is_handle_valid(*h)) {
+        handles.push_back(*h);
+      }
     }
   }
 
@@ -445,26 +228,17 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   ERAY_GL_CALL(glClearColor(0.09, 0.05, 0.09, 1.F));
   ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-  // Render tori
+  // Render parameterized surfaces
+  framebuffer_->begin_pick_render();
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
   shaders_.param->set_uniform("u_vMat", camera.view_matrix());
   shaders_.param->set_uniform("u_pMat", camera.proj_matrix());
   shaders_.param->bind();
-  scene_objs_rs_.torus_vao.bind();
-
-  framebuffer_->begin_pick_render();
-  ERAY_GL_CALL(glDepthMask(GL_FALSE));
   shaders_.param->set_uniform("u_fill", true);
-  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(scene_objs_rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT,
-                          nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
-  ERAY_GL_CALL(glDepthMask(GL_TRUE));
+  scene_objs_renderer_.render_parameterized_surfaces_filled();
   framebuffer_->end_pick_render();
-
   shaders_.param->set_uniform("u_fill", false);
-  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
-  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(scene_objs_rs_.torus_vao.ebo().count()), GL_UNSIGNED_INT,
-                          nullptr, static_cast<GLsizei>(scene_objs_rs_.transferred_torus_buff.size()));
+  scene_objs_renderer_.render_parameterized_surfaces();
 
   // Render polylines
   shaders_.polyline->bind();
@@ -494,10 +268,9 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render Bernstein control points for B-Splines
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-
   framebuffer_->begin_pick_render();
   ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
-  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.helper_point_txt.get()));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.helper_point_txt.get()));
   shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   shaders_.helper_points->set_uniform("u_scale", 0.02F);
   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
@@ -506,17 +279,17 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   point_list_renderer_.render_helper_points();
   framebuffer_->end_pick_render();
 
-  // Render points
+  // Render control points
+  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   framebuffer_->begin_pick_render();
   ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
-  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, scene_objs_rs_.point_txt.get()));
+  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.point_txt.get()));
   shaders_.instanced_sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
   shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
   shaders_.instanced_sprite->bind();
-  scene_objs_rs_.points_vao.bind();
-  ERAY_GL_CALL(glDrawElements(GL_POINTS, scene_objs_rs_.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr));
+  scene_objs_renderer_.render_control_points();
   framebuffer_->end_pick_render();
 
   // Render billboards

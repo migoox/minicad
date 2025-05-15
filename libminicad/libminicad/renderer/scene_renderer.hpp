@@ -9,7 +9,6 @@
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
-#include <unordered_set>
 
 namespace mini {
 

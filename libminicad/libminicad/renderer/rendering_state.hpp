@@ -11,18 +11,31 @@ struct BillboardRS {
   bool show                  = true;
 };
 
+//-- SceneObject -------------------------------------------------------------------------------------------------------
+
+struct PointRS {};
+
+struct ParameterizedSurfaceRS {};
+
+using SceneObjectVariantRS = std::variant<PointRS, ParameterizedSurfaceRS>;
+
+struct SceneObjectRS {
+  explicit SceneObjectRS(SceneObjectVariantRS&& variant   = PointRS{},
+                         VisibilityState visibility_state = VisibilityState::Visible)
+      : visibility(visibility_state), variant(std::move(variant)) {}
+
+  VisibilityState visibility;
+  SceneObjectVariantRS variant;
+};
+
+//-- PointListObject ---------------------------------------------------------------------------------------------------
+
 struct PointListObjectRS {
-  explicit PointListObjectRS(VisibilityState visibility_state, bool _show_polyline = true)
+  explicit PointListObjectRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
       : visibility(visibility_state), show_polyline(_show_polyline) {}
 
   VisibilityState visibility;
   bool show_polyline{true};
-};
-
-struct SceneObjectRS {
-  explicit SceneObjectRS(VisibilityState visibility_state) : visibility(visibility_state) {}
-
-  VisibilityState visibility;
 };
 
 }  // namespace mini

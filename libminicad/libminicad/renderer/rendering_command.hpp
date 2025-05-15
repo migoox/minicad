@@ -5,7 +5,11 @@
 
 namespace mini {
 
-struct SceneObjectRSCommand {
+struct RSCommand {
+  bool is_handled{};
+};
+
+struct SceneObjectRSCommand : public RSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};
@@ -22,14 +26,14 @@ struct SceneObjectRSCommand {
   using CommandVariant =
       std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility>;
 
-  explicit SceneObjectRSCommand(SceneObjectHandle _handle, CommandVariant _cmd) : handle(_handle), cmd(_cmd) {}
+  explicit SceneObjectRSCommand(SceneObjectHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
   SceneObjectRSCommand() = delete;
 
   SceneObjectHandle handle;
-  CommandVariant cmd;
+  CommandVariant variant;
 };
 
-struct PointListObjectRSCommand {
+struct PointListObjectRSCommand : public RSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};

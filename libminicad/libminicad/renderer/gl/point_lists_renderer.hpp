@@ -2,13 +2,15 @@
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/renderer/gl/buffer.hpp>
+#include <libminicad/renderer/gl/subrenderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 
 namespace mini::gl {
 
-struct PointListsRenderer;
+class PointListsRenderer;
 
 struct PointListObjectRSCommandHandler {
   explicit PointListObjectRSCommandHandler(const PointListObjectRSCommand& _cmd_ctx, PointListsRenderer& _rs,
@@ -38,16 +40,13 @@ using PointsChunksBuffer =
       target[2] = vec.z;
     }>;
 
-struct PointListsRenderer {
+class PointListsRenderer : public SubRenderer<PointListObjectHandle, PointListObjectRS, PointListObjectRSCommand> {
+ public:
   PointListsRenderer() = delete;
 
   static PointListsRenderer create();
 
-  void push_cmd(const PointListObjectRSCommand& cmd);
   void update(Scene& scene);
-
-  std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle);
-  void set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state);
 
   std::optional<std::pair<PointListObjectHandle, size_t>> find_helper_point_by_idx(size_t idx) const;
 
@@ -67,9 +66,6 @@ struct PointListsRenderer {
 
     eray::driver::gl::VertexArray curves_vao;
     PointsChunksBuffer curves;
-
-    std::unordered_map<PointListObjectHandle, ::mini::PointListObjectRS> point_lists;
-    std::vector<PointListObjectRSCommand> cmds;
   } m_;
 
   explicit PointListsRenderer(Members&& m);

@@ -7,11 +7,8 @@
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <variant>
 
 namespace mini::gl {
-
-//----------------------------------------------------------------------------------------------------------------------
 
 struct BillboardRS {
   BillboardRS() = delete;
@@ -21,20 +18,5 @@ struct BillboardRS {
 
   eray::driver::gl::TextureHandle texture;
 };
-
-//----------------------------------------------------------------------------------------------------------------------
-
-struct PointRS {};
-
-struct SurfaceParametrizationRS {};
-
-struct SceneObjectRS {
-  static SceneObjectRS create(const SceneObject& scene_obj);
-  ::mini::SceneObjectRS state;
-
-  std::variant<PointRS, SurfaceParametrizationRS> specialized_rs;
-};
-
-//----------------------------------------------------------------------------------------------------------------------
 
 }  // namespace mini::gl

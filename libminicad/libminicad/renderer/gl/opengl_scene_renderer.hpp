@@ -9,6 +9,7 @@
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/point_lists_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
+#include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
@@ -16,23 +17,6 @@
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
-
-struct SceneObjectRSCommandHandler {
-  explicit SceneObjectRSCommandHandler(OpenGLSceneRenderer& _renderer, Scene& _scene,
-                                       const SceneObjectRSCommand& _cmd_ctx)
-      : renderer(_renderer), scene(_scene), cmd_ctx(_cmd_ctx) {}
-
-  void operator()(const SceneObjectRSCommand::Internal::AddObject&);
-  void operator()(const SceneObjectRSCommand::UpdateObjectMembers&);
-  void operator()(const SceneObjectRSCommand::UpdateObjectVisibility&);
-  void operator()(const SceneObjectRSCommand::Internal::DeleteObject&);
-
-  // NOLINTBEGIN
-  OpenGLSceneRenderer& renderer;
-  Scene& scene;
-  const SceneObjectRSCommand& cmd_ctx;
-  // NOLINTEND
-};
 
 class OpenGLSceneRenderer final : public ISceneRenderer {
  public:
@@ -85,32 +69,19 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   struct GlobalRS {
     std::unordered_map<zstring_view, BillboardRS> billboards;
 
-    bool show_grid;
-  } global_rs_;
-
-  struct SceneObjectsRS {
-    eray::driver::gl::VertexArray points_vao;
-    eray::driver::gl::VertexArrays torus_vao;
     eray::driver::gl::TextureHandle point_txt;
     eray::driver::gl::TextureHandle helper_point_txt;
 
-    std::vector<SceneObjectRSCommand> cmds;
-
-    std::vector<SceneObjectHandle> transferred_points_buff;
-    std::unordered_map<SceneObjectHandle, std::size_t> transferred_point_ind;
-
-    std::vector<SceneObjectHandle> transferred_torus_buff;
-    std::unordered_map<SceneObjectHandle, std::size_t> transferred_torus_ind;
-
-    std::unordered_map<SceneObjectHandle, SceneObjectRS> scene_objects_rs;
-  } scene_objs_rs_;
+    bool show_grid;
+  } global_rs_;
 
   PointListsRenderer point_list_renderer_;
+  SceneObjectsRenderer scene_objs_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
 
  private:
-  explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRS&& objs_rs,
+  explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                PointListsRenderer&& point_list_objs_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer);
 };

@@ -81,43 +81,40 @@ PointListsRenderer PointListsRenderer::create() {
       .polylines         = PointsChunksBuffer::create(),
       .curves_vao        = std::move(curves_vao),
       .curves            = PointsChunksBuffer::create(),
-      .point_lists       = {},
-      .cmds              = {},
   });
 }
 
 PointListsRenderer::PointListsRenderer(Members&& members) : m_(std::move(members)) {}
 
-void PointListsRenderer::push_cmd(const PointListObjectRSCommand& cmd) { m_.cmds.push_back(cmd); }
-
 void PointListsRenderer::update(Scene& scene) {
   // TODO(migoox): add commands preprocessing to remove repetitions
 
   // Flush the commands and invoke handler
-  for (auto& cmd : m_.cmds) {
+  for (const auto& cmd : cmds_) {
     auto add_obj    = std::holds_alternative<PointListObjectRSCommand::Internal::AddObject>(cmd.variant);
     auto delete_obj = std::holds_alternative<PointListObjectRSCommand::Internal::DeleteObject>(cmd.variant);
 
     if (add_obj) {
-      m_.point_lists.emplace(cmd.handle, mini::PointListObjectRS(VisibilityState::Visible));
+      rs_.emplace(cmd.handle, mini::PointListObjectRS(VisibilityState::Visible));
     }
     if (delete_obj) {
       m_.polylines.delete_chunk(cmd.handle);
       m_.curves.delete_chunk(cmd.handle);
       m_.helper_points.delete_chunk(cmd.handle);
+      rs_.erase(cmd.handle);
     }
-    if (!m_.point_lists.contains(cmd.handle)) {
+    if (!rs_.contains(cmd.handle)) {
       continue;
     }
 
     if (auto obj = scene.get_obj(cmd.handle)) {
-      auto handler = PointListObjectRSCommandHandler(cmd, *this, *obj.value(), m_.point_lists.at(cmd.handle));
+      auto handler = PointListObjectRSCommandHandler(cmd, *this, *obj.value(), rs_.at(cmd.handle));
       std::visit(handler, cmd.variant);
     } else {
-      m_.point_lists.erase(cmd.handle);
+      rs_.erase(cmd.handle);
     }
   }
-  m_.cmds.clear();
+  cmds_.clear();
 
   // Sync the buffers
   m_.polylines.sync(m_.polylines_vao.vbo().handle());
@@ -143,20 +140,6 @@ void PointListsRenderer::render_curves() const {
 void PointListsRenderer::render_helper_points() const {
   m_.helper_points_vao.bind();
   ERAY_GL_CALL(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_.helper_points.chunks_count())));
-}
-
-std::optional<PointListObjectRS> PointListsRenderer::object_rs(const PointListObjectHandle& handle) {
-  if (!m_.point_lists.contains(handle)) {
-    return std::nullopt;
-  }
-
-  return m_.point_lists.at(handle);
-}
-
-void PointListsRenderer::set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state) {
-  if (m_.point_lists.contains(handle)) {
-    m_.point_lists.at(handle) = state;
-  }
 }
 
 }  // namespace mini::gl
