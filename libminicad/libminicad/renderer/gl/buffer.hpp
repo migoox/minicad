@@ -50,16 +50,16 @@ class ChunksBuffer {
   static constexpr std::size_t kGPUTargetPrimitiveCount = GPUTargetPrimitiveCount;
 
   /**
-   * @brief Synchronizes CPU and GPU buffers if the CPU buffer is dirty. Call it after
+   * @brief Synchronizes CPU and GPU buffers when the CPU buffer is dirty. Call it after
    * all of the required buffer modifications are applied. DSA buffer is expected.
    *
    */
-  void sync(const eray::driver::gl::BufferHandle& buffer) {
+  void sync(const eray::driver::gl::BufferHandle& dsa_buffer_handle) {
     if (!expired_chunks_.empty()) {
       delete_expired_chunks();
     }
     if (is_dirty_) {
-      ERAY_GL_CALL(glNamedBufferData(buffer.get(),
+      ERAY_GL_CALL(glNamedBufferData(dsa_buffer_handle.get(),
                                      static_cast<GLsizeiptr>(data_.size() * sizeof(GPUTargetPrimitiveType)),
                                      reinterpret_cast<const void*>(data_.data()), GL_STATIC_DRAW));
     }
