@@ -10,6 +10,7 @@ OrbitingCameraOperator::OrbitingCameraOperator()
     : last_mouse_pos_(eray::math::Vec2f::filled(0.0F)),
       is_rot_active_(false),
       is_pan_active_(false),
+      is_looking_around_(false),
       looking_around_sensitivity_(0.1F),
       orbit_sensitivity_(0.32F),
       pan_sensitivity_(0.016F),
