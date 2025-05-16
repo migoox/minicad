@@ -4,7 +4,7 @@
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/buffer.hpp>
-#include <libminicad/renderer/gl/point_lists_renderer.hpp>
+#include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
@@ -17,12 +17,12 @@ namespace mini::gl {
 
 namespace util = eray::util;
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::AddObject&) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::AddObject&) {
   const auto& handle = cmd_ctx.handle;
 
-  renderer.rs_.emplace(handle, mini::PointListObjectRS(VisibilityState::Visible));
+  renderer.rs_.emplace(handle, mini::CurveRS(VisibilityState::Visible));
 
-  if (auto o = scene.get_obj(handle)) {
+  if (auto o = scene.arena<Curve>().get_obj(handle)) {
     auto& obj = *o.value();
 
     renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
@@ -30,7 +30,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   }
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::DeleteObject&) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::DeleteObject&) {
   const auto& handle = cmd_ctx.handle;
   renderer.m_.polylines.delete_chunk(handle);
   renderer.m_.curves.delete_chunk(handle);
@@ -38,19 +38,19 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   renderer.rs_.erase(handle);
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::UpdateControlPoints&) {
   const auto& handle = cmd_ctx.handle;
-  if (auto o = scene.get_obj(handle)) {
+  if (auto o = scene.arena<Curve>().get_obj(handle)) {
     auto& obj = *o.value();
 
     renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
     renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
   } else {
-    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+    renderer.push_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::DeleteObject{}));
   }
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateObjectVisibility& cmd) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::UpdateObjectVisibility& cmd) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
     util::Logger::warn(
@@ -67,7 +67,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   obj_rs.visibility = cmd.new_visibility_state;
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowPolyline& cmd) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::ShowPolyline& cmd) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
     util::Logger::warn("OpenGL Renderer received update ShowPolyline command but there is no rendering state created");
@@ -80,20 +80,20 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
   if (!cmd.show) {
     renderer.m_.polylines.delete_chunk(handle);
   } else {
-    if (auto o = scene.get_obj(handle)) {
+    if (auto o = scene.arena<Curve>().get_obj(handle)) {
       auto& obj = *o.value();
       renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
     }
   }
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::ShowBernsteinControlPoints&) {
   // TODO(migoox): update bernstein points visibility
 }
 
-void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand::UpdateHelperPoints&) {
+void CurveRSCommandHandler::operator()(const CurveRSCommand::UpdateHelperPoints&) {
   const auto& handle = cmd_ctx.handle;
-  if (auto o = scene.get_obj(handle)) {
+  if (auto o = scene.arena<Curve>().get_obj(handle)) {
     auto& obj = *o.value();
     std::visit(eray::util::match{
                    [&](const BSplineCurve& curve) {
@@ -106,7 +106,7 @@ void PointListObjectRSCommandHandler::operator()(const PointListObjectRSCommand:
     renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points(), obj.bezier3_points_count());
     renderer.m_.polylines.update_chunk(obj.handle(), obj.polyline_points(), obj.polyline_points_count());
   } else {
-    renderer.push_cmd(PointListObjectRSCommand(handle, PointListObjectRSCommand::Internal::DeleteObject{}));
+    renderer.push_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::DeleteObject{}));
   }
 }
 
@@ -140,7 +140,7 @@ void PointListsRenderer::update_impl(Scene& /*scene*/) {
   m_.helper_points.sync(m_.helper_points_vao.vbo().handle());
 }
 
-std::optional<std::pair<PointListObjectHandle, size_t>> PointListsRenderer::find_helper_point_by_idx(size_t idx) const {
+std::optional<std::pair<CurveHandle, size_t>> PointListsRenderer::find_helper_point_by_idx(size_t idx) const {
   return m_.helper_points.find_by_idx(idx);
 }
 

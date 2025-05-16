@@ -10,30 +10,30 @@
 
 namespace mini {
 
-class PointListObjectsSelection {
+class CurvesSelection {
  public:
-  void remove(const PointListObjectHandle& handle) {
+  void remove(const CurveHandle& handle) {
     auto f = objs_.find(handle);
     if (f != objs_.end()) {
       objs_.erase(f);
     }
   }
-  void add(const PointListObjectHandle& handle) { objs_.insert(handle); }
+  void add(const CurveHandle& handle) { objs_.insert(handle); }
   void clear() { objs_.clear(); }
 
-  bool contains(const PointListObjectHandle& handle) const { return objs_.contains(handle); }
+  bool contains(const CurveHandle& handle) const { return objs_.contains(handle); }
   bool is_multi_selection() const { return objs_.size() > 1; }
   bool is_single_selection() const { return objs_.size() == 1; }
   bool is_empty() const { return objs_.empty(); }
 
-  std::optional<PointListObjectHandle> single() {
+  std::optional<CurveHandle> single() {
     if (is_single_selection()) {
       return *objs_.begin();
     }
     return std::nullopt;
   }
 
-  const PointListObjectHandle& first() { return *objs_.begin(); }
+  const CurveHandle& first() { return *objs_.begin(); }
 
   auto begin() { return objs_.begin(); }
   auto begin() const { return objs_.begin(); }
@@ -41,7 +41,7 @@ class PointListObjectsSelection {
   auto end() const { return objs_.end(); }
 
  private:
-  std::unordered_set<PointListObjectHandle> objs_;
+  std::unordered_set<CurveHandle> objs_;
 };
 
 class SceneObjectsSelection {
@@ -121,7 +121,7 @@ class SceneObjectsSelection {
 };
 
 struct HelperPoint {
-  PointListObjectHandle parent;
+  CurveHandle parent;
   size_t helper_point;
 };
 

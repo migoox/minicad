@@ -13,7 +13,7 @@
 namespace mini {
 
 struct SampledHelperPoint {
-  PointListObjectHandle pl_handle;
+  CurveHandle c_handle;
   size_t helper_point_idx;
 };
 
@@ -36,9 +36,9 @@ class ISceneRenderer {
   virtual std::optional<SceneObjectRS> object_rs(const SceneObjectHandle& handle)         = 0;
   virtual void set_object_rs(const SceneObjectHandle& handle, const SceneObjectRS& state) = 0;
 
-  virtual void push_object_rs_cmd(const PointListObjectRSCommand& cmd)                            = 0;
-  virtual std::optional<PointListObjectRS> object_rs(const PointListObjectHandle& handle)         = 0;
-  virtual void set_object_rs(const PointListObjectHandle& handle, const PointListObjectRS& state) = 0;
+  virtual void push_object_rs_cmd(const CurveRSCommand& cmd)                  = 0;
+  virtual std::optional<CurveRS> object_rs(const CurveHandle& handle)         = 0;
+  virtual void set_object_rs(const CurveHandle& handle, const CurveRS& state) = 0;
 
   virtual void add_billboard(zstring_view name, const eray::res::Image& img) = 0;
   virtual BillboardRS& billboard(zstring_view name)                          = 0;

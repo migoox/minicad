@@ -6,8 +6,8 @@
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
-#include <libminicad/renderer/gl/point_lists_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
@@ -35,9 +35,9 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   std::optional<::mini::SceneObjectRS> object_rs(const SceneObjectHandle& handle) final;
   void set_object_rs(const SceneObjectHandle& handle, const ::mini::SceneObjectRS& state) final;
 
-  void push_object_rs_cmd(const PointListObjectRSCommand& cmd) final;
-  std::optional<::mini::PointListObjectRS> object_rs(const PointListObjectHandle& handle) final;
-  void set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state) final;
+  void push_object_rs_cmd(const CurveRSCommand& cmd) final;
+  std::optional<::mini::CurveRS> object_rs(const CurveHandle& handle) final;
+  void set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) final;
 
   void add_billboard(zstring_view name, const eray::res::Image& img) final;
   ::mini::BillboardRS& billboard(zstring_view name) final;
@@ -53,7 +53,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
 
  private:
   friend SceneObjectRSCommandHandler;
-  friend PointListObjectRSCommandHandler;
+  friend CurveRSCommandHandler;
 
   struct Shaders {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param;
@@ -75,14 +75,14 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     bool show_grid;
   } global_rs_;
 
-  PointListsRenderer point_list_renderer_;
+  PointListsRenderer curve_renderer_;
   SceneObjectsRenderer scene_objs_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
 
  private:
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                               PointListsRenderer&& point_list_objs_rs,
+                               PointListsRenderer&& curve_objs_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer);
 };
 

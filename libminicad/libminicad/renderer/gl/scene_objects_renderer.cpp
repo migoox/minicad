@@ -14,7 +14,7 @@ namespace util = eray::util;
 namespace math = eray::math;
 
 void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::AddObject&) {
-  if (auto o = scene.get_obj(cmd_ctx.handle)) {
+  if (auto o = scene.arena<SceneObject>().get_obj(cmd_ctx.handle)) {
     std::visit(eray::util::match{
                    [&](const Point&) {
                      renderer.rs_.emplace(cmd_ctx.handle, SceneObjectRS(PointRS{}));
@@ -45,7 +45,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
     return;
   }
 
-  if (auto o = scene.get_obj(cmd_ctx.handle)) {
+  if (auto o = scene.arena<SceneObject>().get_obj(cmd_ctx.handle)) {
     std::visit(
         util::match{[&](const Point&) {
                       auto p = o.value()->transform.pos();
@@ -134,7 +134,7 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Interna
             renderer.m_.transferred_torus_buff.pop_back();
             auto id = static_cast<int>(handle.obj_id);
 
-            if (auto o2 = scene.get_obj(renderer.m_.transferred_torus_buff[ind])) {
+            if (auto o2 = scene.arena<SceneObject>().get_obj(renderer.m_.transferred_torus_buff[ind])) {
               auto mat = o2.value()->transform.local_to_world_matrix();
               std::visit(
                   eray::util::match{

@@ -137,11 +137,11 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
 }
 
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                                         PointListsRenderer&& point_list_objs_rs,
+                                         PointListsRenderer&& curve_objs_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
-      point_list_renderer_(std::move(point_list_objs_rs)),
+      curve_renderer_(std::move(curve_objs_rs)),
       scene_objs_renderer_(std::move(objs_rs)),
       framebuffer_(std::move(framebuffer)) {}
 
@@ -155,17 +155,15 @@ void OpenGLSceneRenderer::set_object_rs(const SceneObjectHandle& handle, const :
   scene_objs_renderer_.set_object_rs(handle, state);
 }
 
-std::optional<::mini::PointListObjectRS> OpenGLSceneRenderer::object_rs(const PointListObjectHandle& handle) {
-  return point_list_renderer_.object_rs(handle);
+std::optional<::mini::CurveRS> OpenGLSceneRenderer::object_rs(const CurveHandle& handle) {
+  return curve_renderer_.object_rs(handle);
 }
 
-void OpenGLSceneRenderer::set_object_rs(const PointListObjectHandle& handle, const ::mini::PointListObjectRS& state) {
-  point_list_renderer_.set_object_rs(handle, state);
+void OpenGLSceneRenderer::set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) {
+  curve_renderer_.set_object_rs(handle, state);
 }
 
-void OpenGLSceneRenderer::push_object_rs_cmd(const PointListObjectRSCommand& cmd) {
-  point_list_renderer_.push_cmd(cmd);
-}
+void OpenGLSceneRenderer::push_object_rs_cmd(const CurveRSCommand& cmd) { curve_renderer_.push_cmd(cmd); }
 
 void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
   auto txt = create_texture(img);
@@ -180,7 +178,7 @@ void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
 
 void OpenGLSceneRenderer::update(Scene& scene) {
   scene_objs_renderer_.update(scene);
-  point_list_renderer_.update(scene);
+  curve_renderer_.update(scene);
 }
 
 SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width,
@@ -197,8 +195,8 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
     if (id & (1 << 31)) {
       auto helper_point_idx = id & ~(1 << 31);
 
-      if (auto result = this->point_list_renderer_.find_helper_point_by_idx(static_cast<size_t>(helper_point_idx))) {
-        return SampledHelperPoint{.pl_handle = result->first, .helper_point_idx = result->second};
+      if (auto result = this->curve_renderer_.find_helper_point_by_idx(static_cast<size_t>(helper_point_idx))) {
+        return SampledHelperPoint{.c_handle = result->first, .helper_point_idx = result->second};
       }
       return std::nullopt;
     }
@@ -206,8 +204,8 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
 
   auto handles = std::vector<SceneObjectHandle>();
   for (auto id : ids) {
-    if (auto h = scene.handle_by_scene_obj_id(static_cast<SceneObjectId>(id))) {
-      if (scene.is_handle_valid(*h)) {
+    if (auto h = scene.arena<SceneObject>().handle_by_obj_id(static_cast<std::uint32_t>(id))) {
+      if (scene.arena<SceneObject>().exists(*h)) {
         handles.push_back(*h);
       }
     }
@@ -243,7 +241,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   // Render polylines
   shaders_.polyline->bind();
   shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  point_list_renderer_.render_polylines();
+  curve_renderer_.render_polylines();
 
   // Render Curves
   shaders_.bezier->bind();
@@ -251,7 +249,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
   shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
   shaders_.bezier->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
-  point_list_renderer_.render_curves();
+  curve_renderer_.render_curves();
 
   // Render grid
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
@@ -276,7 +274,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.helper_points->set_uniform("u_textureSampler", 0);
   shaders_.helper_points->bind();
-  point_list_renderer_.render_helper_points();
+  curve_renderer_.render_helper_points();
   framebuffer_->end_pick_render();
 
   // Render control points

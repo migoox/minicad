@@ -17,11 +17,11 @@ namespace mini {
 namespace util = eray::util;
 namespace math = eray::math;
 
-SceneObject::~SceneObject() {
-  scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
+void SceneObject::on_delete() {
+  scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
 
-  for (const auto& pl_h : point_lists_) {
-    if (auto pl = scene_.get_obj(pl_h)) {
+  for (const auto& c_h : curves_) {
+    if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
       auto it = pl.value()->points_map_.find(handle_);
       if (it != pl.value()->points_map_.end()) {
         auto ind = it->second;
@@ -42,14 +42,13 @@ SceneObject::~SceneObject() {
 }
 
 void SceneObject::update() {
-  scene_.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
+  scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
 
   // Only points might be a part of the point lists
   if (has_type<Point>()) {
-    for (const auto& pl_h : this->point_lists_) {
-      if (auto pl = scene_.get_obj(pl_h)) {
-        scene_.renderer().push_object_rs_cmd(
-            PointListObjectRSCommand(pl_h, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
+    for (const auto& c_h : this->curves_) {
+      if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
+        scene().renderer().push_object_rs_cmd(CurveRSCommand(c_h, CurveRSCommand::Internal::UpdateControlPoints{}));
         std::visit(eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, get_variant<Point>()); }},
                    pl.value()->object);
       }
@@ -57,96 +56,91 @@ void SceneObject::update() {
   }
 }
 
-PointListObject::~PointListObject() {
-  scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::DeleteObject{}));
+void Curve::on_delete() {
+  scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::DeleteObject{}));
   for (auto p : points_) {
-    p.get().point_lists_.erase(handle_);
+    p.get().curves_.erase(handle_);
   }
 }
 
-void PointListObject::update() {
-  scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
+void Curve::update() {
+  scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 }
 
-std::expected<void, PointListObject::SceneObjectError> PointListObject::add(const SceneObjectHandle& handle) {
+std::expected<void, Curve::SceneObjectError> Curve::add(const SceneObjectHandle& handle) {
   if (points_map_.contains(handle)) {
     return {};
   }
 
-  if (!scene_.is_handle_valid(handle)) {
-    return std::unexpected(SceneObjectError::HandleIsNotValid);
-  }
+  if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
+    auto& obj = *o.value();
 
-  auto& obj = *scene_.scene_objects_.at(handle.obj_id)->first;
-  if (std::holds_alternative<Point>(obj.object)) {
-    auto idx = points_.size();
-    points_map_.insert({handle, idx});
-    points_.emplace_back(obj);
+    if (std::holds_alternative<Point>(obj.object)) {
+      auto idx = points_.size();
+      points_map_.insert({handle, idx});
+      points_.emplace_back(obj);
 
-    obj.point_lists_.insert(handle_);
+      obj.curves_.insert(handle_);
 
-    if (std::holds_alternative<BSplineCurve>(this->object)) {
-      std::get<BSplineCurve>(this->object).reset_bernstein_points(*this);
-      scene_.renderer().push_object_rs_cmd(
-          PointListObjectRSCommand(handle_, PointListObjectRSCommand::UpdateHelperPoints{}));
+      if (std::holds_alternative<BSplineCurve>(this->object)) {
+        std::get<BSplineCurve>(this->object).reset_bernstein_points(*this);
+        scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::UpdateHelperPoints{}));
+      }
+      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+                 this->object);
+      scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
+
+      return {};
     }
-    std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
-               this->object);
-    scene_.renderer().push_object_rs_cmd(
-        PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
+    auto obj_type_name = std::visit(util::match{[&](auto& p) { return p.type_name(); }}, obj.object);
+    util::Logger::warn(
+        "Detected an attempt to add a scene object that holds type \"{}\" to point list. Only objects of type \"{}\" "
+        "are accepted.",
+        obj_type_name, Point::type_name());
 
-    return {};
+    return std::unexpected(SceneObjectError::NotAPoint);
   }
 
-  auto obj_type_name = std::visit(util::match{[&](auto& p) { return p.type_name(); }}, obj.object);
-  util::Logger::warn(
-      "Detected an attempt to add a scene object that holds type \"{}\" to point list. Only objects of type \"{}\" "
-      "are accepted.",
-      obj_type_name, Point::type_name());
-
-  return std::unexpected(SceneObjectError::NotAPoint);
+  return std::unexpected(SceneObjectError::InvalidHandle);
 }
 
-std::expected<void, PointListObject::SceneObjectError> PointListObject::remove(const SceneObjectHandle& handle) {
-  if (!scene_.is_handle_valid(handle)) {
-    return std::unexpected(SceneObjectError::HandleIsNotValid);
-  }
-
+std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHandle& handle) {
   if (!points_map_.contains(handle)) {
     return std::unexpected(SceneObjectError::NotFound);
   }
 
-  auto& obj = *scene_.scene_objects_.at(handle.obj_id)->first;
-  if (obj.has_type<Point>()) {
-    auto it = points_map_.find(handle);
-    if (it != points_map_.end()) {
-      auto idx = it->second;
+  if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
+    auto& obj = *o.value();
+    if (obj.has_type<Point>()) {
+      auto it = points_map_.find(handle);
+      if (it != points_map_.end()) {
+        auto idx = it->second;
 
-      points_map_.erase(it);
-      points_.erase(points_.begin() + static_cast<int>(idx));
+        points_map_.erase(it);
+        points_.erase(points_.begin() + static_cast<int>(idx));
+      }
+
+      auto obj_it = obj.curves_.find(handle_);
+      if (obj_it != obj.curves_.end()) {
+        obj.curves_.erase(obj_it);
+      }
+      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+                 this->object);
+      scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
+
+      return {};
     }
 
-    auto obj_it = obj.point_lists_.find(handle_);
-    if (obj_it != obj.point_lists_.end()) {
-      obj.point_lists_.erase(obj_it);
-    }
-    std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
-               this->object);
-    scene_.renderer().push_object_rs_cmd(
-        PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
-
-    return {};
+    return std::unexpected(SceneObjectError::NotAPoint);
   }
 
-  return std::unexpected(SceneObjectError::NotAPoint);
+  return std::unexpected(SceneObjectError::InvalidHandle);
 }
 
-std::expected<void, PointListObject::SceneObjectError> PointListObject::move_before(const SceneObjectHandle& dest,
-                                                                                    const SceneObjectHandle& obj) {
-  if (!scene_.is_handle_valid(dest) || !scene_.is_handle_valid(obj)) {
-    return std::unexpected(SceneObjectError::HandleIsNotValid);
+std::expected<void, Curve::SceneObjectError> Curve::move_before(const SceneObjectHandle& dest,
+                                                                const SceneObjectHandle& obj) {
+  if (!scene().arena<SceneObject>().exists(dest) || !scene().arena<SceneObject>().exists(obj)) {
+    return std::unexpected(SceneObjectError::InvalidHandle);
   }
 
   if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
@@ -167,17 +161,16 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_bef
   points_.insert(points_.begin() + static_cast<int>(dest_idx), std::ref(obj_ref));
   update_indices_from(std::min(dest_idx, obj_idx));
 
-  std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
-  scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
+  std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
+  scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
   return {};
 }
 
-std::expected<void, PointListObject::SceneObjectError> PointListObject::move_after(const SceneObjectHandle& dest,
-                                                                                   const SceneObjectHandle& obj) {
-  if (!scene_.is_handle_valid(dest) || !scene_.is_handle_valid(obj)) {
-    return std::unexpected(SceneObjectError::HandleIsNotValid);
+std::expected<void, Curve::SceneObjectError> Curve::move_after(const SceneObjectHandle& dest,
+                                                               const SceneObjectHandle& obj) {
+  if (!scene().arena<SceneObject>().exists(dest) || !scene().arena<SceneObject>().exists(obj)) {
+    return std::unexpected(SceneObjectError::InvalidHandle);
   }
 
   if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
@@ -201,28 +194,27 @@ std::expected<void, PointListObject::SceneObjectError> PointListObject::move_aft
   points_.insert(points_.begin() + static_cast<int>(insert_pos), std::ref(obj_ref));
   update_indices_from(std::min(insert_pos, obj_idx));
 
-  std::visit(eray::util::match{[&](auto& o) { o.on_point_list_reorder(*this); }}, this->object);
-  scene_.renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(handle_, PointListObjectRSCommand::Internal::UpdateControlPoints{}));
+  std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
+  scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
   return {};
 }
 
-void PointListObject::update_indices_from(size_t start_idx) {
+void Curve::update_indices_from(size_t start_idx) {
   for (size_t i = start_idx; i < points_.size(); ++i) {
     points_map_[points_[i].get().handle()] = i;
   }
 }
 
-std::generator<eray::math::Vec3f> PointListObject::bezier3_points() const {
+std::generator<eray::math::Vec3f> Curve::bezier3_points() const {
   return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points(*this); }}, this->object);
 }
 
-size_t PointListObject::bezier3_points_count() const {
+size_t Curve::bezier3_points_count() const {
   return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points_count(*this); }}, this->object);
 }
 
-std::generator<eray::math::Vec3f> PointListObject::polyline_points() const {
+std::generator<eray::math::Vec3f> Curve::polyline_points() const {
   auto lines = points() | std::views::adjacent<2>;
   for (const auto& [p0, p1] : lines) {
     co_yield p0;
@@ -230,9 +222,9 @@ std::generator<eray::math::Vec3f> PointListObject::polyline_points() const {
   }
 }
 
-size_t PointListObject::polyline_points_count() const { return 2 * (points_.size() - 1); }
+size_t Curve::polyline_points_count() const { return 2 * (points_.size() - 1); }
 
-std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<const PointListObject> base) const {
+std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<const Curve> base) const {
   auto&& points = base.get().points();
   auto lines    = points | std::views::adjacent<2>;
   for (const auto& [p0, p1] : lines) {
@@ -243,11 +235,9 @@ std::generator<eray::math::Vec3f> Polyline::bezier3_points(ref<const PointListOb
   }
 }
 
-size_t Polyline::bezier3_points_count(ref<const PointListObject> base) const {
-  return (base.get().points().size() - 1) * 4;
-}
+size_t Polyline::bezier3_points_count(ref<const Curve> base) const { return (base.get().points().size() - 1) * 4; }
 
-std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<const PointListObject> base) const {
+std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<const Curve> base) const {
   auto&& points = base.get().points();
   auto count    = points.size();
   if (points.empty()) {
@@ -273,7 +263,7 @@ std::generator<eray::math::Vec3f> MultisegmentBezierCurve::bezier3_points(ref<co
   }
 }
 
-size_t MultisegmentBezierCurve::bezier3_points_count(ref<const PointListObject> base) const {
+size_t MultisegmentBezierCurve::bezier3_points_count(ref<const Curve> base) const {
   auto cp_count = base.get().point_objects().size();
   if (cp_count == 0) {
     return 0;
@@ -285,7 +275,7 @@ size_t MultisegmentBezierCurve::bezier3_points_count(ref<const PointListObject> 
   return cp_count / 3 * 4;
 }
 
-void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
+void BSplineCurve::reset_bernstein_points(const Curve& base) {
   auto de_boor_points_count = base.point_objects().size();
   if (de_boor_points_count < 4) {
     bezier_points_.clear();
@@ -307,7 +297,7 @@ void BSplineCurve::reset_bernstein_points(const PointListObject& base) {
   }
 }
 
-void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_idx) {
+void BSplineCurve::update_bernstein_segment(const Curve& base, int cp_idx) {
   auto de_boor_points = base.point_objects();
 
   if (cp_idx + 3 >= static_cast<int>(de_boor_points.size()) || cp_idx < 0) {
@@ -326,7 +316,7 @@ void BSplineCurve::update_bernstein_segment(const PointListObject& base, int cp_
   bezier_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
 }
 
-void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObjectHandle& handle) {
+void BSplineCurve::update_bernstein_points(Curve& base, const SceneObjectHandle& handle) {
   if (auto o = base.point_idx(handle)) {
     auto cp_idx = static_cast<int>(o.value());
     update_bernstein_segment(base, cp_idx - 2);
@@ -335,7 +325,7 @@ void BSplineCurve::update_bernstein_points(PointListObject& base, const SceneObj
   }
 }
 
-void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const eray::math::Vec3f& point) {
+void BSplineCurve::set_bernstein_point(Curve& base, size_t idx, const eray::math::Vec3f& point) {
   if (bezier_points_.size() <= idx) {
     return;
   }
@@ -381,31 +371,27 @@ void BSplineCurve::set_bernstein_point(PointListObject& base, size_t idx, const 
   update_bernstein_segment(base, cp_idx_int + 2);
 }
 
-void BSplineCurve::on_point_update(PointListObject& base, const SceneObject& point, const Point&) {
+void BSplineCurve::on_point_update(Curve& base, const SceneObject& point, const Point&) {
   update_bernstein_points(base, point.handle());
-  base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
+  base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-void BSplineCurve::on_point_add(PointListObject& base, const SceneObject&, const Point&) {
+void BSplineCurve::on_point_add(Curve& base, const SceneObject&, const Point&) {
   reset_bernstein_points(base);
-  base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
+  base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-void BSplineCurve::on_point_remove(PointListObject& base, const SceneObject&, const Point&) {
+void BSplineCurve::on_point_remove(Curve& base, const SceneObject&, const Point&) {
   reset_bernstein_points(base);
-  base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
+  base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-void BSplineCurve::on_point_list_reorder(PointListObject& base) {
+void BSplineCurve::on_curve_reorder(Curve& base) {
   reset_bernstein_points(base);
-  base.scene().renderer().push_object_rs_cmd(
-      PointListObjectRSCommand(base.handle(), PointListObjectRSCommand::UpdateHelperPoints{}));
+  base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const PointListObject> /*base*/) const {
+std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const Curve> /*base*/) const {
   for (auto i = 0U; const auto& b : bezier_points_) {
     co_yield b;
     if (i % 3 == 0 && i != 0) {
@@ -415,21 +401,17 @@ std::generator<eray::math::Vec3f> BSplineCurve::bezier3_points(ref<const PointLi
   }
 }
 
-std::generator<eray::math::Vec3f> BSplineCurve::unique_bezier3_points(ref<const PointListObject> /*base*/) const {
+std::generator<eray::math::Vec3f> BSplineCurve::unique_bezier3_points(ref<const Curve> /*base*/) const {
   for (const auto& b : bezier_points_) {
     co_yield b;
   }
 }
 
-size_t BSplineCurve::bezier3_points_count(ref<const PointListObject> /*base*/) const {
-  return bezier_points_.size() / 3 * 4;
-}
+size_t BSplineCurve::bezier3_points_count(ref<const Curve> /*base*/) const { return bezier_points_.size() / 3 * 4; }
 
-size_t BSplineCurve::unique_bezier3_points_count(ref<const PointListObject> /*base*/) const {
-  return bezier_points_.size();
-}
+size_t BSplineCurve::unique_bezier3_points_count(ref<const Curve> /*base*/) const { return bezier_points_.size(); }
 
-void NaturalSplineCurve::reset_segments(PointListObject& base) {
+void NaturalSplineCurve::reset_segments(Curve& base) {
   auto all_points_count = base.point_objects().size();
 
   if (all_points_count == 0) {
@@ -558,9 +540,9 @@ void NaturalSplineCurve::reset_segments(PointListObject& base) {
       (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
 }
 
-void NaturalSplineCurve::update(PointListObject& base) { reset_segments(base); }
+void NaturalSplineCurve::update(Curve& base) { reset_segments(base); }
 
-std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const PointListObject> /*base*/) const {
+std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const Curve> /*base*/) const {
   for (const auto& s : segments_) {
     co_yield s.a;
     co_yield s.a + 1.F / 3.F * s.b;
@@ -569,8 +551,6 @@ std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const P
   }
 }
 
-size_t NaturalSplineCurve::bezier3_points_count(ref<const PointListObject> /*base*/) const {
-  return segments_.size() * 4;
-}
+size_t NaturalSplineCurve::bezier3_points_count(ref<const Curve> /*base*/) const { return segments_.size() * 4; }
 
 }  // namespace mini

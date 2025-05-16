@@ -8,8 +8,8 @@
 
 namespace mini {
 
-using SceneObjectId     = std::uint32_t;
-using PointListObjectId = std::uint32_t;
+using SceneObjectId = std::uint32_t;
+using CurveId       = std::uint32_t;
 
 template <typename T>
 using ref = std::reference_wrapper<T>;
@@ -19,13 +19,18 @@ class Scene;
 class SceneObject;
 using SceneObjectHandle = eray::util::Handle<SceneObject>;
 
-class PointListObject;
-using PointListObjectHandle = eray::util::Handle<PointListObject>;
-using ObjectHandle          = std::variant<SceneObjectHandle, PointListObjectHandle>;
+class Curve;
+using CurveHandle = eray::util::Handle<Curve>;
 
-class PointListObject;
+class PatchSurface;
+using PatchSurfaceHandle = eray::util::Handle<PatchSurface>;
+
+using PointListObjectHandle = std::variant<CurveHandle>;
+using ObjectHandle          = std::variant<SceneObjectHandle, CurveHandle>;
+
+class Curve;
 template <typename T>
-concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, PointListObjectHandle>;
+concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;

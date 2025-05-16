@@ -12,35 +12,34 @@ namespace mini::gl {
 
 class PointListsRenderer;
 
-struct PointListObjectRSCommandHandler {
-  explicit PointListObjectRSCommandHandler(const PointListObjectRSCommand& _cmd_ctx, PointListsRenderer& _renderer,
-                                           Scene& _scene)
+struct CurveRSCommandHandler {
+  explicit CurveRSCommandHandler(const CurveRSCommand& _cmd_ctx, PointListsRenderer& _renderer, Scene& _scene)
       : cmd_ctx(_cmd_ctx), renderer(_renderer), scene(_scene) {}
 
-  void operator()(const PointListObjectRSCommand::Internal::AddObject&);
-  void operator()(const PointListObjectRSCommand::Internal::UpdateControlPoints&);
-  void operator()(const PointListObjectRSCommand::Internal::DeleteObject&);
-  void operator()(const PointListObjectRSCommand::UpdateObjectVisibility&);
-  void operator()(const PointListObjectRSCommand::ShowPolyline&);
-  void operator()(const PointListObjectRSCommand::ShowBernsteinControlPoints&);
-  void operator()(const PointListObjectRSCommand::UpdateHelperPoints&);
+  void operator()(const CurveRSCommand::Internal::AddObject&);
+  void operator()(const CurveRSCommand::Internal::UpdateControlPoints&);
+  void operator()(const CurveRSCommand::Internal::DeleteObject&);
+  void operator()(const CurveRSCommand::UpdateObjectVisibility&);
+  void operator()(const CurveRSCommand::ShowPolyline&);
+  void operator()(const CurveRSCommand::ShowBernsteinControlPoints&);
+  void operator()(const CurveRSCommand::UpdateHelperPoints&);
 
   // NOLINTBEGIN
-  const PointListObjectRSCommand& cmd_ctx;
+  const CurveRSCommand& cmd_ctx;
   PointListsRenderer& renderer;
   Scene& scene;
   // NOLINTEND
 };
 
 using PointsChunksBuffer =
-    ChunksBuffer<PointListObjectHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
+    ChunksBuffer<CurveHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
       target[0] = vec.x;
       target[1] = vec.y;
       target[2] = vec.z;
     }>;
 
-class PointListsRenderer : public SubRenderer<PointListsRenderer, PointListObjectHandle, PointListObjectRS,
-                                              PointListObjectRSCommand, PointListObjectRSCommandHandler> {
+class PointListsRenderer
+    : public SubRenderer<PointListsRenderer, CurveHandle, CurveRS, CurveRSCommand, CurveRSCommandHandler> {
  public:
   PointListsRenderer() = delete;
 
@@ -48,14 +47,14 @@ class PointListsRenderer : public SubRenderer<PointListsRenderer, PointListObjec
 
   void update_impl(Scene& scene);
 
-  std::optional<std::pair<PointListObjectHandle, size_t>> find_helper_point_by_idx(size_t idx) const;
+  std::optional<std::pair<CurveHandle, size_t>> find_helper_point_by_idx(size_t idx) const;
 
   void render_polylines() const;
   void render_curves() const;
   void render_helper_points() const;
 
  private:
-  friend PointListObjectRSCommandHandler;
+  friend CurveRSCommandHandler;
 
   struct Members {
     eray::driver::gl::VertexArray helper_points_vao;

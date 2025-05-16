@@ -28,10 +28,10 @@ struct SceneObjectRS {
   SceneObjectVariantRS variant;
 };
 
-//-- PointListObject ---------------------------------------------------------------------------------------------------
+//-- Curve ---------------------------------------------------------------------------------------------------
 
-struct PointListObjectRS {
-  explicit PointListObjectRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
+struct CurveRS {
+  explicit CurveRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
       : visibility(visibility_state), show_polyline(_show_polyline) {}
 
   VisibilityState visibility;

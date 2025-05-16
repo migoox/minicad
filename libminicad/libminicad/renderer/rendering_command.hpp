@@ -70,9 +70,9 @@ struct RSCommandPriority<SceneObjectRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 
-//-- PointListObjectRSCommand ------------------------------------------------------------------------------------------
+//-- CurveRSCommand ------------------------------------------------------------------------------------------
 
-struct PointListObjectRSCommand {
+struct CurveRSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};
@@ -108,31 +108,30 @@ struct PointListObjectRSCommand {
       std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints, UpdateObjectVisibility,
                    ShowPolyline, ShowBernsteinControlPoints, UpdateHelperPoints>;
 
-  explicit PointListObjectRSCommand(PointListObjectHandle _handle, CommandVariant _cmd)
-      : handle(_handle), variant(_cmd) {}
-  PointListObjectRSCommand() = delete;
+  explicit CurveRSCommand(CurveHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
+  CurveRSCommand() = delete;
 
-  PointListObjectHandle handle;
+  CurveHandle handle;
   CommandVariant variant;
 };
 
 template <>
-struct RSCommandPriority<PointListObjectRSCommand::Internal::AddObject> {
+struct RSCommandPriority<CurveRSCommand::Internal::AddObject> {
   static constexpr int kValue = ImmediatePriority::kValue;
 };
 
 template <>
-struct RSCommandPriority<PointListObjectRSCommand::Internal::UpdateControlPoints> {
+struct RSCommandPriority<CurveRSCommand::Internal::UpdateControlPoints> {
   static constexpr int kValue = HighPriority::kValue;
 };
 
 template <>
-struct RSCommandPriority<PointListObjectRSCommand::UpdateHelperPoints> {
+struct RSCommandPriority<CurveRSCommand::UpdateHelperPoints> {
   static constexpr int kValue = MediumPriority::kValue;
 };
 
 template <>
-struct RSCommandPriority<PointListObjectRSCommand::Internal::DeleteObject> {
+struct RSCommandPriority<CurveRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 

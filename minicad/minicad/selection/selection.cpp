@@ -25,7 +25,7 @@ void SceneObjectsSelection::remove(Scene& scene, const SceneObjectHandle& handle
 void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
   if (points_only_ || objs_.empty()) {
     bool is_point = false;
-    if (auto o = scene.get_obj(handle)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
       is_point = std::holds_alternative<Point>(o.value()->object);
     } else {
       return;
@@ -80,7 +80,7 @@ void SceneObjectsSelection::update_transforms(Scene& scene, Cursor& cursor) {
   }
 
   for (const auto& handle : objs_) {
-    if (auto o = scene.get_obj(handle)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
       o.value()->update();
     }
   }
@@ -91,7 +91,7 @@ void SceneObjectsSelection::update_transforms(Scene& scene, Cursor& cursor) {
 
   transform_dirty_ = true;
   for (const auto& handle : objs_) {
-    if (auto o = scene.get_obj(handle)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
       o.value()->transform.set_parent(transform);
     }
   }
@@ -104,7 +104,7 @@ void SceneObjectsSelection::detach_all(Scene& scene) {
   transform_dirty_ = false;
 
   for (const auto& handle : objs_) {
-    if (auto o = scene.get_obj(handle)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
       o.value()->transform.detach_from_parent();
       o.value()->update();
     }
@@ -122,7 +122,7 @@ void SceneObjectsSelection::update_centroid(Scene& scene) {
 
   int count = 0;
   for (const auto& obj : objs_) {
-    if (auto o = scene.get_obj(obj)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(obj)) {
       centroid_ += o.value()->transform.pos();
       count++;
     }
@@ -137,7 +137,7 @@ void SceneObjectsSelection::update_centroid(Scene& scene) {
 void SceneObjectsSelection::update_is_points_only_selection(Scene& scene) {
   points_only_ = true;
   for (const auto& h : objs_) {
-    if (auto o = scene.get_obj(h)) {
+    if (auto o = scene.arena<SceneObject>().get_obj(h)) {
       if (!std::holds_alternative<Point>(o.value()->object)) {
         points_only_ = false;
         return;
@@ -151,7 +151,7 @@ std::optional<eray::math::Vec3f> HelperPointSelection::pos(Scene& scene) {
     return std::nullopt;
   }
 
-  if (auto o = scene.get_obj(selection_->parent)) {
+  if (auto o = scene.arena<Curve>().get_obj(selection_->parent)) {
     if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
       return bspline->bernstein_point(selection_->helper_point);
     }
@@ -164,11 +164,10 @@ void HelperPointSelection::set_point(Scene& scene, eray::math::Vec3f new_pos) {
   if (!selection_) {
     return;
   }
-  if (auto o = scene.get_obj(selection_->parent)) {
+  if (auto o = scene.arena<Curve>().get_obj(selection_->parent)) {
     if (auto* bspline = std::get_if<BSplineCurve>(&o.value()->object)) {
       bspline->set_bernstein_point(*o.value(), selection_->helper_point, new_pos);
-      scene.renderer().push_object_rs_cmd(
-          PointListObjectRSCommand(selection_->parent, PointListObjectRSCommand::UpdateHelperPoints{}));
+      scene.renderer().push_object_rs_cmd(CurveRSCommand(selection_->parent, CurveRSCommand::UpdateHelperPoints{}));
     }
   }
 }
