@@ -19,8 +19,9 @@ class Scene {
   Scene() = delete;
   explicit Scene(std::unique_ptr<ISceneRenderer>&& renderer);
 
-  ERAY_ENABLE_DEFAULT_MOVE_AND_COPY_CTOR(Scene)
-  ERAY_DISABLE_MOVE_AND_COPY_ASSIGN(Scene)
+  Scene(Scene&&) noexcept      = default;
+  Scene(const Scene&) noexcept = delete;
+  ERAY_DELETE_MOVE_AND_COPY_ASSIGN(Scene)
 
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
 

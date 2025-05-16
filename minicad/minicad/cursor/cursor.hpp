@@ -31,8 +31,6 @@ class Cursor {
   eray::math::Vec2f ndc_pos_;
 
   bool is_mouse_move_active_{};
-  float start_depth_view_{};
-  float start_depth_ndc_{};
 };
 
 }  // namespace mini

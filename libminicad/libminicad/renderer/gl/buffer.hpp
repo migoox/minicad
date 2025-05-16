@@ -40,7 +40,7 @@ template <::mini::CObjectHandle ChunkOwnerHandle, typename CPUSourceType, typena
 class ChunksBuffer {
  public:
   ERAY_DEFAULT_MOVE(ChunksBuffer)
-  ERAY_DISABLE_COPY(ChunksBuffer)
+  ERAY_DELETE_COPY(ChunksBuffer)
 
   static ChunksBuffer create() {
     return ChunksBuffer<ChunkOwnerHandle, CPUSourceType, GPUTargetPrimitiveType, GPUTargetPrimitiveCount,

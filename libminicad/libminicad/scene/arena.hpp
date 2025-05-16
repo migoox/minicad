@@ -16,7 +16,7 @@ class Arena {
   using Handle = eray::util::Handle<Object>;
   Arena()      = default;
   ERAY_DEFAULT_MOVE(Arena)
-  ERAY_DISABLE_COPY(Arena)
+  ERAY_DELETE_COPY(Arena)
 
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
 

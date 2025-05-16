@@ -124,7 +124,7 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
  public:
   SceneObject() = delete;
   ERAY_DEFAULT_MOVE(SceneObject)
-  ERAY_DISABLE_COPY(SceneObject)
+  ERAY_DELETE_COPY(SceneObject)
   SceneObject(SceneObjectHandle handle, Scene& scene) : ObjectBase<SceneObject, SceneObjectVariant>(handle, scene) {}
 
   void update();
@@ -303,7 +303,7 @@ class Curve : public ObjectBase<Curve, CurveVariant> {
   Curve() = delete;
   Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {}
   ERAY_DEFAULT_MOVE(Curve)
-  ERAY_DISABLE_COPY(Curve)
+  ERAY_DELETE_COPY(Curve)
 
   auto point_objects() {
     return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
