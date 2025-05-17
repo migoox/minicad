@@ -105,11 +105,6 @@ MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
 }
 
 void MiniCadApp::gui_objects_list_window() {
-  ImGui::Begin("Objects");
-  if (ImGui::Button("Add")) {
-    ImGui::OpenPopup("AddSceneObjectPopup");
-  }
-
   enum class ObjectType : uint8_t {
     Point                   = 0,
     Torus                   = 1,
@@ -130,6 +125,12 @@ void MiniCadApp::gui_objects_list_window() {
     _Count                  = 4,  // NOLINT
   };
 
+  enum class PatchSurfaceType : uint8_t {
+    BezierPatchSurface = 0,
+    BPatchSurface      = 1,
+    _Count             = 2,  // NOLINT
+  };
+
   static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<ObjectType>({
       {ObjectType::Point, "Point"},
       {ObjectType::Torus, "Torus"},
@@ -148,35 +149,44 @@ void MiniCadApp::gui_objects_list_window() {
       {CurveType::NaturalSplineCurve, "Natural Spline Curve"}  //
   });
 
-  if (ImGui::BeginPopup("AddSceneObjectPopup")) {
-    for (const auto [type, name] : kSceneObjectNames) {
+  static constexpr auto kPatchSurfaceNames = eray::util::StringEnumMapper<PatchSurfaceType>({
+      {PatchSurfaceType::BezierPatchSurface, "Bezier Patch Surface"},  //
+      {PatchSurfaceType::BPatchSurface, "B-Patch Surface"},            //
+  });
+
+  ImGui::Begin("Objects");
+  if (ImGui::Button("Point")) {
+    on_scene_object_added(Point{});
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Curve")) {
+    ImGui::OpenPopup("AddCurvePopup");
+  }
+  if (ImGui::Button("Patches")) {
+    ImGui::OpenPopup("AddPatchesPopup");
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Param Surface")) {
+    on_scene_object_added(Torus{});
+  }
+
+  if (ImGui::BeginPopup("AddCurvePopup")) {
+    for (const auto [type, name] : kCurveNames) {
       if (ImGui::Selectable(name.c_str())) {
         switch (type) {
-          case ObjectType::Point:
-            on_scene_object_added(Point{});
-            break;
-          case ObjectType::Torus:
-            on_scene_object_added(Torus{});
-            break;
-          case ObjectType::Polyline:
+          case CurveType::Polyline:
             on_curve_added(Polyline{});
             break;
-          case ObjectType::MultisegmentBezierCurve:
+          case CurveType::MultisegmentBezierCurve:
             on_curve_added(MultisegmentBezierCurve{});
             break;
-          case ObjectType::BSplineCurve:
+          case CurveType::BSplineCurve:
             on_curve_added(BSplineCurve{});
             break;
-          case ObjectType::NaturalSplineCurve:
+          case CurveType::NaturalSplineCurve:
             on_curve_added(NaturalSplineCurve{});
             break;
-          case ObjectType::BezierPatchSurface:
-            on_patch_surface_added(BezierPatches{});
-            break;
-          case ObjectType::BPatchSurface:
-            on_patch_surface_added(BPatches{});
-            break;
-          case ObjectType::_Count:
+          case CurveType::_Count:
             util::panic("AddSceneObjectPopup failed with object unexpected type");
         }
       }
@@ -184,20 +194,45 @@ void MiniCadApp::gui_objects_list_window() {
     ImGui::EndPopup();
   }
 
-  ImGui::SameLine();
+  if (ImGui::BeginPopup("AddPatchesPopup")) {
+    for (const auto [type, name] : kPatchSurfaceNames) {
+      if (ImGui::Selectable(name.c_str())) {
+        switch (type) {
+          case PatchSurfaceType::BezierPatchSurface:
+            on_patch_surface_added(BezierPatches{});
+            break;
+          case PatchSurfaceType::BPatchSurface:
+            on_patch_surface_added(BPatches{});
+            break;
+          case PatchSurfaceType::_Count:
+            util::panic("AddSceneObjectPopup failed with object unexpected type");
+        }
+      }
+    }
+    ImGui::EndPopup();
+  }
 
   {
     bool disable = m_.selection->is_empty() && m_.point_lists_selection->is_empty();
+
     if (disable) {
       ImGui::BeginDisabled();
     }
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8F, 0.1F, 0.1F, 1.0F));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0F, 0.2F, 0.2F, 1.0F));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6F, 0.0F, 0.0F, 1.0F));
+
     if (ImGui::Button("Delete")) {
       on_selection_deleted();
     }
+
     if (disable) {
       ImGui::EndDisabled();
     }
+    ImGui::PopStyleColor(3);
   }
+
+  ImGui::Separator();
 
   static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
   for (const auto& obj : m_.scene.objs()) {
