@@ -38,21 +38,46 @@ class Scene {
   bool add_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
   bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
 
-  std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant = Point{});
-  std::expected<CurveHandle, ObjectCreationError> create_curve(CurveVariant variant = Polyline{});
-  std::expected<PatchSurfaceHandle, ObjectCreationError> create_patch_surface(PatchSurfaceVariant variant = {});
+  template <CObject TObject>
+  std::expected<eray::util::Handle<TObject>, ObjectCreationError> create_obj(TObject::Variant&& variant) {
+    auto h = arena<TObject>().create(*this, std::move(variant));
+    if (!h) {
+      return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+    }
+    const auto& handle = *h;
+    auto& obj          = arena<TObject>().unsafe_at(handle);
+    obj.order_idx_     = objects_order_.size();
+    objects_order_.emplace_back(handle);
 
-  template <typename THandle>
-  bool delete_obj(const THandle handle) {
-    using Object = typename THandle::Object;
+    return handle;
+  }
 
-    if (auto o = arena<Object>().get_obj(handle)) {
+  template <CObject TObject>
+  std::expected<std::vector<TObject>, ObjectCreationError> create_many_objs(TObject::Variant variant, size_t count) {
+    auto h = arena<TObject>().create_many(*this, variant, count);
+    if (!h) {
+      return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+    }
+    for (const auto& handle : *h) {
+      auto& obj      = arena<TObject>().unsafe_at(handle);
+      obj.order_idx_ = objects_order_.size();
+      objects_order_.emplace_back(handle);
+    }
+
+    return *h;
+  }
+
+  template <CObject TObject>
+  bool delete_obj(const eray::util::Handle<TObject>& handle) {
+    if (auto o = arena<TObject>().get_obj(handle)) {
       remove_from_order(o.value()->order_idx_);
-      arena<Object>().delete_obj(handle);
+      arena<TObject>().delete_obj(handle);
       return true;
     }
     return false;
   }
+
+  // TODO(migoox): delete many objs
 
   const std::vector<ObjectHandle>& objs() const { return objects_order_; }
 

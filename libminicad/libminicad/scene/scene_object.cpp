@@ -17,6 +17,11 @@ namespace mini {
 namespace util = eray::util;
 namespace math = eray::math;
 
+SceneObject::SceneObject(SceneObjectHandle handle, Scene& scene)
+    : ObjectBase<SceneObject, SceneObjectVariant>(handle, scene) {
+  scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle, SceneObjectRSCommand::Internal::AddObject{}));
+}
+
 void SceneObject::on_delete() {
   scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
 
@@ -54,6 +59,10 @@ void SceneObject::update() {
       }
     }
   }
+}
+
+Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {
+  scene.renderer().push_object_rs_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::AddObject{}));
 }
 
 void Curve::on_delete() {
@@ -553,4 +562,8 @@ std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const C
 
 size_t NaturalSplineCurve::bezier3_points_count(ref<const Curve> /*base*/) const { return segments_.size() * 4; }
 
+PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
+    : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene) {
+  scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
+}
 }  // namespace mini

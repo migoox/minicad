@@ -7,6 +7,7 @@
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
@@ -15,6 +16,18 @@
 #include <unordered_set>
 #include <variant>
 
+#define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
+  template <typename Variant>                                                \
+  struct ValidateVariant_##TVariant;                                         \
+                                                                             \
+  template <typename... Types>                                               \
+  struct ValidateVariant_##TVariant<std::variant<Types...>> {                \
+    static constexpr bool kAreVariantTypesValid = (CVariant<Types> && ...);  \
+  };                                                                         \
+                                                                             \
+  static_assert(ValidateVariant_##TVariant<TVariant>::kAreVariantTypesValid, \
+                "Not all variant types satisfy the required constraint")
+
 namespace mini {
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -22,19 +35,32 @@ namespace mini {
 // ---------------------------------------------------------------------------------------------------------------------
 
 template <typename T>
-concept CObject = requires(T t, const eray::util::Handle<T>& handle, Scene& scene) {
-  T{handle, scene};
-  { t.order_idx() } -> std::same_as<std::size_t>;
-  { t.handle() } -> std::same_as<const eray::util::Handle<T>&>;
-  { t.id() } -> std::same_as<typename eray::util::Handle<T>::ObjectId>;
-  { t.scene() } -> std::same_as<Scene&>;
-  { std::as_const(t).scene() } -> std::same_as<const Scene&>;
-  { t.on_delete() } -> std::same_as<void>;  // TODO(migoox): find better solution
+concept CObject =
+    requires(T t, const eray::util::Handle<T>& handle, Scene& scene, std::string&& name, std::size_t idx) {
+      typename T::Variant;
+
+      T{handle, scene};
+      { t.order_idx() } -> std::same_as<std::size_t>;
+      { t.handle() } -> std::same_as<const eray::util::Handle<T>&>;
+      { t.id() } -> std::same_as<typename eray::util::Handle<T>::ObjectId>;
+      { t.scene() } -> std::same_as<Scene&>;
+      { std::as_const(t).scene() } -> std::same_as<const Scene&>;
+      { t.on_delete() } -> std::same_as<void>;  // TODO(migoox): find better solution
+      { t.type_name() } -> std::same_as<zstring_view>;
+      { t.set_name(std::move(name)) } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept CObjectVariant = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
 };
 
 template <typename TObject, typename TVariant>
 class ObjectBase {
  public:
+  MINI_VALIDATE_VARIANT_TYPES(TVariant, CObjectVariant);
+  using Variant = TVariant;
+
   size_t order_idx() const { return order_idx_; }
   const eray::util::Handle<TObject>& handle() const { return handle_; }
   typename eray::util::Handle<TObject>::ObjectId id() const { return handle_.obj_id; }
@@ -60,6 +86,16 @@ class ObjectBase {
     assert(std::holds_alternative<Type>(object) && "Curve is not of the requested type.");
     return std::get<Type>(object);
   }
+
+  zstring_view type_name() {
+    return std::visit(eray::util::match{[&](const auto& o) {
+                        using T = std::decay_t<decltype(o)>;
+                        return T::type_name();
+                      }},
+                      object);
+  }
+
+  void set_name(std::string&& new_name) { name = std::move(new_name); }
 
  public:
   TVariant object;
@@ -134,11 +170,6 @@ class PointListObjectBase {
 // - SceneObjectType ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-template <typename T>
-concept CSceneObjectType = requires {
-  { T::type_name() } -> std::same_as<zstring_view>;
-};
-
 class Point {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
@@ -154,17 +185,13 @@ class Torus {
   eray::math::Vec2i tess_level = eray::math::Vec2i(16, 16);
 };
 
-using SceneObjectVariant = std::variant<Point, Torus>;
-
-// Check if all of the variant types are valid
-template <typename Variant>
-struct ValidateSceneObjectVariantTypes;
-template <typename... Types>
-struct ValidateSceneObjectVariantTypes<std::variant<Types...>> {
-  static constexpr bool kAreVariantTypesValid = (CSceneObjectType<Types> && ...);
+template <typename T>
+concept CSceneObjectType = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
 };
-static_assert(ValidateSceneObjectVariantTypes<SceneObjectVariant>::kAreVariantTypesValid,
-              "Not all variant types satisfy CSceneObjectType");
+
+using SceneObjectVariant = std::variant<Point, Torus>;
+MINI_VALIDATE_VARIANT_TYPES(SceneObjectVariant, CSceneObjectType);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // - SceneObject -------------------------------------------------------------------------------------------------------
@@ -175,7 +202,7 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
   SceneObject() = delete;
   ERAY_DEFAULT_MOVE(SceneObject)
   ERAY_DELETE_COPY(SceneObject)
-  SceneObject(SceneObjectHandle handle, Scene& scene) : ObjectBase<SceneObject, SceneObjectVariant>(handle, scene) {}
+  SceneObject(SceneObjectHandle handle, Scene& scene);
 
   void update();
   void on_delete();
@@ -195,18 +222,6 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
 // ---------------------------------------------------------------------------------------------------------------------
 // - CurveType -----------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
-
-template <typename T>
-concept CCurveType =
-    requires(T t, Curve& base, ref<const Curve> base_ref, const SceneObject& point_obj, const Point& point) {
-      { T::type_name() } -> std::same_as<zstring_view>;
-      { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_curve_reorder(base) } -> std::same_as<void>;
-      { t.bezier3_points(base_ref) } -> std::same_as<std::generator<eray::math::Vec3f>>;
-      { t.bezier3_points_count(base_ref) } -> std::same_as<size_t>;
-    };
 
 struct Polyline {
  public:
@@ -332,17 +347,20 @@ class NaturalSplineCurve {
   std::vector<eray::math::Vec3f> unique_points_;
 };
 
-using CurveVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;
+template <typename T>
+concept CCurveType =
+    requires(T t, Curve& base, ref<const Curve> base_ref, const SceneObject& point_obj, const Point& point) {
+      { T::type_name() } -> std::same_as<zstring_view>;
+      { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
+      { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
+      { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
+      { t.on_curve_reorder(base) } -> std::same_as<void>;
+      { t.bezier3_points(base_ref) } -> std::same_as<std::generator<eray::math::Vec3f>>;
+      { t.bezier3_points_count(base_ref) } -> std::same_as<size_t>;
+    };
 
-// Check if all of the variant types are valid
-template <typename Variant>
-struct ValidateCurveVariantTypes;
-template <typename... Types>
-struct ValidateCurveVariantTypes<std::variant<Types...>> {
-  static constexpr bool kAreVariantTypesValid = (CCurveType<Types> && ...);
-};
-static_assert(ValidateCurveVariantTypes<CurveVariant>::kAreVariantTypesValid,
-              "Not all variant types satisfy CCurveType");
+using CurveVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;
+MINI_VALIDATE_VARIANT_TYPES(CurveVariant, CCurveType);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // - Curve ---------------------------------------------------------------------------------------------------
@@ -351,7 +369,7 @@ static_assert(ValidateCurveVariantTypes<CurveVariant>::kAreVariantTypesValid,
 class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase<Curve> {
  public:
   Curve() = delete;
-  Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {}
+  Curve(const CurveHandle& handle, Scene& scene);
   ERAY_DEFAULT_MOVE(Curve)
   ERAY_DELETE_COPY(Curve)
 
@@ -387,11 +405,6 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
 // - PatchSurfaceType --------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-template <typename T>
-concept CPatchSurfaceType = requires {
-  { T::type_name() } -> std::same_as<zstring_view>;
-};
-
 class BezierPatches {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Bezier Patches"; }
@@ -402,17 +415,13 @@ class BPatches {
   [[nodiscard]] static zstring_view type_name() noexcept { return "B-Patches"; }
 };
 
-using PatchSurfaceVariant = std::variant<BezierPatches, BPatches>;
-
-// Check if all of the variant types are valid
-template <typename Variant>
-struct ValidateSurfacePatchesVariantTypes;
-template <typename... Types>
-struct ValidateSurfacePatchesVariantTypes<std::variant<Types...>> {
-  static constexpr bool kAreVariantTypesValid = (CSceneObjectType<Types> && ...);
+template <typename T>
+concept CPatchSurfaceType = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
 };
-static_assert(ValidateSceneObjectVariantTypes<SceneObjectVariant>::kAreVariantTypesValid,
-              "Not all variant types satisfy CPatchSurfaceType");
+
+using PatchSurfaceVariant = std::variant<BezierPatches, BPatches>;
+MINI_VALIDATE_VARIANT_TYPES(PatchSurfaceVariant, CPatchSurfaceType);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // - PatchSurface ------------------------------------------------------------------------------------------------------
@@ -421,8 +430,8 @@ static_assert(ValidateSceneObjectVariantTypes<SceneObjectVariant>::kAreVariantTy
 class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, public PointListObjectBase<PatchSurface> {
  public:
   PatchSurface() = delete;
-  PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
-      : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene) {}
+  PatchSurface(const PatchSurfaceHandle& handle, Scene& scene);
+
   ERAY_DEFAULT_MOVE(PatchSurface)
   ERAY_DELETE_COPY(PatchSurface)
 

@@ -2,9 +2,11 @@
 
 #include <cstdint>
 #include <expected>
+#include <generator>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <optional>
 #include <stack>
 #include <vector>
 
@@ -87,20 +89,29 @@ class Arena {
     objects_.resize(max_objs);
   }
 
-  std::expected<Handle, ObjectCreationError> create(Scene& scene) {
+  std::expected<Handle, ObjectCreationError> create(Scene& scene, Object::Variant&& variant) {
     if (objects_freed_.empty()) {
       eray::util::Logger::warn("Reached limit of objects");
       return std::unexpected(ObjectCreationError::ReachedMaxObjects);
     }
 
-    auto obj_id = objects_freed_.top();
-    objects_freed_.pop();
-    auto h = Handle(signature_, timestamp(), obj_id);
-    objects_order_.push_back(h);
-    objects_[obj_id].emplace(std::piecewise_construct, std::forward_as_tuple(h, scene),
-                             std::forward_as_tuple(objects_order_.size() - 1));
-    ++object_idx_;
-    return h;
+    return unsafe_create(scene, std::move(variant));
+  }
+
+  std::expected<std::vector<Handle>, ObjectCreationError> create_many(ref<Scene> scene, Object::Variant variant,
+                                                                      size_t count) {
+    if (objects_freed_.size() < count) {
+      eray::util::Logger::warn("Reached limit of objects");
+      return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+    }
+
+    auto result = std::vector<Handle>();
+    result.reserve(count);
+    for (auto i = 0U; i < count; ++i) {
+      result.emplace_back(unsafe_create(scene, Object::Variant(variant)));  // copy the variant
+    }
+
+    return result;
   }
 
   bool delete_obj(const Handle& handle) {
@@ -120,10 +131,47 @@ class Arena {
     return true;
   }
 
-  Object& at_unsafe(const Handle& handle) { return objects_.at(handle.obj_id)->first; }
+  bool delete_many(const std::vector<Handle>& handles) {
+    size_t count = 0;
+    for (auto& h : handles) {
+      if (!exists(h)) {
+        continue;
+      }
+      ++count;
+
+      auto idx                   = objects_[h].second;
+      objects_order_[idx].obj_id = max_objs_;  // mark handle as invalid
+      objects_[h.obj_id]         = std::nullopt;
+    }
+
+    for (auto i = 0U, j = 0U; i < objects_order_.size(); ++i) {
+      if (objects_order_[i].obj_id != max_objs_) {  // if valid
+        objects_order_[j++] = objects_order_[i];
+      }
+    }
+    objects_order_.resize(objects_order_.size() - count);
+
+    for (auto i = 0U; auto& h : objects_order_) {
+      objects_[h].second = i++;
+    }
+  }
+
+  Object& unsafe_at(const Handle& handle) { return objects_.at(handle.obj_id)->first; }
 
  private:
   std::uint32_t timestamp() { return curr_timestamp_++; }
+
+  Handle unsafe_create(ref<Scene> scene, Object::Variant&& variant) {
+    auto obj_id = objects_freed_.top();
+    objects_freed_.pop();
+    auto h = Handle(signature_, timestamp(), obj_id);
+    objects_order_.push_back(h);
+    objects_[obj_id].emplace(std::piecewise_construct, std::forward_as_tuple(h, scene.get()),
+                             std::forward_as_tuple(objects_order_.size() - 1));
+    objects_[obj_id]->first.object = std::move(variant);
+    objects_[obj_id]->first.set_name(std::format("{} {}", objects_[obj_id]->first.type_name(), object_idx_++));
+    return h;
+  }
 
  private:
   std::size_t max_objs_{0};

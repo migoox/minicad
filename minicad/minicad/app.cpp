@@ -715,7 +715,7 @@ void MiniCadApp::update(Duration delta) {
 }
 
 bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
-  auto obj_handle = m_.scene.create_scene_obj(std::move(variant));
+  auto obj_handle = m_.scene.create_obj<SceneObject>(std::move(variant));
   if (!obj_handle) {
     Logger::err("Could not add a new curve");
     return false;
@@ -734,7 +734,7 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
 }
 
 bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
-  auto obj_handle = m_.scene.create_scene_obj(Point{});
+  auto obj_handle = m_.scene.create_obj<SceneObject>(Point{});
   if (!obj_handle) {
     Logger::err("Could not add a new curve");
     return false;
@@ -768,7 +768,7 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
 }
 
 bool MiniCadApp::on_curve_added(CurveVariant variant) {
-  if (auto handle = m_.scene.create_curve(std::move(variant))) {
+  if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
     m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
@@ -787,7 +787,7 @@ bool MiniCadApp::on_curve_added(CurveVariant variant) {
 }
 
 bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
-  if (auto handle = m_.scene.create_curve(std::move(variant))) {
+  if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
     m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
@@ -819,7 +819,7 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
 }
 
 bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant) {
-  if (auto handle = m_.scene.create_patch_surface(std::move(variant))) {
+  if (auto handle = m_.scene.create_obj<PatchSurface>(std::move(variant))) {
     m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       Logger::info("Created patch surface \"{}\"", o.value()->name);
