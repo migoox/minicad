@@ -110,7 +110,7 @@ void CurveRSCommandHandler::operator()(const CurveRSCommand::UpdateHelperPoints&
   }
 }
 
-PointListsRenderer PointListsRenderer::create() {
+CurvesRenderer CurvesRenderer::create() {
   auto vbo_layout = eray::driver::gl::VertexBuffer::Layout();
   vbo_layout.add_attribute<float>("pos", 0, 3);
   auto polylines_vao = eray::driver::gl::VertexArray::create(
@@ -122,7 +122,7 @@ PointListsRenderer PointListsRenderer::create() {
   auto curves_vao = eray::driver::gl::VertexArray::create(eray::driver::gl::VertexBuffer::create(std::move(vbo_layout)),
                                                           eray::driver::gl::ElementBuffer::create());
 
-  return PointListsRenderer(Members{
+  return CurvesRenderer(Members{
       .helper_points_vao = std::move(helper_points_vao),
       .helper_points     = PointsChunksBuffer::create(),
       .polylines_vao     = std::move(polylines_vao),
@@ -132,30 +132,30 @@ PointListsRenderer PointListsRenderer::create() {
   });
 }
 
-PointListsRenderer::PointListsRenderer(Members&& members) : m_(std::move(members)) {}
+CurvesRenderer::CurvesRenderer(Members&& members) : m_(std::move(members)) {}
 
-void PointListsRenderer::update_impl(Scene& /*scene*/) {
+void CurvesRenderer::update_impl(Scene& /*scene*/) {
   m_.polylines.sync(m_.polylines_vao.vbo().handle());
   m_.curves.sync(m_.curves_vao.vbo().handle());
   m_.helper_points.sync(m_.helper_points_vao.vbo().handle());
 }
 
-std::optional<std::pair<CurveHandle, size_t>> PointListsRenderer::find_helper_point_by_idx(size_t idx) const {
+std::optional<std::pair<CurveHandle, size_t>> CurvesRenderer::find_helper_point_by_idx(size_t idx) const {
   return m_.helper_points.find_by_idx(idx);
 }
 
-void PointListsRenderer::render_polylines() const {
+void CurvesRenderer::render_polylines() const {
   m_.polylines_vao.bind();
   ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_.polylines.chunks_count())));
 }
 
-void PointListsRenderer::render_curves() const {
+void CurvesRenderer::render_curves() const {
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
   m_.curves_vao.bind();
   ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.curves.chunks_count())));
 }
 
-void PointListsRenderer::render_helper_points() const {
+void CurvesRenderer::render_helper_points() const {
   m_.helper_points_vao.bind();
   ERAY_GL_CALL(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_.helper_points.chunks_count())));
 }

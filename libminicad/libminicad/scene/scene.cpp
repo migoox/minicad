@@ -7,7 +7,10 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <variant>
+
+#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini {
 
@@ -17,6 +20,7 @@ Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
     : renderer_(std::move(renderer)), signature_(next_signature_++) {
   arena<SceneObject>().init(kMaxObjects, signature_);
   arena<Curve>().init(kMaxObjects, signature_);
+  arena<PatchSurface>().init(kMaxObjects, signature_);
 }
 
 bool Scene::add_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle) {
@@ -64,7 +68,7 @@ std::expected<SceneObjectHandle, Scene::ObjectCreationError> Scene::create_scene
   return handle;
 }
 
-std::expected<CurveHandle, Scene::ObjectCreationError> Scene::create_curve_obj(CurveVariant variant) {
+std::expected<CurveHandle, Scene::ObjectCreationError> Scene::create_curve(CurveVariant variant) {
   auto h = arena<Curve>().create(*this);
   if (!h) {
     return std::unexpected(ObjectCreationError::ReachedMaxObjects);
@@ -88,12 +92,35 @@ std::expected<CurveHandle, Scene::ObjectCreationError> Scene::create_curve_obj(C
   return handle;
 }
 
+std::expected<PatchSurfaceHandle, Scene::ObjectCreationError> Scene::create_patch_surface(PatchSurfaceVariant variant) {
+  auto h = arena<PatchSurface>().create(*this);
+  if (!h) {
+    return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+  }
+  const auto& handle = *h;
+  auto& obj          = arena<PatchSurface>().at_unsafe(handle);
+  auto obj_ind       = arena<PatchSurface>().curr_obj_idx();
+  std::visit(eray::util::match{
+                 [&obj, obj_ind](BezierPatches&) { obj.name = std::format("Bezier Patches {}", obj_ind); },
+                 [&obj, obj_ind](BPatches&) { obj.name = std::format("B-Patches {}", obj_ind); },
+             },
+             variant);
+  obj.object = std::move(variant);
+
+  obj.order_idx_ = objects_order_.size();
+  objects_order_.emplace_back(handle);
+
+  renderer_->push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
+  return handle;
+}
+
 void Scene::remove_from_order(size_t ind) {
   for (size_t i = ind + 1; i < objects_order_.size(); ++i) {
-    std::visit(
-        eray::util::match{[&](const SceneObjectHandle& handle) { arena<SceneObject>().at_unsafe(handle).order_idx_--; },
-                          [&](const CurveHandle& handle) { arena<Curve>().at_unsafe(handle).order_idx_--; }},
-        objects_order_[i]);
+    std::visit(eray::util::match{[&](const auto& handle) {
+                 using T = std::decay_t<decltype(handle)>::Object;
+                 arena<T>().at_unsafe(handle).order_idx_--;
+               }},
+               objects_order_[i]);
   }
   objects_order_.erase(objects_order_.begin() + static_cast<int>(ind));
 }

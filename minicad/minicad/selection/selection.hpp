@@ -4,36 +4,37 @@
 #include <liberay/math/vec.hpp>
 #include <liberay/util/iterator.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <optional>
 #include <unordered_set>
 
 namespace mini {
 
-class CurvesSelection {
+class PointListObjectsSelection {
  public:
-  void remove(const CurveHandle& handle) {
+  void remove(const PointListObjectHandle& handle) {
     auto f = objs_.find(handle);
     if (f != objs_.end()) {
       objs_.erase(f);
     }
   }
-  void add(const CurveHandle& handle) { objs_.insert(handle); }
+  void add(const PointListObjectHandle& handle) { objs_.insert(handle); }
   void clear() { objs_.clear(); }
 
-  bool contains(const CurveHandle& handle) const { return objs_.contains(handle); }
+  bool contains(const PointListObjectHandle& handle) const { return objs_.contains(handle); }
   bool is_multi_selection() const { return objs_.size() > 1; }
   bool is_single_selection() const { return objs_.size() == 1; }
   bool is_empty() const { return objs_.empty(); }
 
-  std::optional<CurveHandle> single() {
+  std::optional<PointListObjectHandle> single() {
     if (is_single_selection()) {
       return *objs_.begin();
     }
     return std::nullopt;
   }
 
-  const CurveHandle& first() { return *objs_.begin(); }
+  const PointListObjectHandle& first() { return *objs_.begin(); }
 
   auto begin() { return objs_.begin(); }
   auto begin() const { return objs_.begin(); }
@@ -41,7 +42,7 @@ class CurvesSelection {
   auto end() const { return objs_.end(); }
 
  private:
-  std::unordered_set<CurveHandle> objs_;
+  std::unordered_set<PointListObjectHandle> objs_;
 };
 
 class SceneObjectsSelection {

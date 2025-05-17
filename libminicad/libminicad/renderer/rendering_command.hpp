@@ -2,10 +2,13 @@
 
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 
 namespace mini {
 
-//-- Command generic priorities ----------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// - Command generic priorities ----------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 struct ImmediatePriority {
   static constexpr int kValue = 400;
@@ -34,7 +37,9 @@ constexpr auto kRSCommandPriorityComparer = [](auto&& arg_x, auto&& arg_y) {
          RSCommandPriority<std::decay_t<decltype(arg_y)>>::kValue;
 };
 
-//-- SceneObjectRSCommand ----------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// - SceneObjectRSCommand ----------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 struct SceneObjectRSCommand {
   struct Internal {
@@ -70,7 +75,9 @@ struct RSCommandPriority<SceneObjectRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 
-//-- CurveRSCommand ------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// - CurveRSCommand ----------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 struct CurveRSCommand {
   struct Internal {
@@ -132,6 +139,57 @@ struct RSCommandPriority<CurveRSCommand::UpdateHelperPoints> {
 
 template <>
 struct RSCommandPriority<CurveRSCommand::Internal::DeleteObject> {
+  static constexpr int kValue = DeferredPriority::kValue;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - PatchSurfaceRSCommand ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct PatchSurfaceRSCommand {
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+    struct UpdateControlPoints {};
+  };
+
+  struct UpdateObjectVisibility {
+    explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
+
+    VisibilityState new_visibility_state;
+  };
+
+  /**
+   * @brief Applies to any point list, hides/shows the polyline between the scene points.
+   *
+   */
+  struct ShowPolyline {
+    explicit ShowPolyline(bool _show) : show(_show) {}
+    bool show;
+  };
+
+  using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints,
+                                      UpdateObjectVisibility, ShowPolyline>;
+
+  explicit PatchSurfaceRSCommand(PatchSurfaceHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
+  PatchSurfaceRSCommand() = delete;
+
+  PatchSurfaceHandle handle;
+  CommandVariant variant;
+};
+
+template <>
+struct RSCommandPriority<PatchSurfaceRSCommand::Internal::AddObject> {
+  static constexpr int kValue = ImmediatePriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<PatchSurfaceRSCommand::Internal::UpdateControlPoints> {
+  static constexpr int kValue = HighPriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<PatchSurfaceRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 

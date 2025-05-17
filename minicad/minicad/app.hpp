@@ -25,6 +25,8 @@
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
 
+#include "libminicad/scene/scene_object_handle.hpp"
+
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -66,7 +68,7 @@ class MiniCadApp final : public eray::os::Application {
     ToolState tool_state;
 
     std::unique_ptr<SceneObjectsSelection> selection;
-    std::unique_ptr<CurvesSelection> curve_selection;
+    std::unique_ptr<PointListObjectsSelection> point_lists_selection;
     HelperPointSelection helper_point_selection;
   };
 
@@ -75,16 +77,20 @@ class MiniCadApp final : public eray::os::Application {
   // GUI
   void gui_objects_list_window();
   void gui_selection_window();
-  void gui_curve_window();
+  void gui_point_list_window();
 
   // GUI Events
   bool on_scene_object_added(SceneObjectVariant variant);
   bool on_point_created_in_point_list(const CurveHandle& handle);
   bool on_scene_object_deleted(const SceneObjectHandle& handle);
 
-  bool on_curve_object_added(CurveVariant variant);
-  bool on_curve_object_added_from_points_selection(CurveVariant variant);
-  bool on_curve_object_deleted(const CurveHandle& handle);
+  bool on_curve_added(CurveVariant variant);
+  bool on_curve_added_from_points_selection(CurveVariant variant);
+  bool on_curve_deleted(const CurveHandle& handle);
+
+  bool on_patch_surface_added(PatchSurfaceVariant variant);
+  bool on_patch_surface_deleted(const PatchSurfaceHandle& handle);
+
   bool on_selection_deleted();
 
   bool on_points_reorder(const CurveHandle& handle, const std::optional<SceneObjectHandle>& source,
@@ -122,10 +128,10 @@ class MiniCadApp final : public eray::os::Application {
   bool on_selection_set_single(const SceneObjectHandle& handle);
   bool on_selection_clear();
 
-  bool on_curve_selection_add(const CurveHandle& handle);
-  bool on_curve_selection_set_single(const CurveHandle& handle);
-  bool on_curve_selection_remove(const CurveHandle& handle);
-  bool on_curve_selection_clear();
+  bool on_point_lists_selection_add(const PointListObjectHandle& handle);
+  bool on_point_lists_selection_set_single(const PointListObjectHandle& handle);
+  bool on_point_lists_selection_remove(const PointListObjectHandle& handle);
+  bool on_point_lists_selection_clear();
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);

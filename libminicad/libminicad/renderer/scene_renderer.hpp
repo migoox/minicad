@@ -40,6 +40,10 @@ class ISceneRenderer {
   virtual std::optional<CurveRS> object_rs(const CurveHandle& handle)         = 0;
   virtual void set_object_rs(const CurveHandle& handle, const CurveRS& state) = 0;
 
+  virtual void push_object_rs_cmd(const PatchSurfaceRSCommand& cmd)                         = 0;
+  virtual std::optional<PatchSurfaceRS> object_rs(const PatchSurfaceHandle& handle)         = 0;
+  virtual void set_object_rs(const PatchSurfaceHandle& handle, const PatchSurfaceRS& state) = 0;
+
   virtual void add_billboard(zstring_view name, const eray::res::Image& img) = 0;
   virtual BillboardRS& billboard(zstring_view name)                          = 0;
 

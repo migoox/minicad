@@ -2,6 +2,7 @@
 
 #include <liberay/math/vec.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
+#include <variant>
 
 namespace mini {
 
@@ -11,7 +12,9 @@ struct BillboardRS {
   bool show                  = true;
 };
 
-//-- SceneObject -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// - SceneObject -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 struct PointRS {};
 
@@ -28,10 +31,24 @@ struct SceneObjectRS {
   SceneObjectVariantRS variant;
 };
 
-//-- Curve ---------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// - Curve -------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 
 struct CurveRS {
   explicit CurveRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
+      : visibility(visibility_state), show_polyline(_show_polyline) {}
+
+  VisibilityState visibility;
+  bool show_polyline{true};
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - PatchSurface ------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct PatchSurfaceRS {
+  explicit PatchSurfaceRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
       : visibility(visibility_state), show_polyline(_show_polyline) {}
 
   VisibilityState visibility;

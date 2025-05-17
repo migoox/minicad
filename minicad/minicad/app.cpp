@@ -21,6 +21,7 @@
 #include <liberay/res/image.hpp>
 #include <liberay/util/enum_mapper.hpp>
 #include <liberay/util/logger.hpp>
+#include <liberay/util/object_handle.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/timer.hpp>
 #include <liberay/util/variant_match.hpp>
@@ -29,6 +30,7 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
@@ -41,8 +43,6 @@
 #include <optional>
 #include <ranges>
 #include <variant>
-
-#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini {
 
@@ -85,9 +85,9 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
                                            .select_tool              = SelectTool(),                //
                                            .scene                    = Scene(std::move(sr)),        //
                                            .tool_state               = ToolState::Cursor,
-                                           .selection                = std::make_unique<SceneObjectsSelection>(),  //
-                                           .curve_selection          = std::make_unique<CurvesSelection>(),        //
-                                           .helper_point_selection   = HelperPointSelection()                      //
+                                           .selection                = std::make_unique<SceneObjectsSelection>(),    //
+                                           .point_lists_selection  = std::make_unique<PointListObjectsSelection>(),  //
+                                           .helper_point_selection = HelperPointSelection()                          //
                                        });
 }
 
@@ -117,7 +117,9 @@ void MiniCadApp::gui_objects_list_window() {
     MultisegmentBezierCurve = 3,
     BSplineCurve            = 4,
     NaturalSplineCurve      = 5,
-    _Count                  = 6,  // NOLINT
+    BezierPatchSurface      = 6,
+    BPatchSurface           = 7,
+    _Count                  = 8,  // NOLINT
   };
 
   enum class CurveType : uint8_t {
@@ -132,16 +134,18 @@ void MiniCadApp::gui_objects_list_window() {
       {ObjectType::Point, "Point"},
       {ObjectType::Torus, "Torus"},
       {ObjectType::Polyline, "Polyline"},
-      {ObjectType::MultisegmentBezierCurve, "Bezier"},
-      {ObjectType::BSplineCurve, "B-Spline"},
-      {ObjectType::NaturalSplineCurve, "Natural Spline"},
+      {ObjectType::MultisegmentBezierCurve, "Bezier Curve"},
+      {ObjectType::BSplineCurve, "B-Spline Curve"},
+      {ObjectType::NaturalSplineCurve, "Natural Spline Curve"},
+      {ObjectType::BezierPatchSurface, "Bezier Patch Surface"},
+      {ObjectType::BPatchSurface, "B-Patch Surface"},
   });
 
   static constexpr auto kCurveNames = eray::util::StringEnumMapper<CurveType>({
-      {CurveType::Polyline, "Polyline"},                 //
-      {CurveType::MultisegmentBezierCurve, "Bezier"},    //
-      {CurveType::BSplineCurve, "B-Spline"},             //
-      {CurveType::NaturalSplineCurve, "Natural Spline"}  //
+      {CurveType::Polyline, "Polyline"},                       //
+      {CurveType::MultisegmentBezierCurve, "Bezier Curve"},    //
+      {CurveType::BSplineCurve, "B-Spline Curve"},             //
+      {CurveType::NaturalSplineCurve, "Natural Spline Curve"}  //
   });
 
   if (ImGui::BeginPopup("AddSceneObjectPopup")) {
@@ -155,16 +159,22 @@ void MiniCadApp::gui_objects_list_window() {
             on_scene_object_added(Torus{});
             break;
           case ObjectType::Polyline:
-            on_curve_object_added(Polyline{});
+            on_curve_added(Polyline{});
             break;
           case ObjectType::MultisegmentBezierCurve:
-            on_curve_object_added(MultisegmentBezierCurve{});
+            on_curve_added(MultisegmentBezierCurve{});
             break;
           case ObjectType::BSplineCurve:
-            on_curve_object_added(BSplineCurve{});
+            on_curve_added(BSplineCurve{});
             break;
           case ObjectType::NaturalSplineCurve:
-            on_curve_object_added(NaturalSplineCurve{});
+            on_curve_added(NaturalSplineCurve{});
+            break;
+          case ObjectType::BezierPatchSurface:
+            on_patch_surface_added(BezierPatches{});
+            break;
+          case ObjectType::BPatchSurface:
+            on_patch_surface_added(BPatches{});
             break;
           case ObjectType::_Count:
             util::panic("AddSceneObjectPopup failed with object unexpected type");
@@ -177,7 +187,7 @@ void MiniCadApp::gui_objects_list_window() {
   ImGui::SameLine();
 
   {
-    bool disable = m_.selection->is_empty() && m_.curve_selection->is_empty();
+    bool disable = m_.selection->is_empty() && m_.point_lists_selection->is_empty();
     if (disable) {
       ImGui::BeginDisabled();
     }
@@ -192,74 +202,93 @@ void MiniCadApp::gui_objects_list_window() {
   static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
   for (const auto& obj : m_.scene.objs()) {
     std::visit(  //
-        util::match{[&](const SceneObjectHandle& handle) {
-                      if (auto o = m_.scene.arena<SceneObject>().get_obj(handle)) {
-                        bool is_selected = m_.selection->contains(handle);
-                        ImGui::Selectable(o.value()->name.c_str(), is_selected);
-                        if (ImGui::IsItemHovered()) {
-                          if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                            if (is_selected) {
-                              on_selection_remove(handle);
-                            } else {
-                              on_selection_add(handle);
-                            }
-                          }
+        util::match{
+            [&](const SceneObjectHandle& handle) {
+              if (auto o = m_.scene.arena<SceneObject>().get_obj(handle)) {
+                bool is_selected = m_.selection->contains(handle);
+                ImGui::Selectable(o.value()->name.c_str(), is_selected);
+                if (ImGui::IsItemHovered()) {
+                  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    if (is_selected) {
+                      on_selection_remove(handle);
+                    } else {
+                      on_selection_add(handle);
+                    }
+                  }
 
-                          if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                            on_selection_set_single(handle);
-                          }
-                        }
-                        if (ImGui::IsItemHovered()) {
-                          if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                            ImGui::OpenPopup("SelectionPopup");
-                          }
-                        }
-                        if (std::holds_alternative<Point>(o.value()->object)) {
-                          if (ImGui::BeginDragDropSource()) {
-                            ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &handle,
-                                                      sizeof(SceneObjectHandle));
-                            ImGui::Text("%s", o.value()->name.c_str());
-                            ImGui::EndDragDropSource();
-                          }
-                        }
-                      }
-                    },
-                    [&](const CurveHandle& handle) {
-                      if (auto o = m_.scene.arena<Curve>().get_obj(handle)) {
-                        bool is_selected = m_.curve_selection->contains(handle);
-                        ImGui::Selectable(o.value()->name.c_str(), is_selected);
+                  if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    on_selection_set_single(handle);
+                  }
+                }
+                if (ImGui::IsItemHovered()) {
+                  if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                    ImGui::OpenPopup("SelectionPopup");
+                  }
+                }
+                if (std::holds_alternative<Point>(o.value()->object)) {
+                  if (ImGui::BeginDragDropSource()) {
+                    ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &handle, sizeof(SceneObjectHandle));
+                    ImGui::Text("%s", o.value()->name.c_str());
+                    ImGui::EndDragDropSource();
+                  }
+                }
+              }
+            },
+            [&](const PointListObjectHandle& handle) {
+              bool is_selected = m_.point_lists_selection->contains(handle);
 
-                        if (ImGui::IsItemHovered()) {
-                          if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                            if (is_selected) {
-                              on_curve_selection_remove(handle);
-                            } else {
-                              on_curve_selection_add(handle);
-                            }
-                          }
-                          if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                            ImGui::OpenPopup("SelectionPopup");
-                          }
-                          if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                            on_curve_selection_set_single(handle);
-                          }
-                        }
-                        if (ImGui::BeginDragDropTarget()) {
-                          if (const ImGuiPayload* payload =
-                                  ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
-                            IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
-                            auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
-                            m_.scene.add_point_to_curve(point_handle, handle);
-                          }
-                          ImGui::EndDragDropTarget();
-                        }
-                      }
-                    }},
+              auto exists = std::visit(
+                  util::match{//
+                              [&](const auto& h) {
+                                using T = ERAY_HANDLE_OBJ(h);
+                                if (auto o = m_.scene.arena<T>().get_obj(h)) {
+                                  ImGui::Selectable(o.value()->name.c_str(), is_selected);
+                                  return true;
+                                }
+                                return false;
+                              }},
+                  handle);
+
+              if (!exists) {
+                return;
+              }
+
+              if (ImGui::IsItemHovered()) {
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                  if (is_selected) {
+                    on_point_lists_selection_remove(handle);
+                  } else {
+                    on_point_lists_selection_add(handle);
+                  }
+                }
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                  ImGui::OpenPopup("SelectionPopup");
+                }
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                  on_point_lists_selection_set_single(handle);
+                }
+              }
+
+              std::visit(util::match{//
+                                     [&](const CurveHandle& h) {
+                                       if (ImGui::BeginDragDropTarget()) {
+                                         if (const ImGuiPayload* payload =
+                                                 ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
+                                           IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
+                                           auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
+                                           m_.scene.add_point_to_curve(point_handle, h);
+                                         }
+                                         ImGui::EndDragDropTarget();
+                                       }
+                                     },
+                                     [](const auto&) {}},
+                         handle);
+            }},
         obj);
   }
 
   if (ImGui::BeginPopup("SelectionPopup")) {
-    bool disabled = !m_.selection->is_points_only() || !m_.curve_selection->is_empty();
+    bool disabled = !m_.selection->is_points_only() || !m_.point_lists_selection->is_empty();
     if (disabled) {
       ImGui::BeginDisabled();
     }
@@ -268,16 +297,16 @@ void MiniCadApp::gui_objects_list_window() {
         if (ImGui::Selectable(name.c_str())) {
           switch (type) {
             case CurveType::Polyline:
-              on_curve_object_added_from_points_selection(Polyline{});
+              on_curve_added_from_points_selection(Polyline{});
               break;
             case CurveType::MultisegmentBezierCurve:
-              on_curve_object_added_from_points_selection(MultisegmentBezierCurve{});
+              on_curve_added_from_points_selection(MultisegmentBezierCurve{});
               break;
             case CurveType::BSplineCurve:
-              on_curve_object_added_from_points_selection(BSplineCurve{});
+              on_curve_added_from_points_selection(BSplineCurve{});
               break;
             case CurveType::NaturalSplineCurve:
-              on_curve_object_added_from_points_selection(NaturalSplineCurve{});
+              on_curve_added_from_points_selection(NaturalSplineCurve{});
               break;
             case CurveType::_Count:
               util::panic("AddCurvePopup failed with object unexpected type");
@@ -371,92 +400,118 @@ void MiniCadApp::gui_selection_window() {
   ImGui::End();
 }
 
-void MiniCadApp::gui_curve_window() {
+void MiniCadApp::gui_point_list_window() {
   ImGui::Begin("Selected Point List");
-  if (m_.curve_selection->is_single_selection()) {
+  if (m_.point_lists_selection->is_single_selection()) {
     static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
     auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
 
-    if (auto obj = m_.scene.arena<Curve>().get_obj(m_.curve_selection->first())) {
-      auto type_name = std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
+    std::visit(
+        util::match{[&](const CurveHandle& h) {
+                      if (auto obj = m_.scene.arena<Curve>().get_obj(h)) {
+                        auto type_name =
+                            std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
 
-      ImGui::Text("Type: %s", type_name.c_str());
-      ImGui::Text("Name: %s", obj.value()->name.c_str());
-      ImGui::SameLine();
-      static std::string object_name;
-      if (ImGui::Button("Rename")) {
-        ImGui::mini::OpenModal("Rename object");
-        object_name = obj.value()->name;
-      }
+                        ImGui::Text("Type: %s", type_name.c_str());
+                        ImGui::Text("Name: %s", obj.value()->name.c_str());
+                        ImGui::SameLine();
+                        static std::string object_name;
+                        if (ImGui::Button("Rename")) {
+                          ImGui::mini::OpenModal("Rename object");
+                          object_name = obj.value()->name;
+                        }
 
-      if (ImGui::mini::RenameModal("Rename object", object_name)) {
-        obj.value()->name = object_name;
-      }
+                        if (ImGui::mini::RenameModal("Rename object", object_name)) {
+                          obj.value()->name = object_name;
+                        }
 
-      if (!std::holds_alternative<Polyline>(obj.value()->object)) {
-        auto state = m_.scene.renderer().object_rs(obj.value()->handle());
-        if (state) {
-          if (ImGui::Checkbox("Polyline", &state->show_polyline)) {
-            m_.scene.renderer().push_object_rs_cmd(
-                CurveRSCommand(obj.value()->handle(), CurveRSCommand::ShowPolyline(state->show_polyline)));
-          }
-        }
-      }
+                        if (!std::holds_alternative<Polyline>(obj.value()->object)) {
+                          auto state = m_.scene.renderer().object_rs(obj.value()->handle());
+                          if (state) {
+                            if (ImGui::Checkbox("Polyline", &state->show_polyline)) {
+                              m_.scene.renderer().push_object_rs_cmd(CurveRSCommand(
+                                  obj.value()->handle(), CurveRSCommand::ShowPolyline(state->show_polyline)));
+                            }
+                          }
+                        }
 
-      if (ImGui::BeginTabBar("PointsTabBar", ImGuiTabBarFlags_None)) {
-        if (ImGui::BeginTabItem("Control Points")) {
-          m_.selection->is_single_selection();
+                        if (ImGui::BeginTabBar("PointsTabBar", ImGuiTabBarFlags_None)) {
+                          if (ImGui::BeginTabItem("Control Points")) {
+                            m_.selection->is_single_selection();
 
-          if (ImGui::Button("Add")) {
-            on_point_created_in_point_list(m_.curve_selection->first());
-          }
-          ImGui::SameLine();
-          auto disable = !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
-          if (disable) {
-            ImGui::BeginDisabled();
-          }
-          if (ImGui::Button("Remove")) {
-            m_.scene.remove_point_from_curve(m_.selection->first(), m_.curve_selection->first());
-          }
-          if (disable) {
-            ImGui::EndDisabled();
-          }
+                            if (ImGui::Button("Add")) {
+                              on_point_created_in_point_list(h);
+                            }
+                            ImGui::SameLine();
+                            auto disable =
+                                !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
+                            if (disable) {
+                              ImGui::BeginDisabled();
+                            }
+                            if (ImGui::Button("Remove")) {
+                              m_.scene.remove_point_from_curve(m_.selection->first(), h);
+                            }
+                            if (disable) {
+                              ImGui::EndDisabled();
+                            }
 
-          for (auto& p : obj.value()->point_objects()) {
-            ImGui::PushID(static_cast<int>(p.id()));
+                            for (auto& p : obj.value()->point_objects()) {
+                              ImGui::PushID(static_cast<int>(p.id()));
 
-            bool is_selected = m_.selection->contains(p.handle());
-            if (ImGui::Selectable(p.name.c_str(), is_selected)) {
-              if (is_selected) {
-                on_selection_remove(p.handle());
-              } else {
-                on_selection_add(p.handle());
-              }
-            }
-            reorder_dnd.drag_and_drop_component(p, true);
+                              bool is_selected = m_.selection->contains(p.handle());
+                              if (ImGui::Selectable(p.name.c_str(), is_selected)) {
+                                if (is_selected) {
+                                  on_selection_remove(p.handle());
+                                } else {
+                                  on_selection_add(p.handle());
+                                }
+                              }
+                              reorder_dnd.drag_and_drop_component(p, true);
 
-            ImGui::PopID();
-          }
-          ImGui::EndTabItem();
-        }
-        if (std::holds_alternative<BSplineCurve>(obj.value()->object) && ImGui::BeginTabItem("Bernstein Points")) {
-          auto id = 0;
-          ImGui::Separator();
-          for (const auto& points : std::get<BSplineCurve>(obj.value()->object).bernstein_points() |
-                                        std::views::slide(4) | std::views::stride(4)) {
-            for (auto p : points) {
-              ImGui::PushID(id++);
-              ImGui::InputFloat3("##Point", p.data, "%.3f", ImGuiInputTextFlags_ReadOnly);
-              ImGui::PopID();
-            }
-            ImGui::Separator();
-          }
-          ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
-      }
-    }
-    on_points_reorder(m_.curve_selection->first(), reorder_dnd.source, reorder_dnd.before_dest, reorder_dnd.after_dest);
+                              ImGui::PopID();
+                            }
+                            ImGui::EndTabItem();
+                          }
+                          if (std::holds_alternative<BSplineCurve>(obj.value()->object) &&
+                              ImGui::BeginTabItem("Bernstein Points")) {
+                            auto id = 0;
+                            ImGui::Separator();
+                            for (const auto& points : std::get<BSplineCurve>(obj.value()->object).bernstein_points() |
+                                                          std::views::slide(4) | std::views::stride(4)) {
+                              for (auto p : points) {
+                                ImGui::PushID(id++);
+                                ImGui::InputFloat3("##Point", p.data, "%.3f", ImGuiInputTextFlags_ReadOnly);
+                                ImGui::PopID();
+                              }
+                              ImGui::Separator();
+                            }
+                            ImGui::EndTabItem();
+                          }
+                          ImGui::EndTabBar();
+                        }
+                      }
+                      on_points_reorder(h, reorder_dnd.source, reorder_dnd.before_dest, reorder_dnd.after_dest);
+                    },
+                    [&](const PatchSurfaceHandle& h) {
+                      if (auto obj = m_.scene.arena<PatchSurface>().get_obj(h)) {
+                        auto type_name =
+                            std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
+
+                        ImGui::Text("Type: %s", type_name.c_str());
+                        ImGui::Text("Name: %s", obj.value()->name.c_str());
+                        ImGui::SameLine();
+                        static std::string object_name;
+                        if (ImGui::Button("Rename")) {
+                          ImGui::mini::OpenModal("Rename object");
+                          object_name = obj.value()->name;
+                        }
+
+                        if (ImGui::mini::RenameModal("Rename object", object_name)) {
+                          obj.value()->name = object_name;
+                        }
+                      }
+                    }},
+        m_.point_lists_selection->first());
   }
   ImGui::End();
 }
@@ -480,7 +535,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   gui_objects_list_window();
   gui_selection_window();
-  gui_curve_window();
+  gui_point_list_window();
 
   ImGui::Begin("Tools");
   bool selected = m_.tool_state == ToolState::Cursor;
@@ -628,7 +683,7 @@ void MiniCadApp::update(Duration delta) {
 bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
   auto obj_handle = m_.scene.create_scene_obj(std::move(variant));
   if (!obj_handle) {
-    Logger::err("Could not add a new point list object");
+    Logger::err("Could not add a new curve");
     return false;
   }
 
@@ -647,7 +702,7 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
 bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
   auto obj_handle = m_.scene.create_scene_obj(Point{});
   if (!obj_handle) {
-    Logger::err("Could not add a new point list object");
+    Logger::err("Could not add a new curve");
     return false;
   }
 
@@ -678,11 +733,11 @@ bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   return true;
 }
 
-bool MiniCadApp::on_curve_object_added(CurveVariant variant) {
-  if (auto handle = m_.scene.create_curve_obj(std::move(variant))) {
-    m_.curve_selection->add(*handle);
+bool MiniCadApp::on_curve_added(CurveVariant variant) {
+  if (auto handle = m_.scene.create_curve(std::move(variant))) {
+    m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
-      Logger::info("Created point list object \"{}\"", o.value()->name);
+      Logger::info("Created curve \"{}\"", o.value()->name);
 
       // Natural splines don't need the polyline by default
       if (o.value()->has_type<NaturalSplineCurve>()) {
@@ -697,16 +752,16 @@ bool MiniCadApp::on_curve_object_added(CurveVariant variant) {
   return false;
 }
 
-bool MiniCadApp::on_curve_object_added_from_points_selection(CurveVariant variant) {
-  if (auto handle = m_.scene.create_curve_obj(std::move(variant))) {
-    m_.curve_selection->add(*handle);
+bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
+  if (auto handle = m_.scene.create_curve(std::move(variant))) {
+    m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
-      Logger::info("Created point list object \"{}\"", o.value()->name);
+      Logger::info("Created curve \"{}\"", o.value()->name);
 
       if (m_.selection->is_points_only()) {
         for (const auto& h : *m_.selection) {
           if (!o.value()->add(h)) {
-            Logger::warn("Could not add scene object with id to point list\"{}\"", h.obj_id);
+            Logger::warn("Could not add scene object with id to curve\"{}\"", h.obj_id);
           }
         }
       }
@@ -718,11 +773,35 @@ bool MiniCadApp::on_curve_object_added_from_points_selection(CurveVariant varian
   return false;
 }
 
-bool MiniCadApp::on_curve_object_deleted(const CurveHandle& handle) {
+bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
   if (auto o = m_.scene.arena<Curve>().get_obj(handle)) {
     auto name = o.value()->name;
     m_.scene.delete_obj(handle);
-    Logger::info("Deleted point list object \"{}\"", name);
+    Logger::info("Deleted curve \"{}\"", name);
+    return true;
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant) {
+  if (auto handle = m_.scene.create_patch_surface(std::move(variant))) {
+    m_.point_lists_selection->add(*handle);
+    if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
+      Logger::info("Created patch surface \"{}\"", o.value()->name);
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_patch_surface_deleted(const PatchSurfaceHandle& handle) {
+  if (auto o = m_.scene.arena<PatchSurface>().get_obj(handle)) {
+    auto name = o.value()->name;
+    m_.scene.delete_obj(handle);
+    Logger::info("Deleted patch surface object \"{}\"", name);
     return true;
   }
 
@@ -735,7 +814,7 @@ bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optiona
   if (auto obj = m_.scene.arena<Curve>().get_obj(handle)) {
     if (source && before_dest) {
       if (!obj.value()->move_before(*before_dest, *source)) {
-        util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
+        util::Logger::warn("Could not reorder the points in curve {}.", obj.value()->name);
       }
       obj.value()->update();
       return true;
@@ -743,7 +822,7 @@ bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optiona
 
     if (source && after_dest) {
       if (!obj.value()->move_after(*after_dest, *source)) {
-        util::Logger::warn("Could not reorder the points in point list {}.", obj.value()->name);
+        util::Logger::warn("Could not reorder the points in curve {}.", obj.value()->name);
       }
       obj.value()->update();
       return true;
@@ -769,7 +848,7 @@ bool MiniCadApp::on_selection_remove(const SceneObjectHandle& handle) {
 }
 
 bool MiniCadApp::on_selection_set_single(const SceneObjectHandle& handle) {
-  on_curve_selection_clear();
+  on_point_lists_selection_clear();
   on_selection_clear();
   on_selection_add(handle);
   return true;
@@ -785,39 +864,54 @@ bool MiniCadApp::on_selection_clear() {
   return true;
 }
 
-bool MiniCadApp::on_curve_selection_add(const CurveHandle& handle) {
-  if (auto o = m_.scene.arena<Curve>().get_obj(handle)) {
-    auto handles = o.value()->point_handles();
-    on_selection_add_many(handles.begin(), handles.end());
-  }
-  m_.curve_selection->add(handle);
+bool MiniCadApp::on_point_lists_selection_add(const PointListObjectHandle& handle) {
+  std::visit(util::match{[&](auto& h) {
+               using T = std::decay_t<decltype(h)>::Object;
+               if (auto o = m_.scene.arena<T>().get_obj(h)) {
+                 auto handles = o.value()->point_handles();
+                 on_selection_add_many(handles.begin(), handles.end());
+               }
+             }},
+             handle);
+
+  m_.point_lists_selection->add(handle);
   return true;
 }
 
-bool MiniCadApp::on_curve_selection_set_single(const CurveHandle& handle) {
-  on_curve_selection_clear();
+bool MiniCadApp::on_point_lists_selection_set_single(const PointListObjectHandle& handle) {
+  on_point_lists_selection_clear();
   on_selection_clear();
-  m_.curve_selection->add(handle);
+  m_.point_lists_selection->add(handle);
   return true;
 }
 
-bool MiniCadApp::on_curve_selection_remove(const CurveHandle& handle) {
-  if (auto o = m_.scene.arena<Curve>().get_obj(handle)) {
-    auto handles = o.value()->point_handles();
-    on_selection_remove_many(handles.begin(), handles.end());
-  }
-  m_.curve_selection->remove(handle);
+bool MiniCadApp::on_point_lists_selection_remove(const PointListObjectHandle& handle) {
+  std::visit(util::match{[&](auto& h) {
+               using T = ERAY_HANDLE_OBJ(h);
+
+               if (auto o = m_.scene.arena<T>().get_obj(h)) {
+                 auto handles = o.value()->point_handles();
+                 on_selection_remove_many(handles.begin(), handles.end());
+               }
+             }},
+             handle);
+  m_.point_lists_selection->remove(handle);
   return true;
 }
 
-bool MiniCadApp::on_curve_selection_clear() {
-  for (const auto& c : *m_.curve_selection) {
-    if (auto o = m_.scene.arena<Curve>().get_obj(c)) {
-      auto handles = o.value()->point_handles();
-      on_selection_remove_many(handles.begin(), handles.end());
-    }
+bool MiniCadApp::on_point_lists_selection_clear() {
+  for (const auto& c : *m_.point_lists_selection) {
+    std::visit(util::match{[&](auto& h) {
+                 using T = ERAY_HANDLE_OBJ(h);
+
+                 if (auto o = m_.scene.arena<T>().get_obj(h)) {
+                   auto handles = o.value()->point_handles();
+                   on_selection_remove_many(handles.begin(), handles.end());
+                 }
+               }},
+               c);
   }
-  m_.curve_selection->clear();
+  m_.point_lists_selection->clear();
   return true;
 }
 
@@ -826,11 +920,15 @@ bool MiniCadApp::on_selection_deleted() {
   for (const auto& o : *m_.selection) {
     result = on_scene_object_deleted(o) || result;
   }
-  for (const auto& o : *m_.curve_selection) {
-    result = on_curve_object_deleted(o) || result;
+  for (const auto& o : *m_.point_lists_selection) {
+    result = std::visit(util::match{
+                            [&](const CurveHandle& h) { return on_curve_deleted(h) || result; },
+                            [&](const PatchSurfaceHandle& h) { return on_patch_surface_deleted(h) || result; },
+                        },
+                        o);
   }
   on_selection_clear();
-  on_curve_selection_clear();
+  on_point_lists_selection_clear();
 
   return result;
 }
@@ -870,7 +968,7 @@ bool MiniCadApp::on_tool_action_end() {
     auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
 
     on_selection_clear();
-    on_curve_selection_clear();
+    on_point_lists_selection_clear();
     auto sampling_result = m_.scene.renderer().sample_mouse_pick_box(
         m_.scene, static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y), static_cast<size_t>(box.size.x),
         static_cast<size_t>(box.size.y));

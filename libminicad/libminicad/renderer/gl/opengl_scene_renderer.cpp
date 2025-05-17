@@ -14,6 +14,8 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
 
+#include "libminicad/renderer/gl/patch_surface_renderer.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -132,17 +134,18 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   };
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
-      std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), PointListsRenderer::create(),
-      std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
+      std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), CurvesRenderer::create(),
+      PatchSurfaceRenderer::create(), std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
 
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                                         PointListsRenderer&& curve_objs_rs,
+                                         CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
       curve_renderer_(std::move(curve_objs_rs)),
       scene_objs_renderer_(std::move(objs_rs)),
+      patch_surface_renderer_(std::move(patch_surface_rs)),
       framebuffer_(std::move(framebuffer)) {}
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_renderer_.push_cmd(cmd); }
@@ -168,6 +171,18 @@ void OpenGLSceneRenderer::push_object_rs_cmd(const CurveRSCommand& cmd) { curve_
 void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
   auto txt = create_texture(img);
   global_rs_.billboards.insert({name, BillboardRS(std::move(txt))});
+}
+
+void OpenGLSceneRenderer::push_object_rs_cmd(const PatchSurfaceRSCommand& cmd) {
+  patch_surface_renderer_.push_cmd(cmd);
+}
+
+std::optional<::mini::PatchSurfaceRS> OpenGLSceneRenderer::object_rs(const PatchSurfaceHandle& handle) {
+  return patch_surface_renderer_.object_rs(handle);
+}
+
+void OpenGLSceneRenderer::set_object_rs(const PatchSurfaceHandle& handle, const ::mini::PatchSurfaceRS& state) {
+  patch_surface_renderer_.set_object_rs(handle, state);
 }
 
 ::mini::BillboardRS& OpenGLSceneRenderer::billboard(zstring_view name) { return global_rs_.billboards.at(name).state; }

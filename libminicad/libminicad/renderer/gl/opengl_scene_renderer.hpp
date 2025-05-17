@@ -14,6 +14,9 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "libminicad/renderer/gl/patch_surface_renderer.hpp"
+#include "libminicad/renderer/rendering_state.hpp"
+
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
@@ -38,6 +41,10 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   void push_object_rs_cmd(const CurveRSCommand& cmd) final;
   std::optional<::mini::CurveRS> object_rs(const CurveHandle& handle) final;
   void set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) final;
+
+  void push_object_rs_cmd(const PatchSurfaceRSCommand& cmd) final;
+  std::optional<::mini::PatchSurfaceRS> object_rs(const PatchSurfaceHandle& handle) final;
+  void set_object_rs(const PatchSurfaceHandle& handle, const ::mini::PatchSurfaceRS& state) final;
 
   void add_billboard(zstring_view name, const eray::res::Image& img) final;
   ::mini::BillboardRS& billboard(zstring_view name) final;
@@ -75,14 +82,15 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     bool show_grid;
   } global_rs_;
 
-  PointListsRenderer curve_renderer_;
+  CurvesRenderer curve_renderer_;
   SceneObjectsRenderer scene_objs_renderer_;
+  PatchSurfaceRenderer patch_surface_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
 
  private:
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                               PointListsRenderer&& curve_objs_rs,
+                               CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer);
 };
 

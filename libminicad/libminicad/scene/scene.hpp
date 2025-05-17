@@ -39,7 +39,8 @@ class Scene {
   bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
 
   std::expected<SceneObjectHandle, ObjectCreationError> create_scene_obj(SceneObjectVariant variant = Point{});
-  std::expected<CurveHandle, ObjectCreationError> create_curve_obj(CurveVariant variant = Polyline{});
+  std::expected<CurveHandle, ObjectCreationError> create_curve(CurveVariant variant = Polyline{});
+  std::expected<PatchSurfaceHandle, ObjectCreationError> create_patch_surface(PatchSurfaceVariant variant = {});
 
   template <typename THandle>
   bool delete_obj(const THandle handle) {
@@ -79,7 +80,7 @@ class Scene {
   static std::uint32_t next_signature_;
   std::uint32_t signature_;
 
-  std::tuple<Arena<SceneObject>, Arena<Curve>> arenas_;
+  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>> arenas_;
 
   std::vector<ObjectHandle> objects_order_;
 };

@@ -10,10 +10,10 @@
 
 namespace mini::gl {
 
-class PointListsRenderer;
+class CurvesRenderer;
 
 struct CurveRSCommandHandler {
-  explicit CurveRSCommandHandler(const CurveRSCommand& _cmd_ctx, PointListsRenderer& _renderer, Scene& _scene)
+  explicit CurveRSCommandHandler(const CurveRSCommand& _cmd_ctx, CurvesRenderer& _renderer, Scene& _scene)
       : cmd_ctx(_cmd_ctx), renderer(_renderer), scene(_scene) {}
 
   void operator()(const CurveRSCommand::Internal::AddObject&);
@@ -26,24 +26,23 @@ struct CurveRSCommandHandler {
 
   // NOLINTBEGIN
   const CurveRSCommand& cmd_ctx;
-  PointListsRenderer& renderer;
+  CurvesRenderer& renderer;
   Scene& scene;
   // NOLINTEND
 };
 
-using PointsChunksBuffer =
-    ChunksBuffer<CurveHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
-      target[0] = vec.x;
-      target[1] = vec.y;
-      target[2] = vec.z;
-    }>;
-
-class PointListsRenderer
-    : public SubRenderer<PointListsRenderer, CurveHandle, CurveRS, CurveRSCommand, CurveRSCommandHandler> {
+class CurvesRenderer : public SubRenderer<CurvesRenderer, CurveHandle, CurveRS, CurveRSCommand, CurveRSCommandHandler> {
  public:
-  PointListsRenderer() = delete;
+  CurvesRenderer() = delete;
 
-  static PointListsRenderer create();
+  using PointsChunksBuffer =
+      ChunksBuffer<CurveHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
+        target[0] = vec.x;
+        target[1] = vec.y;
+        target[2] = vec.z;
+      }>;
+
+  static CurvesRenderer create();
 
   void update_impl(Scene& scene);
 
@@ -67,7 +66,7 @@ class PointListsRenderer
     PointsChunksBuffer curves;
   } m_;
 
-  explicit PointListsRenderer(Members&& m);
+  explicit CurvesRenderer(Members&& m);
 };
 
 }  // namespace mini::gl

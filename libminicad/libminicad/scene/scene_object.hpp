@@ -81,6 +81,56 @@ class ObjectBase {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
+// - PointListObject ---------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+template <typename TObject>
+class PointListObjectBase {
+ public:
+  auto point_objects() {
+    return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
+  }
+
+  auto point_objects() const {
+    return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
+  }
+
+  auto point_handles() const { return points_map_ | std::views::keys; }
+
+  auto points() const {
+    return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
+  }
+
+  bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
+
+  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) {
+    if (!contains(handle)) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<SceneObject>(points_.at(points_map_.at(handle)).get());
+  }
+
+  std::optional<size_t> point_idx(const SceneObjectHandle& handle) {
+    if (!contains(handle)) {
+      return std::nullopt;
+    }
+
+    return points_map_.at(handle);
+  }
+
+ protected:
+  std::vector<ref<SceneObject>> points_;
+  std::unordered_map<SceneObjectHandle, size_t> points_map_;
+
+ private:
+  friend Curve;
+  friend PatchSurface;
+
+  PointListObjectBase() = default;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
 // - SceneObjectType ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -298,50 +348,18 @@ static_assert(ValidateCurveVariantTypes<CurveVariant>::kAreVariantTypesValid,
 // - Curve ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-class Curve : public ObjectBase<Curve, CurveVariant> {
+class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase<Curve> {
  public:
   Curve() = delete;
   Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {}
   ERAY_DEFAULT_MOVE(Curve)
   ERAY_DELETE_COPY(Curve)
 
-  auto point_objects() {
-    return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
-  }
-
-  auto point_objects() const {
-    return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
-  }
-
-  auto point_handles() const { return points_map_ | std::views::keys; }
-
-  auto points() const {
-    return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
-  }
-
   std::generator<eray::math::Vec3f> polyline_points() const;
   size_t polyline_points_count() const;
 
   std::generator<eray::math::Vec3f> bezier3_points() const;
   size_t bezier3_points_count() const;
-
-  bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
-
-  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) {
-    if (!contains(handle)) {
-      return std::nullopt;
-    }
-
-    return OptionalObserverPtr<SceneObject>(points_.at(points_map_.at(handle)).get());
-  }
-
-  std::optional<size_t> point_idx(const SceneObjectHandle& handle) {
-    if (!contains(handle)) {
-      return std::nullopt;
-    }
-
-    return points_map_.at(handle);
-  }
 
   enum class SceneObjectError : uint8_t {
     NotAPoint     = 0,
@@ -363,26 +381,59 @@ class Curve : public ObjectBase<Curve, CurveVariant> {
  private:
   friend Scene;
   friend SceneObject;
-
-  std::vector<ref<SceneObject>> points_;
-  std::unordered_map<SceneObjectHandle, size_t> points_map_;
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - PatchSurfaceType --------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+concept CPatchSurfaceType = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
+};
+
+class BezierPatches {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Bezier Patches"; }
+};
+
+class BPatches {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "B-Patches"; }
+};
+
+using PatchSurfaceVariant = std::variant<BezierPatches, BPatches>;
+
+// Check if all of the variant types are valid
+template <typename Variant>
+struct ValidateSurfacePatchesVariantTypes;
+template <typename... Types>
+struct ValidateSurfacePatchesVariantTypes<std::variant<Types...>> {
+  static constexpr bool kAreVariantTypesValid = (CSceneObjectType<Types> && ...);
+};
+static_assert(ValidateSceneObjectVariantTypes<SceneObjectVariant>::kAreVariantTypesValid,
+              "Not all variant types satisfy CPatchSurfaceType");
 
 // ---------------------------------------------------------------------------------------------------------------------
 // - PatchSurface ------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-class PatchSurface {
+class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, public PointListObjectBase<PatchSurface> {
  public:
-  std::generator<eray::math::Vec3f> polyline_points() const;
-  size_t polyline_points_count() const;
+  PatchSurface() = delete;
+  PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
+      : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene) {}
+  ERAY_DEFAULT_MOVE(PatchSurface)
+  ERAY_DELETE_COPY(PatchSurface)
 
-  std::generator<eray::math::Vec3f> bezier3_points() const;
-  size_t bezier3_points_count() const;
+  std::generator<eray::math::Vec3f> polyline_points() const { co_return; }
+  size_t polyline_points_count() const { return 0; }
 
- private:
-  std::vector<ref<SceneObject>> points_;
-  std::unordered_map<SceneObjectHandle, size_t> points_map_;
+  std::generator<eray::math::Vec3f> bezier3_points() const { co_return; }
+  size_t bezier3_points_count() const { return 0; }
+
+  void update() {}
+  void on_delete() {}
 };
 
 }  // namespace mini
