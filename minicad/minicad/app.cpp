@@ -189,10 +189,14 @@ void MiniCadApp::gui_objects_list_window() {
   }
 
   {
-    static int patch_surface_modal_x = 1;
-    static int patch_surface_modal_y = 1;
+    static int patch_surface_modal_x        = 1;
+    static int patch_surface_modal_y        = 1;
+    static float patch_surface_modal_r      = 1;
+    static float patch_surface_modal_size_x = 1;
+    static float patch_surface_modal_size_y = 1;
     static bool patch_surface_modal_cylinder;
     if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", patch_surface_modal_x, patch_surface_modal_y,
+                                          patch_surface_modal_size_x, patch_surface_modal_size_y, patch_surface_modal_r,
                                           patch_surface_modal_cylinder)) {
       switch (chosen_patch_surface_type) {
         case PatchSurfaceType::BezierPatchSurface:

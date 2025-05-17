@@ -99,16 +99,23 @@ bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_vie
   return result;
 }
 
-bool AddPatchSurfaceModal(zstring_view modal_name, int& x, int& y, bool& cylinder) {
+bool AddPatchSurfaceModal(zstring_view modal_name, int& x, int& y, float& size_x, float& size_y, float& r,
+                          bool& cylinder) {
   bool result = false;
   x           = std::max(x, 1);
   y           = std::max(y, 1);
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
   if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::InputInt("x", &x);
-    ImGui::InputInt("y", &y);
+    ImGui::InputInt("X", &x);
+    ImGui::InputInt("Y", &y);
     ImGui::Checkbox("Cylinder", &cylinder);
+    if (!cylinder) {
+      ImGui::DragFloat("Size X", &size_x);
+      ImGui::DragFloat("Size Y", &size_y);
+    } else {
+      ImGui::DragFloat("Radius", &r);
+    }
     if (ImGui::Button("Add", ImVec2(120, 0))) {
       result = true;
       ImGui::CloseCurrentPopup();
