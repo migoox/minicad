@@ -31,6 +31,8 @@ bool RenameModal(zstring_view modal_name, std::string& name_holder);
 bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_view ok_button_label = "OK",
                           zstring_view cancel_button_label = "Cancel");
 
+bool AddPatchSurfaceModal(zstring_view modal_name, int& x, int& y, bool& cylinder);
+
 }  // namespace mini
 
 }  // namespace ImGui

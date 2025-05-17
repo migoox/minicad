@@ -105,18 +105,6 @@ MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
 }
 
 void MiniCadApp::gui_objects_list_window() {
-  enum class ObjectType : uint8_t {
-    Point                   = 0,
-    Torus                   = 1,
-    Polyline                = 2,
-    MultisegmentBezierCurve = 3,
-    BSplineCurve            = 4,
-    NaturalSplineCurve      = 5,
-    BezierPatchSurface      = 6,
-    BPatchSurface           = 7,
-    _Count                  = 8,  // NOLINT
-  };
-
   enum class CurveType : uint8_t {
     Polyline                = 0,
     MultisegmentBezierCurve = 1,
@@ -130,17 +118,6 @@ void MiniCadApp::gui_objects_list_window() {
     BPatchSurface      = 1,
     _Count             = 2,  // NOLINT
   };
-
-  static constexpr auto kSceneObjectNames = eray::util::StringEnumMapper<ObjectType>({
-      {ObjectType::Point, "Point"},
-      {ObjectType::Torus, "Torus"},
-      {ObjectType::Polyline, "Polyline"},
-      {ObjectType::MultisegmentBezierCurve, "Bezier Curve"},
-      {ObjectType::BSplineCurve, "B-Spline Curve"},
-      {ObjectType::NaturalSplineCurve, "Natural Spline Curve"},
-      {ObjectType::BezierPatchSurface, "Bezier Patch Surface"},
-      {ObjectType::BPatchSurface, "B-Patch Surface"},
-  });
 
   static constexpr auto kCurveNames = eray::util::StringEnumMapper<CurveType>({
       {CurveType::Polyline, "Polyline"},                       //
@@ -194,22 +171,40 @@ void MiniCadApp::gui_objects_list_window() {
     ImGui::EndPopup();
   }
 
+  static PatchSurfaceType chosen_patch_surface_type;
+  static bool open_patch_surface_modal = false;
   if (ImGui::BeginPopup("AddPatchesPopup")) {
     for (const auto [type, name] : kPatchSurfaceNames) {
       if (ImGui::Selectable(name.c_str())) {
-        switch (type) {
-          case PatchSurfaceType::BezierPatchSurface:
-            on_patch_surface_added(BezierPatches{});
-            break;
-          case PatchSurfaceType::BPatchSurface:
-            on_patch_surface_added(BPatches{});
-            break;
-          case PatchSurfaceType::_Count:
-            util::panic("AddSceneObjectPopup failed with object unexpected type");
-        }
+        chosen_patch_surface_type = type;
+        open_patch_surface_modal  = true;
       }
     }
+
     ImGui::EndPopup();
+  }
+  if (open_patch_surface_modal) {
+    ImGui::mini::OpenModal("Add Patch Surface");
+    open_patch_surface_modal = false;
+  }
+
+  {
+    static int patch_surface_modal_x = 1;
+    static int patch_surface_modal_y = 1;
+    static bool patch_surface_modal_cylinder;
+    if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", patch_surface_modal_x, patch_surface_modal_y,
+                                          patch_surface_modal_cylinder)) {
+      switch (chosen_patch_surface_type) {
+        case PatchSurfaceType::BezierPatchSurface:
+          on_patch_surface_added(BezierPatches{});
+          break;
+        case PatchSurfaceType::BPatchSurface:
+          on_patch_surface_added(BPatches{});
+          break;
+        case PatchSurfaceType::_Count:
+          util::panic("AddSceneObjectPopup failed with object unexpected type");
+      }
+    }
   }
 
   {

@@ -2,6 +2,7 @@
 #include <imgui/imgui_internal.h>
 #include <imgui/imgui_stdlib.h>
 
+#include <algorithm>
 #include <minicad/imgui/modals.hpp>
 #include <string>
 
@@ -20,7 +21,7 @@ bool RenameModal(zstring_view modal_name, std::string& name_holder) {
   bool result                = false;
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
-  if (ImGui::BeginPopupModal(modal_name.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     if (modal_start) {
       ImGui::SetKeyboardFocusHere();
       init_selection = true;
@@ -81,7 +82,7 @@ bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_vie
   bool result = false;
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
-  if (ImGui::BeginPopupModal(modal_name.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextWrapped("%s", msg.c_str());
     if (ImGui::Button(ok_button_label.c_str(), ImVec2(120, 0))) {
       result = true;
@@ -89,6 +90,31 @@ bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_vie
     }
     ImGui::SameLine();
     if (ImGui::Button(cancel_button_label.c_str(), ImVec2(120, 0))) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+  ImGui::PopStyleVar();
+  return result;
+}
+
+bool AddPatchSurfaceModal(zstring_view modal_name, int& x, int& y, bool& cylinder) {
+  bool result = false;
+  x           = std::max(x, 1);
+  y           = std::max(y, 1);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
+  if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::InputInt("x", &x);
+    ImGui::InputInt("y", &y);
+    ImGui::Checkbox("Cylinder", &cylinder);
+    if (ImGui::Button("Add", ImVec2(120, 0))) {
+      result = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
       ImGui::CloseCurrentPopup();
     }
 
