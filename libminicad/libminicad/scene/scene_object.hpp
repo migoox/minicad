@@ -9,10 +9,10 @@
 #include <liberay/util/ruleof.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <liberay/util/zstring_view.hpp>
+#include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 #include <ranges>
-#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 
@@ -45,6 +45,7 @@ concept CObject =
       { t.id() } -> std::same_as<typename eray::util::Handle<T>::ObjectId>;
       { t.scene() } -> std::same_as<Scene&>;
       { std::as_const(t).scene() } -> std::same_as<const Scene&>;
+      { t.can_be_deleted() } -> std::same_as<bool>;
       { t.on_delete() } -> std::same_as<void>;  // TODO(migoox): find better solution
       { t.type_name() } -> std::same_as<zstring_view>;
       { t.set_name(std::move(name)) } -> std::same_as<void>;
@@ -123,41 +124,23 @@ class ObjectBase {
 template <typename TObject>
 class PointListObjectBase {
  public:
-  auto point_objects() {
-    return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
-  }
-
-  auto point_objects() const {
-    return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
-  }
-
-  auto point_handles() const { return points_map_ | std::views::keys; }
+  auto point_objects() { return points_.point_objects(); }
+  auto point_objects() const { return points_.point_objects(); }
+  auto point_handles() { return points_.point_handles(); }
+  auto point_handles() const { return points_.point_handles(); }
 
   auto points() const {
     return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
   }
 
-  bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
+  bool contains(const SceneObjectHandle& handle) { return points_.contains(handle); }
 
-  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) {
-    if (!contains(handle)) {
-      return std::nullopt;
-    }
+  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point(handle); }
 
-    return OptionalObserverPtr<SceneObject>(points_.at(points_map_.at(handle)).get());
-  }
-
-  std::optional<size_t> point_idx(const SceneObjectHandle& handle) {
-    if (!contains(handle)) {
-      return std::nullopt;
-    }
-
-    return points_map_.at(handle);
-  }
+  std::optional<size_t> point_idx(const SceneObjectHandle& handle) { return points_.point_idx(handle); }
 
  protected:
-  std::vector<ref<SceneObject>> points_;
-  std::unordered_map<SceneObjectHandle, size_t> points_map_;
+  PointList points_;
 
  private:
   friend Curve;
@@ -167,7 +150,8 @@ class PointListObjectBase {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - SceneObjectType ---------------------------------------------------------------------------------------------------
+// - SceneObjectType
+// ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
 class Point {
@@ -206,6 +190,7 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
 
   void update();
   void on_delete();
+  bool can_be_deleted();
 
  public:
   eray::math::Transform3f transform;
@@ -363,7 +348,7 @@ using CurveVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurv
 MINI_VALIDATE_VARIANT_TYPES(CurveVariant, CCurveType);
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - Curve ---------------------------------------------------------------------------------------------------
+// - Curve -------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
 class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase<Curve> {
@@ -380,9 +365,9 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
   size_t bezier3_points_count() const;
 
   enum class SceneObjectError : uint8_t {
-    NotAPoint     = 0,
-    InvalidHandle = 1,
-    NotFound      = 2,
+    NotAPoint     = static_cast<uint8_t>(PointList::OperationError::NotAPoint),
+    NotFound      = static_cast<uint8_t>(PointList::OperationError::NotFound),
+    InvalidHandle = 2,
   };
 
   std::expected<void, SceneObjectError> add(const SceneObjectHandle& handle);
@@ -392,6 +377,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
 
   void update();
   void on_delete();
+  bool can_be_deleted() { return true; }
 
  private:
   void update_indices_from(size_t start_idx);
@@ -441,8 +427,30 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   std::generator<eray::math::Vec3f> bezier3_points() const { co_return; }
   size_t bezier3_points_count() const { return 0; }
 
+  void set_dimensions(eray::math::Vec2u dim);
+  void set_size(eray::math::Vec2f size);
+
   void update() {}
   void on_delete() {}
+  bool can_be_deleted() { return true; }
+
+  static constexpr size_t kPatchSize = 4;
+
+  const eray::math::Vec2u& patches_dimensions() const { return dim_; }
+  const eray::math::Vec2f& size() const { return size_; }
+
+ private:
+  size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const {
+    return patch_y * dim_.x + patch_x + point_y * kPatchSize + point_x;
+  }
+
+  void unsafe_add_handles_from_patch(std::vector<SceneObjectHandle>& handles, size_t patch_x, size_t patch_y) const;
+
+  SceneObjectHandle unsafe_get_point_handle(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const;
+  eray::math::Vec3f unsafe_get_point(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const;
+
+  eray::math::Vec2u dim_;
+  eray::math::Vec2f size_;
 };
 
 }  // namespace mini

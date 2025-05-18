@@ -7,7 +7,6 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/arena.hpp>
-#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <vector>
@@ -53,7 +52,8 @@ class Scene {
   }
 
   template <CObject TObject>
-  std::expected<std::vector<TObject>, ObjectCreationError> create_many_objs(TObject::Variant variant, size_t count) {
+  std::expected<std::vector<eray::util::Handle<TObject>>, ObjectCreationError> create_many_objs(
+      TObject::Variant variant, size_t count) {
     auto h = arena<TObject>().create_many(*this, variant, count);
     if (!h) {
       return std::unexpected(ObjectCreationError::ReachedMaxObjects);

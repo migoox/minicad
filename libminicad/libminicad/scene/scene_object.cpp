@@ -9,6 +9,7 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <ranges>
 #include <variant>
 
@@ -22,21 +23,18 @@ SceneObject::SceneObject(SceneObjectHandle handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle, SceneObjectRSCommand::Internal::AddObject{}));
 }
 
+bool SceneObject::can_be_deleted() { return true; }
+
 void SceneObject::on_delete() {
   scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
 
-  for (const auto& c_h : curves_) {
-    if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
-      auto it = pl.value()->points_map_.find(handle_);
-      if (it != pl.value()->points_map_.end()) {
-        auto ind = it->second;
-        pl.value()->update();
-        pl.value()->points_map_.erase(it);
-        pl.value()->points_.erase(pl.value()->points_.begin() + static_cast<int>(ind));
-        pl.value()->update_indices_from(ind);
+  if (has_type<Point>()) {
+    // Only points might be a part of the point lists
 
-        // Only points might be a part of the point lists
-        if (has_type<Point>()) {
+    for (const auto& c_h : curves_) {
+      if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
+        if (!pl.value()->points_.remove(*this)) {
+          pl.value()->update();
           std::visit(
               eray::util::match{[&](auto& obj) { obj.on_point_remove(*pl.value(), *this, get_variant<Point>()); }},
               pl.value()->object);
@@ -67,8 +65,8 @@ Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveV
 
 void Curve::on_delete() {
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::DeleteObject{}));
-  for (auto p : points_) {
-    p.get().curves_.erase(handle_);
+  for (auto& p : points_.point_objects()) {
+    p.curves_.erase(handle_);
   }
 }
 
@@ -77,7 +75,7 @@ void Curve::update() {
 }
 
 std::expected<void, Curve::SceneObjectError> Curve::add(const SceneObjectHandle& handle) {
-  if (points_map_.contains(handle)) {
+  if (points_.contains(handle)) {
     return {};
   }
 
@@ -85,9 +83,10 @@ std::expected<void, Curve::SceneObjectError> Curve::add(const SceneObjectHandle&
     auto& obj = *o.value();
 
     if (std::holds_alternative<Point>(obj.object)) {
-      auto idx = points_.size();
-      points_map_.insert({handle, idx});
-      points_.emplace_back(obj);
+      auto result = points_.add(obj);
+      if (!result) {
+        return std::unexpected(static_cast<SceneObjectError>(result.error()));
+      }
 
       obj.curves_.insert(handle_);
 
@@ -114,19 +113,16 @@ std::expected<void, Curve::SceneObjectError> Curve::add(const SceneObjectHandle&
 }
 
 std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHandle& handle) {
-  if (!points_map_.contains(handle)) {
+  if (!points_.contains(handle)) {
     return std::unexpected(SceneObjectError::NotFound);
   }
 
   if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
     auto& obj = *o.value();
     if (obj.has_type<Point>()) {
-      auto it = points_map_.find(handle);
-      if (it != points_map_.end()) {
-        auto idx = it->second;
-
-        points_map_.erase(it);
-        points_.erase(points_.begin() + static_cast<int>(idx));
+      auto result = points_.remove(obj);
+      if (!result) {
+        return std::unexpected(static_cast<SceneObjectError>(result.error()));
       }
 
       auto obj_it = obj.curves_.find(handle_);
@@ -152,23 +148,10 @@ std::expected<void, Curve::SceneObjectError> Curve::move_before(const SceneObjec
     return std::unexpected(SceneObjectError::InvalidHandle);
   }
 
-  if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
-    return std::unexpected(SceneObjectError::NotFound);
+  auto result = points_.move_before(dest, obj);
+  if (!result) {
+    return std::unexpected(static_cast<SceneObjectError>(result.error()));
   }
-
-  size_t dest_idx = points_map_[dest];
-  size_t obj_idx  = points_map_[obj];
-
-  if (obj_idx == dest_idx) {
-    return {};
-  }
-  SceneObject& obj_ref = points_[obj_idx].get();
-  points_.erase(points_.begin() + static_cast<int>(obj_idx));
-  if (obj_idx < dest_idx && dest_idx > 0) {
-    dest_idx--;
-  }
-  points_.insert(points_.begin() + static_cast<int>(dest_idx), std::ref(obj_ref));
-  update_indices_from(std::min(dest_idx, obj_idx));
 
   std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
@@ -182,37 +165,15 @@ std::expected<void, Curve::SceneObjectError> Curve::move_after(const SceneObject
     return std::unexpected(SceneObjectError::InvalidHandle);
   }
 
-  if (!points_map_.contains(dest) || !points_map_.contains(obj)) {
-    return std::unexpected(SceneObjectError::NotFound);
+  auto result = points_.move_before(dest, obj);
+  if (!result) {
+    return std::unexpected(static_cast<SceneObjectError>(result.error()));
   }
-
-  size_t dest_idx = points_map_[dest];
-  size_t obj_idx  = points_map_[obj];
-
-  if (obj_idx == dest_idx + 1) {
-    return {};
-  }
-
-  SceneObject& obj_ref = points_[obj_idx].get();
-  points_.erase(points_.begin() + static_cast<int>(obj_idx));
-  size_t insert_pos = dest_idx + 1;
-  if (obj_idx > dest_idx && insert_pos > 0) {
-    insert_pos--;
-  }
-  insert_pos = std::min(insert_pos, points_.size());
-  points_.insert(points_.begin() + static_cast<int>(insert_pos), std::ref(obj_ref));
-  update_indices_from(std::min(insert_pos, obj_idx));
 
   std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
   return {};
-}
-
-void Curve::update_indices_from(size_t start_idx) {
-  for (size_t i = start_idx; i < points_.size(); ++i) {
-    points_map_[points_[i].get().handle()] = i;
-  }
 }
 
 std::generator<eray::math::Vec3f> Curve::bezier3_points() const {
@@ -566,4 +527,54 @@ PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
     : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene) {
   scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
+
+void PatchSurface::set_dimensions(eray::math::Vec2u dim) {
+  auto handles_to_delete = std::vector<SceneObjectHandle>();
+  for (auto col = 0U; col < dim_.x; ++col) {
+    for (auto row = 0U; row < dim_.y; ++row) {
+      if (col >= dim.x || row >= dim.y) {
+        unsafe_add_handles_from_patch(handles_to_delete, col, row);
+      }
+    }
+  }
+
+  for (auto& h : handles_to_delete) {
+    // todo
+    // update_indices_from(points_);
+  }
+
+  size_t to_add = 0;
+  if (dim.x > dim_.x) {
+    to_add += static_cast<size_t>(dim.x - dim_.x) * dim.y;
+  }
+  if (dim.y > dim_.y) {
+    to_add += static_cast<size_t>(std::min(dim.x, dim_.x)) * (dim.y - dim_.y);
+  }
+  to_add = to_add * kPatchSize * kPatchSize;
+
+  auto added_handles = scene().create_many_objs<SceneObject>(Point{}, to_add);
+
+  dim_ = dim;
+}
+
+void PatchSurface::set_size(eray::math::Vec2f size) { size_ = size; }
+
+void PatchSurface::unsafe_add_handles_from_patch(std::vector<SceneObjectHandle>& handles, size_t patch_x,
+                                                 size_t patch_y) const {
+  for (auto x = 0U; x < kPatchSize; ++x) {
+    for (auto y = 0U; y < kPatchSize; ++y) {
+      handles.push_back(unsafe_get_point_handle(patch_x, patch_y, x, y));
+    }
+  }
+}
+
+SceneObjectHandle PatchSurface::unsafe_get_point_handle(size_t patch_x, size_t patch_y, size_t point_x,
+                                                        size_t point_y) const {
+  return points_.unsafe_by_idx(find_idx(patch_x, patch_y, point_x, point_y)).handle();
+}
+
+eray::math::Vec3f PatchSurface::unsafe_get_point(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const {
+  return points_.unsafe_by_idx(find_idx(patch_x, patch_y, point_x, point_y)).transform.pos();
+}
+
 }  // namespace mini

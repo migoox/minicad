@@ -42,7 +42,15 @@ class Arena {
     return OptionalObserverPtr<Object>(objects_[handle.obj_id]->first);
   }
 
-  [[nodiscard]] bool exists(const Handle& handle) {
+  [[nodiscard]] OptionalObserverPtr<const Object> get_obj(const Handle& handle) const {
+    if (!exists(handle)) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<const Object>(objects_[handle.obj_id]->first);
+  }
+
+  [[nodiscard]] bool exists(const Handle& handle) const {
     if (handle.owner_signature != signature_) {
       return false;
     }
@@ -108,7 +116,7 @@ class Arena {
     auto result = std::vector<Handle>();
     result.reserve(count);
     for (auto i = 0U; i < count; ++i) {
-      result.emplace_back(unsafe_create(scene, Object::Variant(variant)));  // copy the variant
+      result.emplace_back(unsafe_create(scene, typename Object::Variant(variant)));  // copy the variant
     }
 
     return result;
