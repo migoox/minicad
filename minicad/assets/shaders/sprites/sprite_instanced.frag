@@ -14,5 +14,8 @@ void main() {
     if (gstate != 0) {
         fragColor = vec4(vec3(fragColor) * vec3(0.5, 0.5, 1.0), fragColor.w);
     }
+    if (fragColor.a < 0.05) {
+        discard;
+    }
     id = gsprite_id;
 }
