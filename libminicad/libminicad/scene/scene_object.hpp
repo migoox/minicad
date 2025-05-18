@@ -198,6 +198,7 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
  private:
   friend Scene;
   friend Curve;
+  friend PatchSurface;
 
  private:
   std::unordered_set<CurveHandle> curves_;
@@ -421,36 +422,29 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   ERAY_DEFAULT_MOVE(PatchSurface)
   ERAY_DELETE_COPY(PatchSurface)
 
+  static constexpr int kPatchSize = 4;
+
   std::generator<eray::math::Vec3f> polyline_points() const { co_return; }
   size_t polyline_points_count() const { return 0; }
 
   std::generator<eray::math::Vec3f> bezier3_points() const { co_return; }
   size_t bezier3_points_count() const { return 0; }
 
-  void set_dimensions(eray::math::Vec2u dim);
-  void set_size(eray::math::Vec2f size);
+  void make_plane(eray::math::Vec2u dim, eray::math::Vec2f size);
 
   void update() {}
   void on_delete() {}
   bool can_be_deleted() { return true; }
 
-  static constexpr size_t kPatchSize = 4;
-
-  const eray::math::Vec2u& patches_dimensions() const { return dim_; }
-  const eray::math::Vec2f& size() const { return size_; }
+  const eray::math::Vec2u& dimensions() const { return dim_; }
 
  private:
-  size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const {
-    return patch_y * dim_.x + patch_x + point_y * kPatchSize + point_x;
+  static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x) {
+    return ((kPatchSize - 1) * dim_x + 1) * ((kPatchSize - 1) * patch_y + point_y) +
+           ((kPatchSize - 1) * patch_x + point_x);
   }
 
-  void unsafe_add_handles_from_patch(std::vector<SceneObjectHandle>& handles, size_t patch_x, size_t patch_y) const;
-
-  SceneObjectHandle unsafe_get_point_handle(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const;
-  eray::math::Vec3f unsafe_get_point(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const;
-
   eray::math::Vec2u dim_;
-  eray::math::Vec2f size_;
 };
 
 }  // namespace mini

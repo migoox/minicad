@@ -2,10 +2,15 @@
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <limits>
 
 namespace mini {
 
 std::expected<void, PointList::OperationError> PointList::add(SceneObject& obj) {
+  if (contains(obj.handle())) {
+    return {};
+  }
+
   if (obj.has_type<Point>()) {
     auto idx = points_.size();
     points_map_.emplace(obj.handle(), idx);
@@ -14,6 +19,23 @@ std::expected<void, PointList::OperationError> PointList::add(SceneObject& obj) 
   }
 
   return std::unexpected(OperationError::NotAPoint);
+}
+
+void PointList::unsafe_set(Scene& scene, const std::vector<SceneObjectHandle>& handles) {
+  clear();
+  for (auto i = 0U; const auto& handle : handles) {
+    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
+      auto& obj = *o.value();
+      points_.emplace_back(obj);
+      points_map_.emplace(obj.handle(), i);
+      ++i;
+    }
+  }
+}
+
+void PointList::clear() {
+  points_.clear();
+  points_map_.clear();
 }
 
 std::expected<void, PointList::OperationError> PointList::remove(SceneObject& obj) {
@@ -106,5 +128,50 @@ void PointList::update_indices_from(size_t start_idx) {
 SceneObject& PointList::unsafe_by_idx(size_t idx) { return points_.at(idx).get(); }
 
 const SceneObject& PointList::unsafe_by_idx(size_t idx) const { return points_.at(idx).get(); }
+
+void PointList::add_many(Scene& scene, const std::vector<SceneObjectHandle>& handles) {
+  for (auto i = 0U; const auto& h : handles) {
+    if (contains(h)) {
+      continue;
+    }
+
+    if (auto o = scene.arena<SceneObject>().get_obj(h)) {
+      auto& obj = *o.value();
+      if (!obj.has_type<Point>()) {
+        continue;
+      }
+
+      points_.emplace_back(obj);
+      points_map_.emplace(obj.handle(), i);
+      ++i;
+    }
+  }
+}
+
+void PointList::remove_many(const std::vector<SceneObjectHandle>& handles) {
+  int count = 0;
+  for (const auto& h : handles) {
+    if (!contains(h)) {
+      continue;
+    }
+    ++count;
+    points_map_[h] = std::numeric_limits<size_t>::max();  // mark as invalid
+  }
+
+  for (auto i = 0U, j = 0U; i < points_.size(); ++i) {
+    if (points_map_[points_[i].get().handle()] != std::numeric_limits<size_t>::max()) {  // if valid
+      points_[j++] = points_[i];
+    }
+  }
+
+  for (auto i = 0U; i < points_.size(); ++i) {
+    if (points_map_[points_[i].get().handle()] != std::numeric_limits<size_t>::max()) {
+      points_map_.erase(points_[i].get().handle());
+    } else {
+      points_map_.at(points_[i].get().handle()) = i;
+    }
+  }
+  points_.erase(points_.end() - count, points_.end());
+}
 
 }  // namespace mini

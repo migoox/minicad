@@ -126,6 +126,10 @@ class Arena {
     if (!exists(handle)) {
       return false;
     }
+    if (!objects_[handle.obj_id]->first.can_be_deleted()) {
+      eray::util::Logger::warn("Requested deletion of an object, however it cannot be deleted.");
+      return false;
+    }
     objects_[handle.obj_id]->first.on_delete();
 
     auto ind = objects_[handle.obj_id]->second;
@@ -141,7 +145,7 @@ class Arena {
 
   bool delete_many(const std::vector<Handle>& handles) {
     size_t count = 0;
-    for (auto& h : handles) {
+    for (const auto& h : handles) {
       if (!exists(h)) {
         continue;
       }

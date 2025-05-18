@@ -189,21 +189,14 @@ void MiniCadApp::gui_objects_list_window() {
   }
 
   {
-    static int patch_surface_modal_x        = 1;
-    static int patch_surface_modal_y        = 1;
-    static float patch_surface_modal_r      = 1;
-    static float patch_surface_modal_size_x = 1;
-    static float patch_surface_modal_size_y = 1;
-    static bool patch_surface_modal_cylinder;
-    if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", patch_surface_modal_x, patch_surface_modal_y,
-                                          patch_surface_modal_size_x, patch_surface_modal_size_y, patch_surface_modal_r,
-                                          patch_surface_modal_cylinder)) {
+    static ImGui::mini::PatchSurfaceInfo info;
+    if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", info)) {
       switch (chosen_patch_surface_type) {
         case PatchSurfaceType::BezierPatchSurface:
-          on_patch_surface_added(BezierPatches{});
+          on_patch_surface_added(BezierPatches{}, info);
           break;
         case PatchSurfaceType::BPatchSurface:
-          on_patch_surface_added(BPatches{});
+          on_patch_surface_added(BPatches{}, info);
           break;
         case PatchSurfaceType::_Count:
           util::panic("AddSceneObjectPopup failed with object unexpected type");
@@ -818,11 +811,15 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
   return false;
 }
 
-bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant) {
+bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info) {
   if (auto handle = m_.scene.create_obj<PatchSurface>(std::move(variant))) {
     m_.point_lists_selection->add(*handle);
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       Logger::info("Created patch surface \"{}\"", o.value()->name);
+      if (!info.cylinder) {
+        o.value()->make_plane(math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)),
+                              math::Vec2f(info.size_x, info.size_y));
+      }
     }
 
     return true;

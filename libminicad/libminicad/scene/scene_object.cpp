@@ -23,13 +23,18 @@ SceneObject::SceneObject(SceneObjectHandle handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle, SceneObjectRSCommand::Internal::AddObject{}));
 }
 
-bool SceneObject::can_be_deleted() { return true; }
+bool SceneObject::can_be_deleted() { return patch_surfaces_.empty(); }
 
 void SceneObject::on_delete() {
+  if (!can_be_deleted()) {
+    eray::util::Logger::err("Requested deletion of a scene object, however it cannot be deleted.");
+    return;
+  }
+
   scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
 
   if (has_type<Point>()) {
-    // Only points might be a part of the point lists
+    // Only points might be a part of the curve
 
     for (const auto& c_h : curves_) {
       if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
@@ -528,53 +533,128 @@ PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
 
-void PatchSurface::set_dimensions(eray::math::Vec2u dim) {
-  auto handles_to_delete = std::vector<SceneObjectHandle>();
-  for (auto col = 0U; col < dim_.x; ++col) {
-    for (auto row = 0U; row < dim_.y; ++row) {
-      if (col >= dim.x || row >= dim.y) {
-        unsafe_add_handles_from_patch(handles_to_delete, col, row);
+// void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f patch_size) {
+//   auto handles_to_delete = std::vector<SceneObjectHandle>();
+//   for (auto col = 0U; col < dim_.x; ++col) {
+//     for (auto row = 0U; row < dim_.y; ++row) {
+//       if (col < dim.x && row < dim.y) {
+//         continue;
+//       }
+
+//       // Save patch control points to delete
+//       auto start_in_col = col == 0 ? 0U : 1U;
+//       auto start_in_row = row == 0 ? 0U : 1U;
+//       for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
+//         for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
+//           handles_to_delete.push_back(points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, dim_.x)).handle());
+//         }
+//       }
+//     }
+//   }
+//   dim_.x = std::min(dim_.x, dim.x);
+//   dim_.y = std::min(dim_.y, dim.y);
+
+//   points_.remove_many(handles_to_delete);
+//   for (const auto& h : handles_to_delete) {
+//     if (auto o = scene().arena<SceneObject>().get_obj(h)) {
+//       auto& obj = *o.value();
+//       auto it   = obj.patch_surfaces_.find(handle());
+//       if (it == obj.patch_surfaces_.end()) {
+//         eray::util::Logger::warn(
+//             "Attempted to unregister a point list from a point, but the point did not reference that point list.");
+//         continue;
+//       }
+//       obj.patch_surfaces_.erase(it);
+//       if (obj.can_be_deleted()) {
+//         scene().delete_obj(obj.handle());
+//       }
+//     }
+//   }
+
+//   size_t dx = dim.x - dim_.x;
+//   size_t dy = dim.y - dim_.y;
+
+//   size_t new_points_count =
+//       dx * (kPatchSize - 1) * (dim_.y * (kPatchSize - 1) + 1) + dy * (kPatchSize - 1) * (dim.x * (kPatchSize - 1) +
+//       1);
+
+//   auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
+//   auto new_points = std::vector<SceneObjectHandle>(((kPatchSize - 1) * dim_.x + 1) * ((kPatchSize - 1) * dim_.y + 1),
+//                                                    SceneObjectHandle(0, 0, 0));
+
+//   auto np_it = new_point_handles->begin();
+//   for (auto col = 0U; col < dim.x; ++col) {
+//     for (auto row = 0U; row < dim.y; ++row) {
+//       auto start_in_col = col == 0 ? 0U : 1U;
+//       auto start_in_row = row == 0 ? 0U : 1U;
+//       for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
+//         for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
+//           auto idx = find_idx(col, row, in_col, in_row, dim.x);
+//           if (col < dim_.x && row < dim_.y) {
+//             auto old_idx    = find_idx(col, row, in_col, in_row, dim_.x);
+//             new_points[idx] = points_.unsafe_by_idx(old_idx).handle();
+//           } else {
+//             new_points[idx] = *np_it;
+//             ++np_it;
+//           }
+//         }
+//       }
+//     }
+//   }
+//   points_.unsafe_set(scene(), new_points);
+//   dim_ = dim;
+// }
+
+void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
+  dim.x = std::max(dim.x, 1U);
+  dim.y = std::max(dim.y, 1U);
+
+  for (const auto& h : points_.point_handles()) {
+    if (auto o = scene().arena<SceneObject>().get_obj(h)) {
+      auto& obj = *o.value();
+      auto it   = obj.patch_surfaces_.find(handle());
+      if (it == obj.patch_surfaces_.end()) {
+        eray::util::Logger::warn(
+            "Attempted to unregister a point list from a point, but the point did not reference that point list.");
+        continue;
+      }
+      obj.patch_surfaces_.erase(it);
+      if (obj.can_be_deleted()) {
+        scene().delete_obj(obj.handle());
       }
     }
   }
+  points_.clear();
 
-  for (auto& h : handles_to_delete) {
-    // todo
-    // update_indices_from(points_);
+  dim_                  = dim;
+  auto new_points_count = (dim.x * (kPatchSize - 1) + 1) * (dim.y * (kPatchSize - 1) + 1);
+
+  auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
+  if (!new_point_handles) {
+    util::Logger::err("Could not create new point objects");
+    return;
   }
+  points_.unsafe_set(scene(), *new_point_handles);
 
-  size_t to_add = 0;
-  if (dim.x > dim_.x) {
-    to_add += static_cast<size_t>(dim.x - dim_.x) * dim.y;
-  }
-  if (dim.y > dim_.y) {
-    to_add += static_cast<size_t>(std::min(dim.x, dim_.x)) * (dim.y - dim_.y);
-  }
-  to_add = to_add * kPatchSize * kPatchSize;
+  for (auto col = 0U; col < dim_.x; ++col) {
+    for (auto row = 0U; row < dim_.y; ++row) {
+      auto start_in_col = col == 0 ? 0U : 1U;
+      auto start_in_row = row == 0 ? 0U : 1U;
+      for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
+        for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
+          auto p = eray::math::Vec3f::filled(0.F);
+          p.x    = size.x * static_cast<float>(col * (kPatchSize - 1) + in_col) /
+                static_cast<float>(dim_.x * (kPatchSize - 1) + 1);
+          p.z = size.y * static_cast<float>(row * (kPatchSize - 1) + in_row) /
+                static_cast<float>(dim_.y * (kPatchSize - 1) + 1);
 
-  auto added_handles = scene().create_many_objs<SceneObject>(Point{}, to_add);
-
-  dim_ = dim;
-}
-
-void PatchSurface::set_size(eray::math::Vec2f size) { size_ = size; }
-
-void PatchSurface::unsafe_add_handles_from_patch(std::vector<SceneObjectHandle>& handles, size_t patch_x,
-                                                 size_t patch_y) const {
-  for (auto x = 0U; x < kPatchSize; ++x) {
-    for (auto y = 0U; y < kPatchSize; ++y) {
-      handles.push_back(unsafe_get_point_handle(patch_x, patch_y, x, y));
+          auto& p_obj = points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, dim_.x));
+          p_obj.transform.set_local_pos(p);
+          p_obj.update();
+        }
+      }
     }
   }
-}
-
-SceneObjectHandle PatchSurface::unsafe_get_point_handle(size_t patch_x, size_t patch_y, size_t point_x,
-                                                        size_t point_y) const {
-  return points_.unsafe_by_idx(find_idx(patch_x, patch_y, point_x, point_y)).handle();
-}
-
-eray::math::Vec3f PatchSurface::unsafe_get_point(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y) const {
-  return points_.unsafe_by_idx(find_idx(patch_x, patch_y, point_x, point_y)).transform.pos();
 }
 
 }  // namespace mini

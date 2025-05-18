@@ -26,6 +26,7 @@
 #include <minicad/tools/select_tool.hpp>
 
 #include "libminicad/scene/scene_object_handle.hpp"
+#include "minicad/imgui/modals.hpp"
 
 namespace mini {
 
@@ -88,7 +89,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_curve_added_from_points_selection(CurveVariant variant);
   bool on_curve_deleted(const CurveHandle& handle);
 
-  bool on_patch_surface_added(PatchSurfaceVariant variant);
+  bool on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info);
   bool on_patch_surface_deleted(const PatchSurfaceHandle& handle);
 
   bool on_selection_deleted();
