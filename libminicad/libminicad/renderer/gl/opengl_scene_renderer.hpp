@@ -8,14 +8,13 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
+#include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
+#include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
-
-#include "libminicad/renderer/gl/patch_surface_renderer.hpp"
-#include "libminicad/renderer/rendering_state.hpp"
 
 namespace mini::gl {
 

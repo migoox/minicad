@@ -424,8 +424,13 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   static constexpr int kPatchSize = 4;
 
-  std::generator<eray::math::Vec3f> polyline_points() const { co_return; }
-  size_t polyline_points_count() const { return 0; }
+  std::generator<eray::math::Vec3f> control_points() const;
+  size_t control_points_count() const;
+
+  std::generator<std::uint32_t> grids_indices() const;
+  size_t grids_indices_count() const;
+
+  size_t polyline_points_count() const;
 
   std::generator<eray::math::Vec3f> bezier3_points() const { co_return; }
   size_t bezier3_points_count() const { return 0; }

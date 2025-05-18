@@ -116,7 +116,7 @@ class ChunksBuffer {
     }
     auto range = it->second;
 
-    if (count == range.begin_idx) {
+    if (count == range.end_idx) {
       for (auto i = range.begin_idx; const auto& p : data) {
         TypeInserter(p, &data_[i]);
         i += kGPUTargetPrimitiveCount;

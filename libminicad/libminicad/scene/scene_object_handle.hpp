@@ -29,7 +29,8 @@ using PointListObjectHandle = std::variant<CurveHandle, PatchSurfaceHandle>;
 using ObjectHandle          = std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle>;
 
 template <typename T>
-concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle>;
+concept CObjectHandle =
+    std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> || std::is_same_v<T, PatchSurfaceHandle>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;

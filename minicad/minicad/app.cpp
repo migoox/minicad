@@ -748,6 +748,9 @@ bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
 
 bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
   if (auto o = m_.scene.arena<SceneObject>().get_obj(handle)) {
+    if (!o.value()->can_be_deleted()) {
+      return false;
+    }
     auto name = o.value()->name;
     m_.scene.delete_obj(handle);
     util::Logger::info("Deleted scene object \"{}\"", name);

@@ -61,6 +61,12 @@ void SceneObject::update() {
                    pl.value()->object);
       }
     }
+    for (const auto& ps_h : this->patch_surfaces_) {
+      if (auto pl = scene().arena<PatchSurface>().get_obj(ps_h)) {
+        scene().renderer().push_object_rs_cmd(
+            PatchSurfaceRSCommand(ps_h, PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
+      }
+    }
   }
 }
 
@@ -651,10 +657,42 @@ void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
           auto& p_obj = points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, dim_.x));
           p_obj.transform.set_local_pos(p);
           p_obj.update();
+          p_obj.patch_surfaces_.emplace(handle());
         }
       }
     }
   }
 }
+
+std::generator<eray::math::Vec3f> PatchSurface::control_points() const {
+  for (const auto& p : points()) {
+    co_yield p;
+  }
+}
+
+size_t PatchSurface::control_points_count() const { return points_.size(); }
+
+std::generator<std::uint32_t> PatchSurface::grids_indices() const {
+  for (auto col = 0U; col < (kPatchSize - 1) * dim_.x + 1; ++col) {
+    for (auto row = 0U; row < (kPatchSize - 1) * dim_.y; ++row) {
+      co_yield row*((kPatchSize - 1) * dim_.x + 1) + col;
+      co_yield (row + 1) * ((kPatchSize - 1) * dim_.x + 1) + col;
+    }
+  }
+
+  for (auto row = 0U; row < (kPatchSize - 1) * dim_.y + 1; ++row) {
+    for (auto col = 0U; col < (kPatchSize - 1) * dim_.x; ++col) {
+      co_yield row*((kPatchSize - 1) * dim_.y + 1) + col;
+      co_yield row*((kPatchSize - 1) * dim_.y + 1) + col + 1;
+    }
+  }
+}
+
+size_t PatchSurface::grids_indices_count() const {
+  return 2 * (((kPatchSize - 1) * dim_.y + 1) * (kPatchSize - 1) * dim_.x +
+              ((kPatchSize - 1) * dim_.x + 1) * (kPatchSize - 1) * dim_.y);
+}
+
+size_t PatchSurface::polyline_points_count() const { return 0; }
 
 }  // namespace mini

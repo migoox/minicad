@@ -194,6 +194,7 @@ void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
 void OpenGLSceneRenderer::update(Scene& scene) {
   scene_objs_renderer_.update(scene);
   curve_renderer_.update(scene);
+  patch_surface_renderer_.update(scene);
 }
 
 SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width,
@@ -253,10 +254,11 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   shaders_.param->set_uniform("u_fill", false);
   scene_objs_renderer_.render_parameterized_surfaces();
 
-  // Render polylines
+  // Render polylines and control grids
   shaders_.polyline->bind();
   shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
   curve_renderer_.render_polylines();
+  patch_surface_renderer_.render_control_grids();
 
   // Render Curves
   shaders_.bezier->bind();

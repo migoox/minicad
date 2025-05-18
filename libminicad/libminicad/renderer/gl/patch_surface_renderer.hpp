@@ -36,11 +36,14 @@ class PatchSurfaceRenderer : public SubRenderer<PatchSurfaceRenderer, PatchSurfa
   PatchSurfaceRenderer() = delete;
 
   using PointsChunksBuffer =
-      ChunksBuffer<CurveHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
+      ChunksBuffer<PatchSurfaceHandle, eray::math::Vec3f, float, 3, [](const eray::math::Vec3f& vec, float* target) {
         target[0] = vec.x;
         target[1] = vec.y;
         target[2] = vec.z;
       }>;
+
+  using IndicesChunksBuffer = ChunksBuffer<PatchSurfaceHandle, uint32_t, uint32_t, 1,
+                                           [](const uint32_t& val, uint32_t* target) { target[0] = val; }>;
 
   static PatchSurfaceRenderer create();
 
@@ -58,6 +61,7 @@ class PatchSurfaceRenderer : public SubRenderer<PatchSurfaceRenderer, PatchSurfa
 
     eray::driver::gl::VertexArray control_grids_vao;
     PointsChunksBuffer control_grids;
+    IndicesChunksBuffer control_grids_indices;
   } m_;
 
   explicit PatchSurfaceRenderer(Members&& m);
