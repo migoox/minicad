@@ -5,6 +5,7 @@
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
+#include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
@@ -13,8 +14,6 @@
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
-
-#include "libminicad/renderer/gl/patch_surface_renderer.hpp"
 
 namespace mini::gl {
 
@@ -81,6 +80,14 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                      gl::RenderingShaderProgram::create("bezier_shader", std::move(bezier_vert), std::move(bezier_frag),
                                                         std::move(bezier_tesc), std::move(bezier_tese)));
 
+  TRY_UNWRAP_ASSET(bezier_surf_vert, manager.load_shader(shaders_path / "patch_surfaces" / "surface.vert"));
+  TRY_UNWRAP_ASSET(bezier_surf_tesc, manager.load_shader(shaders_path / "patch_surfaces" / "bezier.tesc"));
+  TRY_UNWRAP_ASSET(bezier_surf_tese, manager.load_shader(shaders_path / "patch_surfaces" / "bezier.tese"));
+  TRY_UNWRAP_ASSET(bezier_surf_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
+  TRY_UNWRAP_PROGRAM(bezier_surf_prog, gl::RenderingShaderProgram::create(
+                                           "bezier_shader", std::move(bezier_surf_vert), std::move(bezier_surf_frag),
+                                           std::move(bezier_surf_tesc), std::move(bezier_surf_tese)));
+
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
   TRY_UNWRAP_PROGRAM(
@@ -120,6 +127,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .grid             = std::move(grid_prog),                       //
       .polyline         = std::move(polyline_prog),                   //
       .bezier           = std::move(bezier_prog),                     //
+      .bezier_surf      = std::move(bezier_surf_prog),                //
       .sprite           = std::move(sprite_prog),                     //
       .instanced_sprite = std::move(instanced_sprite_prog),           //
       .helper_points    = std::move(instanced_no_state_sprite_prog),  //
@@ -267,6 +275,12 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
   shaders_.bezier->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   curve_renderer_.render_curves();
+
+  // Render Patch Surface
+  shaders_.bezier_surf->bind();
+  shaders_.bezier_surf->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  patch_surface_renderer_.render_surfaces();
 
   // Render grid
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));

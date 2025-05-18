@@ -693,6 +693,22 @@ size_t PatchSurface::grids_indices_count() const {
               ((kPatchSize - 1) * dim_.x + 1) * (kPatchSize - 1) * dim_.y);
 }
 
-size_t PatchSurface::polyline_points_count() const { return 0; }
+std::generator<eray::math::Vec3f> PatchSurface::bezier3_points() const { return control_points(); }
+
+size_t PatchSurface::bezier3_points_count() const { return points_.size(); }
+
+std::generator<std::uint32_t> PatchSurface::bezier3_indices() const {
+  for (auto row = 0U; row < dim_.y; ++row) {
+    for (auto col = 0U; col < dim_.x; ++col) {
+      for (auto in_row = 0U; in_row < kPatchSize; ++in_row) {
+        for (auto in_col = 0U; in_col < kPatchSize; ++in_col) {
+          co_yield static_cast<std::uint32_t>(find_idx(col, row, in_col, in_row, dim_.x));
+        }
+      }
+    }
+  }
+}
+
+size_t PatchSurface::bezier3_indices_count() const { return dim_.x * dim_.y * kPatchSize * kPatchSize; }
 
 }  // namespace mini

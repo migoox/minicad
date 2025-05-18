@@ -21,6 +21,8 @@ void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Inter
 
   if (auto o = scene.arena<PatchSurface>().get_obj(handle)) {
     auto& obj = *o.value();
+    renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.surfaces_indices.update_chunk(handle, obj.bezier3_indices(), obj.bezier3_indices_count());
     renderer.m_.control_grids.update_chunk(handle, obj.control_points(), obj.control_points_count());
     renderer.m_.control_grids_indices.update_chunk(handle, obj.grids_indices(), obj.grids_indices_count());
   }
@@ -28,6 +30,8 @@ void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Inter
 
 void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Internal::DeleteObject&) {
   const auto& handle = cmd_ctx.handle;
+  renderer.m_.surfaces.delete_chunk(handle);
+  renderer.m_.surfaces_indices.delete_chunk(handle);
   renderer.m_.control_grids.delete_chunk(handle);
   renderer.m_.control_grids_indices.delete_chunk(handle);
   renderer.rs_.erase(handle);
@@ -37,7 +41,8 @@ void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Inter
   const auto& handle = cmd_ctx.handle;
   if (auto o = scene.arena<PatchSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-
+    renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.surfaces_indices.update_chunk(handle, obj.bezier3_indices(), obj.bezier3_indices_count());
     renderer.m_.control_grids.update_chunk(handle, obj.control_points(), obj.control_points_count());
     renderer.m_.control_grids_indices.update_chunk(handle, obj.grids_indices(), obj.grids_indices_count());
   } else {
@@ -61,6 +66,7 @@ PatchSurfaceRenderer PatchSurfaceRenderer::create() {
 
   return PatchSurfaceRenderer(Members{.surfaces_vao          = std::move(surfaces_vao),
                                       .surfaces              = PointsChunksBuffer::create(),
+                                      .surfaces_indices      = IndicesChunksBuffer::create(),
                                       .control_grids_vao     = std::move(control_grids_vao),
                                       .control_grids         = PointsChunksBuffer::create(),
                                       .control_grids_indices = IndicesChunksBuffer::create()});
@@ -69,7 +75,8 @@ PatchSurfaceRenderer PatchSurfaceRenderer::create() {
 PatchSurfaceRenderer::PatchSurfaceRenderer(Members&& members) : m_(std::move(members)) {}
 
 void PatchSurfaceRenderer::update_impl(Scene& /*scene*/) {
-  //   m_.surfaces.sync(m_.surfaces_vao.vbo().handle());
+  m_.surfaces.sync(m_.surfaces_vao.vbo().handle());
+  m_.surfaces_indices.sync(m_.surfaces_vao.ebo().handle());
   m_.control_grids.sync(m_.control_grids_vao.vbo().handle());
   m_.control_grids_indices.sync(m_.control_grids_vao.ebo().handle());
 }
@@ -79,6 +86,10 @@ void PatchSurfaceRenderer::render_control_grids() const {
   ERAY_GL_CALL(glDrawElements(GL_LINES, m_.control_grids_indices.chunks_count(), GL_UNSIGNED_INT, nullptr));
 }
 
-void PatchSurfaceRenderer::render_surfaces() const {}
+void PatchSurfaceRenderer::render_surfaces() const {
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 16));
+  m_.surfaces_vao.bind();
+  ERAY_GL_CALL(glDrawElements(GL_PATCHES, m_.surfaces_indices.chunks_count(), GL_UNSIGNED_INT, nullptr));
+}
 
 }  // namespace mini::gl

@@ -206,7 +206,7 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - CurveType -----------------------------------------------------------------------------------------------
+// - CurveType ---------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
 struct Polyline {
@@ -430,10 +430,11 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   std::generator<std::uint32_t> grids_indices() const;
   size_t grids_indices_count() const;
 
-  size_t polyline_points_count() const;
+  std::generator<eray::math::Vec3f> bezier3_points() const;
+  size_t bezier3_points_count() const;
 
-  std::generator<eray::math::Vec3f> bezier3_points() const { co_return; }
-  size_t bezier3_points_count() const { return 0; }
+  std::generator<std::uint32_t> bezier3_indices() const;
+  size_t bezier3_indices_count() const;
 
   void make_plane(eray::math::Vec2u dim, eray::math::Vec2f size);
 

@@ -58,6 +58,7 @@ class PatchSurfaceRenderer : public SubRenderer<PatchSurfaceRenderer, PatchSurfa
   struct Members {
     eray::driver::gl::VertexArray surfaces_vao;
     PointsChunksBuffer surfaces;
+    IndicesChunksBuffer surfaces_indices;
 
     eray::driver::gl::VertexArray control_grids_vao;
     PointsChunksBuffer control_grids;

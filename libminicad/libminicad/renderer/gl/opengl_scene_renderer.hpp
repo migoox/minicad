@@ -66,6 +66,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier_surf;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> helper_points;
