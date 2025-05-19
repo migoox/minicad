@@ -190,7 +190,7 @@ void MiniCadApp::gui_objects_list_window() {
   }
 
   {
-    static ImGui::mini::PatchSurfaceInfo info;
+    static auto info = ImGui::mini::PatchSurfaceInfo{.size_x = 10.F, .size_y = 10.F};
     if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", info)) {
       switch (chosen_patch_surface_type) {
         case PatchSurfaceType::BezierPatchSurface:

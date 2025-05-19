@@ -110,8 +110,8 @@ bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info) {
     ImGui::InputInt("Y", &info.y);
     ImGui::Checkbox("Cylinder", &info.cylinder);
     if (!info.cylinder) {
-      ImGui::DragFloat("Size X", &info.size_x);
-      ImGui::DragFloat("Size Y", &info.size_y);
+      ImGui::DragFloat("Size X", &info.size_x, 0.1F, 1.F, 50.F);
+      ImGui::DragFloat("Size Y", &info.size_y, 0.1F, 1.F, 50.F);
     } else {
       ImGui::DragFloat("Radius", &info.r);
     }
