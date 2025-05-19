@@ -51,6 +51,12 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   void show_grid(bool show_grid) final { global_rs_.show_grid = show_grid; }
   bool is_grid_shown() const final { return global_rs_.show_grid; }
 
+  void show_polylines(bool show_polylines) final { global_rs_.show_polylines = show_polylines; }
+  bool are_polylines_shown() const final { return global_rs_.show_polylines; }
+
+  void show_points(bool show_polylines) final { global_rs_.show_points = show_polylines; }
+  bool are_points_shown() const final { return global_rs_.show_points; }
+
   void resize_viewport(eray::math::Vec2i win_size) final;
   SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const final;
 
@@ -80,6 +86,8 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     eray::driver::gl::TextureHandle helper_point_txt;
 
     bool show_grid;
+    bool show_polylines;
+    bool show_points;
   } global_rs_;
 
   CurvesRenderer curve_renderer_;

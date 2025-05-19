@@ -139,6 +139,8 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .point_txt        = create_texture(point_img),         //
       .helper_point_txt = create_texture(helper_point_img),  //
       .show_grid        = true,                              //
+      .show_polylines   = true,                              //
+      .show_points      = true                               //
   };
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
@@ -263,10 +265,12 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   scene_objs_renderer_.render_parameterized_surfaces();
 
   // Render polylines and control grids
-  shaders_.polyline->bind();
-  shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  curve_renderer_.render_polylines();
-  patch_surface_renderer_.render_control_grids();
+  if (are_polylines_shown()) {
+    shaders_.polyline->bind();
+    shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    curve_renderer_.render_polylines();
+    patch_surface_renderer_.render_control_grids();
+  }
 
   // Render Curves
   shaders_.bezier->bind();
@@ -315,16 +319,18 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render control points
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-  framebuffer_->begin_pick_render();
-  ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
-  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.point_txt.get()));
-  shaders_.instanced_sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
-  shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
-  shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
-  shaders_.instanced_sprite->bind();
-  scene_objs_renderer_.render_control_points();
-  framebuffer_->end_pick_render();
+  if (are_points_shown()) {
+    framebuffer_->begin_pick_render();
+    ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.point_txt.get()));
+    shaders_.instanced_sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
+    shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
+    shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
+    shaders_.instanced_sprite->bind();
+    scene_objs_renderer_.render_control_points();
+    framebuffer_->end_pick_render();
+  }
 
   // Render billboards
   ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));

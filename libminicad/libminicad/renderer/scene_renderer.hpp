@@ -50,6 +50,12 @@ class ISceneRenderer {
   virtual void show_grid(bool show_grid) = 0;
   virtual bool is_grid_shown() const     = 0;
 
+  virtual void show_polylines(bool show_polylines) = 0;
+  virtual bool are_polylines_shown() const         = 0;
+
+  virtual void show_points(bool show_polylines) = 0;
+  virtual bool are_points_shown() const         = 0;
+
   virtual void resize_viewport(eray::math::Vec2i win_size)                                                          = 0;
   virtual SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const = 0;
 

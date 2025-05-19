@@ -575,7 +575,17 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   {
     ImGui::Text("FPS: %d", fps_);
     ImGui::Checkbox("Grid", &m_.grid_on);
-    ImGui::Checkbox("Ortho", &m_.use_ortho);
+
+    bool points = m_.scene.renderer().are_points_shown();
+    if (ImGui::Checkbox("Show Points", &points)) {
+      m_.scene.renderer().show_points(points);
+    }
+
+    bool polylines = m_.scene.renderer().are_polylines_shown();
+    if (ImGui::Checkbox("Show Polylines", &polylines)) {
+      m_.scene.renderer().show_polylines(polylines);
+    }
+
     if (ImGui::Button("Look at cursor")) {
       m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
     }

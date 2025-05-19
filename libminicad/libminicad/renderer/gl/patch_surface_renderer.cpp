@@ -83,7 +83,7 @@ void PatchSurfaceRenderer::update_impl(Scene& /*scene*/) {
 
 void PatchSurfaceRenderer::render_control_grids() const {
   m_.control_grids_vao.bind();
-  //   ERAY_GL_CALL(glDrawElements(GL_LINES, m_.control_grids_indices.chunks_count(), GL_UNSIGNED_INT, nullptr));
+  ERAY_GL_CALL(glDrawElements(GL_LINES, m_.control_grids_indices.chunks_count(), GL_UNSIGNED_INT, nullptr));
 }
 
 void PatchSurfaceRenderer::render_surfaces() const {
