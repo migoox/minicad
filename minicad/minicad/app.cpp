@@ -4,6 +4,7 @@
 #include <imguizmo/ImGuizmo.h>
 
 #include <cstdint>
+#include <format>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
@@ -538,32 +539,26 @@ void MiniCadApp::gui_point_list_window() {
                         }
 
                         auto dim = obj.value()->dimensions();
+                        static std::string input_int_label;
                         for (auto i = 0U; i < dim.x; ++i) {
                           for (auto j = 0U; j < dim.y; ++j) {
-                            auto tess_level = obj.value()->tesselation(i, j);
-                            auto idx        = static_cast<int>(j * dim.x + i);
-                            ImGui::PushID(idx);
+                            auto tess_level = obj.value()->tess_level(i, j);
                             if (!tess_level) {
-                              ImGui::PopID();
                               continue;
                             }
-
-                            auto itess_level_x = static_cast<int>(tess_level->x);
-                            auto itess_level_y = static_cast<int>(tess_level->y);
-
-                            ImGui::Text("X=%d, Y=%d", i, j);
-                            if (ImGui::InputInt("X", &itess_level_x)) {
-                              auto tess = math::Vec2u(static_cast<uint32_t>(itess_level_x),
-                                                      static_cast<uint32_t>(itess_level_y));
-                              obj.value()->set_tesselation(i, j, tess);
+                            auto t          = *tess_level;
+                            auto st         = static_cast<int>(std::sqrt(t));
+                            auto left       = static_cast<int>(std::pow(st - 1, 2));
+                            auto right      = static_cast<int>(std::pow(st + 1, 2));
+                            input_int_label = std::format("X={}, Y={}", i, j);
+                            if (ImGui::InputInt(input_int_label.c_str(), &(*tess_level))) {
+                              if (*tess_level > t) {
+                                t = right;
+                              } else {
+                                t = left;
+                              }
+                              obj.value()->set_tess_level(i, j, std::max(t, 4));
                             }
-                            if (ImGui::InputInt("Y", &itess_level_y)) {
-                              auto tess = math::Vec2u(static_cast<uint32_t>(itess_level_x),
-                                                      static_cast<uint32_t>(itess_level_y));
-                              obj.value()->set_tesselation(i, j, tess);
-                            }
-                            ImGui::Separator();
-                            ImGui::PopID();
                           }
                         }
                       }

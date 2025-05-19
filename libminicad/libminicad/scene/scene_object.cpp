@@ -664,11 +664,11 @@ void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
     }
   }
 
-  tesselation_.resize(dim_.x * dim_.y);
+  tess_level_.resize(dim_.x * dim_.y);
   for (auto x = 0U; x < dim_.x; ++x) {
     for (auto y = 0U; y < dim_.y; ++y) {
-      size_t idx        = y * dim_.x + x;
-      tesselation_[idx] = eray::math::Vec2u(4U, 4U);
+      size_t idx       = y * dim_.x + x;
+      tess_level_[idx] = 4;
     }
   }
 }
@@ -710,7 +710,7 @@ std::generator<eray::math::Vec3f> PatchSurface::bezier3_points() const {
   for (auto x = 0U; x < dim_.x; ++x) {
     for (auto y = 0U; y < dim_.y; ++y) {
       size_t idx = y * dim_.x + x;
-      co_yield eray::math::Vec3f(static_cast<float>(tesselation_[idx].x), static_cast<float>(tesselation_[idx].y), 0.F);
+      co_yield eray::math::Vec3f(static_cast<float>(tess_level_[idx]), 0.F, 0.F);
     }
   }
 }
@@ -732,20 +732,20 @@ std::generator<std::uint32_t> PatchSurface::bezier3_indices() const {
 
 size_t PatchSurface::bezier3_indices_count() const { return dim_.x * dim_.y * kPatchSize * kPatchSize; }
 
-std::optional<eray::math::Vec2u> PatchSurface::tesselation(size_t x, size_t y) const {
+std::optional<int> PatchSurface::tess_level(size_t x, size_t y) const {
   if (x > dim_.x || y > dim_.y) {
     return std::nullopt;
   }
   size_t idx = y * dim_.x + x;
-  return tesselation_[idx];
+  return tess_level_[idx];
 }
 
-void PatchSurface::set_tesselation(size_t x, size_t y, eray::math::Vec2u tesselation) {
+void PatchSurface::set_tess_level(size_t x, size_t y, int tesselation) {
   if (x > dim_.x || y > dim_.y) {
     return;
   }
-  size_t idx        = y * dim_.x + x;
-  tesselation_[idx] = tesselation;
+  size_t idx       = y * dim_.x + x;
+  tess_level_[idx] = tesselation;
 
   scene().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));

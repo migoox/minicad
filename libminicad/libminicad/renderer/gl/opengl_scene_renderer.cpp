@@ -279,7 +279,12 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   // Render Patch Surface
   shaders_.bezier_surf->bind();
   shaders_.bezier_surf->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
+  shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
   shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.bezier_surf->set_uniform("u_horizontal", true);
+  patch_surface_renderer_.render_surfaces();
+  shaders_.bezier_surf->set_uniform("u_horizontal", false);
   patch_surface_renderer_.render_surfaces();
 
   // Render grid
