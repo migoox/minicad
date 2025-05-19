@@ -87,7 +87,7 @@ void PatchSurfaceRenderer::render_control_grids() const {
 }
 
 void PatchSurfaceRenderer::render_surfaces() const {
-  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 16));
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 17));
   m_.surfaces_vao.bind();
   ERAY_GL_CALL(glDrawElements(GL_PATCHES, m_.surfaces_indices.chunks_count(), GL_UNSIGNED_INT, nullptr));
 }

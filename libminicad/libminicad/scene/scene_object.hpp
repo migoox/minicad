@@ -443,6 +443,8 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   bool can_be_deleted() { return true; }
 
   const eray::math::Vec2u& dimensions() const { return dim_; }
+  std::optional<eray::math::Vec2u> tesselation(size_t x, size_t y) const;
+  void set_tesselation(size_t x, size_t y, eray::math::Vec2u tesselation);
 
  private:
   static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x) {
@@ -451,6 +453,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   }
 
   eray::math::Vec2u dim_;
+  std::vector<eray::math::Vec2u> tesselation_;
 };
 
 }  // namespace mini
