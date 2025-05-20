@@ -485,7 +485,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   void set_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
 
   void update() {}
-  void on_delete() {}
+  void on_delete();
   bool can_be_deleted() { return true; }
 
   const eray::math::Vec2u& dimensions() const { return dim_; }

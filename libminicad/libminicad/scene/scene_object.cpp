@@ -743,6 +743,14 @@ void PatchSurface::set_tess_level(size_t x, size_t y, int tesselation) {
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
 }
 
+void PatchSurface::on_delete() {
+  scene().renderer().push_object_rs_cmd(
+      PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::DeleteObject{}));
+  for (auto& p : points_.point_objects()) {
+    p.patch_surfaces_.erase(handle_);
+  }
+}
+
 std::generator<eray::math::Vec3f> BezierPatches::bezier3_points(ref<const PatchSurface> base) const {
   for (const auto& p : base.get().points()) {
     co_yield p;
