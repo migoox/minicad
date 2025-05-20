@@ -14,8 +14,6 @@
 #include <ranges>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 namespace util = eray::util;
@@ -619,7 +617,46 @@ std::generator<std::pair<eray::math::Vec3f, size_t>> BezierPatches::gen_control_
       }
     }
   } else if (std::holds_alternative<CylinderPatchSurfaceStarter>(starter)) {
-    co_return;  // TODO(migoox): implement cylinder
+    auto s = std::get<CylinderPatchSurfaceStarter>(starter);
+    auto n = dim.x * 2;
+
+    auto alpha      = std::numbers::pi_v<float> * 2.F / static_cast<float>(n);
+    auto alpha_half = alpha / 2.F;
+    auto inner_r    = s.radius;
+    auto outer_r    = s.radius / std::cos(alpha_half);
+
+    auto points_dim = control_points_dim(starter, dim);
+
+    for (auto y = 0U; y < points_dim.y; ++y) {
+      auto x_idx = 0U;
+      auto p     = eray::math::Vec3f::filled(0.F);
+      p.y        = s.height * static_cast<float>(y) / static_cast<float>(points_dim.y);
+      for (auto x = 0U; x < n; ++x) {
+        auto curr_alpha = static_cast<float>(x) * alpha;
+
+        if (x % 2 == 0 && x < n) {
+          p.x = std::cos(curr_alpha) * inner_r;
+          p.z = std::sin(curr_alpha) * inner_r;
+
+          auto idx = points_dim.x * y + x_idx;
+          co_yield std::make_pair(p, idx);
+          x_idx++;
+        }
+
+        p.x = std::cos(curr_alpha + alpha_half) * outer_r;
+        p.z = std::sin(curr_alpha + alpha_half) * outer_r;
+
+        auto idx = points_dim.x * y + x_idx;
+        co_yield std::make_pair(p, idx);
+        x_idx++;
+      }
+
+      p.x      = std::cos(0.F) * inner_r;
+      p.z      = std::sin(0.F) * inner_r;
+      auto idx = points_dim.x * y + x_idx;
+      co_yield std::make_pair(p, idx);
+      x_idx++;
+    }
   }
 }
 
@@ -629,7 +666,9 @@ eray::math::Vec2u BezierPatches::control_points_dim(const PatchSurfaceStarter& s
                                                                  dim.y * (PatchSurface::kPatchSize - 1) + 1);
                                       },
                                       [&](const CylinderPatchSurfaceStarter&) {
-                                        return eray::math::Vec2u::filled(0U);  // TODO(migoox): implement cylinder
+                                        return eray::math::Vec2u(dim.x * (PatchSurface::kPatchSize - 1) + 1,
+                                                                 dim.y * (PatchSurface::kPatchSize - 1) + 1);
+                                        // TODO(migoox): implement cylinder
                                       }},
                     starter);
 }
