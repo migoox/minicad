@@ -855,8 +855,9 @@ bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       Logger::info("Created patch surface \"{}\"", o.value()->name);
       if (!info.cylinder) {
-        o.value()->make_plane(math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)),
-                              math::Vec2f(info.size_x, info.size_y));
+        auto starter = PlanePatchSurfaceStarter{.size = math::Vec2f(info.size_x, info.size_y)};
+        o.value()->set_starter(starter,
+                               eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
       }
     }
 

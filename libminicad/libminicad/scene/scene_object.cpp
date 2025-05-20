@@ -14,6 +14,8 @@
 #include <ranges>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -540,79 +542,7 @@ PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
 
-// void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f patch_size) {
-//   auto handles_to_delete = std::vector<SceneObjectHandle>();
-//   for (auto col = 0U; col < dim_.x; ++col) {
-//     for (auto row = 0U; row < dim_.y; ++row) {
-//       if (col < dim.x && row < dim.y) {
-//         continue;
-//       }
-
-//       // Save patch control points to delete
-//       auto start_in_col = col == 0 ? 0U : 1U;
-//       auto start_in_row = row == 0 ? 0U : 1U;
-//       for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
-//         for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
-//           handles_to_delete.push_back(points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, dim_.x)).handle());
-//         }
-//       }
-//     }
-//   }
-//   dim_.x = std::min(dim_.x, dim.x);
-//   dim_.y = std::min(dim_.y, dim.y);
-
-//   points_.remove_many(handles_to_delete);
-//   for (const auto& h : handles_to_delete) {
-//     if (auto o = scene().arena<SceneObject>().get_obj(h)) {
-//       auto& obj = *o.value();
-//       auto it   = obj.patch_surfaces_.find(handle());
-//       if (it == obj.patch_surfaces_.end()) {
-//         eray::util::Logger::warn(
-//             "Attempted to unregister a point list from a point, but the point did not reference that point list.");
-//         continue;
-//       }
-//       obj.patch_surfaces_.erase(it);
-//       if (obj.can_be_deleted()) {
-//         scene().delete_obj(obj.handle());
-//       }
-//     }
-//   }
-
-//   size_t dx = dim.x - dim_.x;
-//   size_t dy = dim.y - dim_.y;
-
-//   size_t new_points_count =
-//       dx * (kPatchSize - 1) * (dim_.y * (kPatchSize - 1) + 1) + dy * (kPatchSize - 1) * (dim.x * (kPatchSize - 1) +
-//       1);
-
-//   auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
-//   auto new_points = std::vector<SceneObjectHandle>(((kPatchSize - 1) * dim_.x + 1) * ((kPatchSize - 1) * dim_.y + 1),
-//                                                    SceneObjectHandle(0, 0, 0));
-
-//   auto np_it = new_point_handles->begin();
-//   for (auto col = 0U; col < dim.x; ++col) {
-//     for (auto row = 0U; row < dim.y; ++row) {
-//       auto start_in_col = col == 0 ? 0U : 1U;
-//       auto start_in_row = row == 0 ? 0U : 1U;
-//       for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
-//         for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
-//           auto idx = find_idx(col, row, in_col, in_row, dim.x);
-//           if (col < dim_.x && row < dim_.y) {
-//             auto old_idx    = find_idx(col, row, in_col, in_row, dim_.x);
-//             new_points[idx] = points_.unsafe_by_idx(old_idx).handle();
-//           } else {
-//             new_points[idx] = *np_it;
-//             ++np_it;
-//           }
-//         }
-//       }
-//     }
-//   }
-//   points_.unsafe_set(scene(), new_points);
-//   dim_ = dim;
-// }
-
-void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
+void PatchSurface::set_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
   dim.x = std::max(dim.x, 1U);
   dim.y = std::max(dim.y, 1U);
 
@@ -632,38 +562,7 @@ void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
     }
   }
   points_.clear();
-
-  dim_                  = dim;
-  auto new_points_count = (dim.x * (kPatchSize - 1) + 1) * (dim.y * (kPatchSize - 1) + 1);
-
-  auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
-  if (!new_point_handles) {
-    util::Logger::err("Could not create new point objects");
-    return;
-  }
-  points_.unsafe_set(scene(), *new_point_handles);
-
-  for (auto col = 0U; col < dim_.x; ++col) {
-    for (auto row = 0U; row < dim_.y; ++row) {
-      auto start_in_col = col == 0 ? 0U : 1U;
-      auto start_in_row = row == 0 ? 0U : 1U;
-      for (auto in_col = start_in_col; in_col < kPatchSize; ++in_col) {
-        for (auto in_row = start_in_row; in_row < kPatchSize; ++in_row) {
-          auto p = eray::math::Vec3f::filled(0.F);
-          p.x    = size.x * static_cast<float>(col * (kPatchSize - 1) + in_col) /
-                static_cast<float>(dim_.x * (kPatchSize - 1) + 1);
-          p.z = size.y * static_cast<float>(row * (kPatchSize - 1) + in_row) /
-                static_cast<float>(dim_.y * (kPatchSize - 1) + 1);
-
-          auto& p_obj = points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, dim_.x));
-          p_obj.transform.set_local_pos(p);
-          p_obj.update();
-          p_obj.patch_surfaces_.emplace(handle());
-        }
-      }
-    }
-  }
-
+  dim_ = dim;
   tess_level_.resize(dim_.x * dim_.y);
   for (auto x = 0U; x < dim_.x; ++x) {
     for (auto y = 0U; y < dim_.y; ++y) {
@@ -671,6 +570,68 @@ void PatchSurface::make_plane(eray::math::Vec2u dim, eray::math::Vec2f size) {
       tess_level_[idx] = 4;
     }
   }
+  starter_ = starter;
+
+  auto new_points_count  = std::visit(eray::util::match{[&](auto& obj) {
+                                       auto points_dim = obj.control_points_dim(starter, dim);
+                                       return points_dim.x * points_dim.y;
+                                     }},
+                                      this->object);
+  auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
+  if (!new_point_handles) {
+    util::Logger::err("Could not create new point objects");
+    return;
+  }
+  points_.unsafe_set(scene(), *new_point_handles);
+
+  std::visit(eray::util::match{[&](auto& obj) {
+               auto generator = obj.gen_control_points(starter, dim);
+               for (const auto& [p, idx] : generator) {
+                 auto& p_obj = points_.unsafe_by_idx(idx);
+                 p_obj.transform.set_local_pos(p);
+                 p_obj.update();
+                 p_obj.patch_surfaces_.emplace(handle());
+               }
+             }},
+             this->object);
+}
+
+std::generator<std::pair<eray::math::Vec3f, size_t>> BezierPatches::gen_control_points(PatchSurfaceStarter starter,
+                                                                                       eray::math::Vec2u dim) {
+  if (std::holds_alternative<PlanePatchSurfaceStarter>(starter)) {
+    auto s = std::get<PlanePatchSurfaceStarter>(starter);
+
+    for (auto col = 0U; col < dim.x; ++col) {
+      for (auto row = 0U; row < dim.y; ++row) {
+        auto start_in_col = col == 0 ? 0U : 1U;
+        auto start_in_row = row == 0 ? 0U : 1U;
+        for (auto in_col = start_in_col; in_col < PatchSurface::kPatchSize; ++in_col) {
+          for (auto in_row = start_in_row; in_row < PatchSurface::kPatchSize; ++in_row) {
+            auto p = eray::math::Vec3f::filled(0.F);
+            p.x    = s.size.x * static_cast<float>(col * (PatchSurface::kPatchSize - 1) + in_col) /
+                  static_cast<float>(dim.x * (PatchSurface::kPatchSize - 1) + 1);
+            p.z = s.size.y * static_cast<float>(row * (PatchSurface::kPatchSize - 1) + in_row) /
+                  static_cast<float>(dim.y * (PatchSurface::kPatchSize - 1) + 1);
+            auto idx = find_idx(col, row, in_col, in_row, dim.x);
+            co_yield std::make_pair(p, idx);
+          }
+        }
+      }
+    }
+  } else if (std::holds_alternative<CylinderPatchSurfaceStarter>(starter)) {
+    co_return;  // TODO(migoox): implement cylinder
+  }
+}
+
+eray::math::Vec2u BezierPatches::control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
+  return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {
+                                        return eray::math::Vec2u(dim.x * (PatchSurface::kPatchSize - 1) + 1,
+                                                                 dim.y * (PatchSurface::kPatchSize - 1) + 1);
+                                      },
+                                      [&](const CylinderPatchSurfaceStarter&) {
+                                        return eray::math::Vec2u::filled(0U);  // TODO(migoox): implement cylinder
+                                      }},
+                    starter);
 }
 
 std::generator<eray::math::Vec3f> PatchSurface::control_points() const {
@@ -682,55 +643,47 @@ std::generator<eray::math::Vec3f> PatchSurface::control_points() const {
 size_t PatchSurface::control_points_count() const { return points_.size(); }
 
 std::generator<std::uint32_t> PatchSurface::grids_indices() const {
-  for (auto col = 0U; col < (kPatchSize - 1) * dim_.x + 1; ++col) {
-    for (auto row = 0U; row < (kPatchSize - 1) * dim_.y; ++row) {
-      co_yield row*((kPatchSize - 1) * dim_.x + 1) + col;
-      co_yield (row + 1) * ((kPatchSize - 1) * dim_.x + 1) + col;
+  auto dim = std::visit(eray::util::match{[this](const auto& type) { return type.control_points_dim(starter_, dim_); }},
+                        this->object);
+
+  for (auto row = 0U; row < dim.y; ++row) {
+    for (auto col = 0U; col < dim.x - 1; ++col) {
+      co_yield dim.x* row + col;
+      co_yield dim.x* row + col + 1;
     }
   }
 
-  for (auto row = 0U; row < (kPatchSize - 1) * dim_.y + 1; ++row) {
-    for (auto col = 0U; col < (kPatchSize - 1) * dim_.x; ++col) {
-      co_yield row*((kPatchSize - 1) * dim_.y + 1) + col;
-      co_yield row*((kPatchSize - 1) * dim_.y + 1) + col + 1;
+  for (auto row = 0U; row < dim.y - 1; ++row) {
+    for (auto col = 0U; col < dim.x; ++col) {
+      co_yield dim.x* row + col;
+      co_yield dim.x*(row + 1) + col;
     }
   }
 }
 
 size_t PatchSurface::grids_indices_count() const {
-  return 2 * (((kPatchSize - 1) * dim_.y + 1) * (kPatchSize - 1) * dim_.x +
-              ((kPatchSize - 1) * dim_.x + 1) * (kPatchSize - 1) * dim_.y);
+  return 2 * std::visit(eray::util::match{[this](const auto& type) {
+                          auto dim = type.control_points_dim(starter_, dim_);
+                          return dim.x * dim.y;
+                        }},
+                        this->object);
 }
 
 std::generator<eray::math::Vec3f> PatchSurface::bezier3_points() const {
-  for (const auto& p : points()) {
-    co_yield p;
-  }
-
-  for (auto x = 0U; x < dim_.x; ++x) {
-    for (auto y = 0U; y < dim_.y; ++y) {
-      size_t idx = y * dim_.x + x;
-      co_yield eray::math::Vec3f(static_cast<float>(tess_level_[idx]), 0.F, 0.F);
-    }
-  }
+  return std::visit(eray::util::match{[this](const auto& type) { return type.bezier3_points(*this); }}, object);
 }
 
-size_t PatchSurface::bezier3_points_count() const { return points_.size(); }
+size_t PatchSurface::bezier3_points_count() const {
+  return std::visit(eray::util::match{[this](const auto& type) { return type.bezier3_points_count(*this); }}, object);
+}
 
 std::generator<std::uint32_t> PatchSurface::bezier3_indices() const {
-  for (auto row = 0U; row < dim_.y; ++row) {
-    for (auto col = 0U; col < dim_.x; ++col) {
-      for (auto in_row = 0U; in_row < kPatchSize; ++in_row) {
-        for (auto in_col = 0U; in_col < kPatchSize; ++in_col) {
-          co_yield static_cast<std::uint32_t>(find_idx(col, row, in_col, in_row, dim_.x));
-        }
-      }
-      co_yield static_cast<uint32_t>(points_.size() + row * dim_.x + col);
-    }
-  }
+  return std::visit(eray::util::match{[this](const auto& type) { return type.bezier3_indices(*this); }}, object);
 }
 
-size_t PatchSurface::bezier3_indices_count() const { return dim_.x * dim_.y * kPatchSize * kPatchSize; }
+size_t PatchSurface::bezier3_indices_count() const {
+  return std::visit(eray::util::match{[this](const auto& type) { return type.bezier3_indices_count(*this); }}, object);
+}
 
 std::optional<int> PatchSurface::tess_level(size_t x, size_t y) const {
   if (x > dim_.x || y > dim_.y) {
@@ -749,6 +702,124 @@ void PatchSurface::set_tess_level(size_t x, size_t y, int tesselation) {
 
   scene().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
+}
+
+std::generator<eray::math::Vec3f> BezierPatches::bezier3_points(ref<const PatchSurface> base) const {
+  for (const auto& p : base.get().points()) {
+    co_yield p;
+  }
+
+  for (auto x = 0U; x < base.get().dim_.x; ++x) {
+    for (auto y = 0U; y < base.get().dim_.y; ++y) {
+      size_t idx = y * base.get().dim_.x + x;
+      co_yield eray::math::Vec3f(static_cast<float>(base.get().tess_level_[idx]), 0.F, 0.F);
+    }
+  }
+}
+
+size_t BezierPatches::bezier3_points_count(ref<const PatchSurface> base) const { return base.get().points_.size(); }
+
+std::generator<std::uint32_t> BezierPatches::bezier3_indices(ref<const PatchSurface> base) const {
+  for (auto row = 0U; row < base.get().dim_.y; ++row) {
+    for (auto col = 0U; col < base.get().dim_.x; ++col) {
+      for (auto in_row = 0U; in_row < PatchSurface::kPatchSize; ++in_row) {
+        for (auto in_col = 0U; in_col < PatchSurface::kPatchSize; ++in_col) {
+          co_yield static_cast<std::uint32_t>(find_idx(col, row, in_col, in_row, base.get().dim_.x));
+        }
+      }
+      co_yield static_cast<uint32_t>(base.get().points_.size() + row * base.get().dim_.x + col);
+    }
+  }
+}
+
+size_t BezierPatches::bezier3_indices_count(ref<const PatchSurface> base) const {
+  return base.get().dim_.x * base.get().dim_.y * PatchSurface::kPatchSize * PatchSurface::kPatchSize;
+}
+size_t BezierPatches::find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x) {
+  return ((PatchSurface::kPatchSize - 1) * dim_x + 1) * ((PatchSurface::kPatchSize - 1) * patch_y + point_y) +
+         ((PatchSurface::kPatchSize - 1) * patch_x + point_x);
+}
+
+std::generator<std::pair<eray::math::Vec3f, size_t>> BPatches::gen_control_points(PatchSurfaceStarter starter,
+                                                                                  eray::math::Vec2u dim) {
+  if (std::holds_alternative<PlanePatchSurfaceStarter>(starter)) {
+    auto s = std::get<PlanePatchSurfaceStarter>(starter);
+    for (auto col = 0U; col < dim.x + PatchSurface::kPatchSize - 1; ++col) {
+      for (auto row = 0U; row < dim.y + PatchSurface::kPatchSize - 1; ++row) {
+        auto idx = row * (dim.x + PatchSurface::kPatchSize - 1) + col;
+        auto p   = eray::math::Vec3f::filled(0.F);
+        p.x      = s.size.x * static_cast<float>(col) / static_cast<float>(dim.x + PatchSurface::kPatchSize - 1);
+        p.z      = s.size.y * static_cast<float>(row) / static_cast<float>(dim.y + PatchSurface::kPatchSize - 1);
+        co_yield std::make_pair(p, idx);
+      }
+    }
+  } else if (std::holds_alternative<CylinderPatchSurfaceStarter>(starter)) {
+    co_return;  // TODO(migoox): implement cylinder
+  }
+}
+
+eray::math::Vec2u BPatches::control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
+  return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {
+                                        return eray::math::Vec2u(dim.x + PatchSurface::kPatchSize - 1,
+                                                                 dim.y + PatchSurface::kPatchSize - 1);
+                                      },
+                                      [&](const CylinderPatchSurfaceStarter&) {
+                                        return eray::math::Vec2u::filled(0U);  // TODO(migoox): implement cylinder
+                                      }},
+                    starter);
+}
+
+std::generator<eray::math::Vec3f> BPatches::bezier3_points(ref<const PatchSurface> base) const {
+  auto dim = base.get().dimensions();
+  math::Vec3f bezier_patch[4][4];
+  for (auto x = 0U; x < dim.x; ++x) {
+    for (auto y = 0U; y < dim.y; ++y) {
+      for (auto iy = 0U; iy < PatchSurface::kPatchSize; ++iy) {
+        auto p0 = base.get().points_.unsafe_by_idx(find_idx(x, y, 0, iy, dim.x)).transform.pos();
+        auto p1 = base.get().points_.unsafe_by_idx(find_idx(x, y, 1, iy, dim.x)).transform.pos();
+        auto p2 = base.get().points_.unsafe_by_idx(find_idx(x, y, 2, iy, dim.x)).transform.pos();
+        auto p3 = base.get().points_.unsafe_by_idx(find_idx(x, y, 3, iy, dim.x)).transform.pos();
+
+        bezier_patch[iy][0] = (p0 + 4 * p1 + p2) / 6.0;
+        bezier_patch[iy][1] = (4 * p1 + 2 * p2) / 6.0;
+        bezier_patch[iy][2] = (2 * p1 + 4 * p2) / 6.0;
+        bezier_patch[iy][3] = (p1 + 4 * p2 + p3) / 6.0;
+      }
+      for (auto ix = 0U; ix < PatchSurface::kPatchSize; ++ix) {
+        auto c0 = bezier_patch[0][ix];
+        auto c1 = bezier_patch[1][ix];
+        auto c2 = bezier_patch[2][ix];
+        auto c3 = bezier_patch[3][ix];
+
+        co_yield (c0 + 4.0 * c1 + c2) / 6.0;
+        co_yield (4.0 * c1 + 2.0 * c2) / 6.0;
+        co_yield (2.0 * c1 + 4.0 * c2) / 6.0;
+        co_yield (c1 + 4.0 * c2 + c3) / 6.0;
+      }
+      co_yield eray::math::Vec3f(static_cast<float>(base.get().tess_level_[dim.x * y + x]), 0.F, 0.F);
+    }
+  }
+}
+
+size_t BPatches::bezier3_points_count(ref<const PatchSurface> base) const {
+  auto dim = base.get().dimensions();
+  return dim.x * dim.y * (PatchSurface::kPatchSize) * (PatchSurface::kPatchSize) + dim.x * dim.y;
+}
+
+std::generator<std::uint32_t> BPatches::bezier3_indices(ref<const PatchSurface> base) const {
+  auto dim = base.get().dimensions();
+  for (auto i = 0U; i < dim.x * dim.y * (PatchSurface::kPatchSize) * (PatchSurface::kPatchSize) + dim.x * dim.y; ++i) {
+    co_yield i;
+  }
+}
+
+size_t BPatches::bezier3_indices_count(ref<const PatchSurface> base) const {
+  auto dim = base.get().dimensions();
+  return dim.x * dim.y * (PatchSurface::kPatchSize) * (PatchSurface::kPatchSize) + dim.x * dim.y;
+}
+
+size_t BPatches::find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x) {
+  return (patch_y + point_y) * (dim_x + PatchSurface::kPatchSize - 1) + (patch_x + point_x);
 }
 
 }  // namespace mini
