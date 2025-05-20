@@ -35,6 +35,7 @@ struct PatchSurfaceInfo {
   int x         = 1;
   int y         = 1;
   float r       = 1.F;
+  float h       = 1.F;
   float size_x  = 1.F;
   float size_y  = 1.F;
   bool cylinder = false;

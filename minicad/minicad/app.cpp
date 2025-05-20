@@ -190,7 +190,12 @@ void MiniCadApp::gui_objects_list_window() {
   }
 
   {
-    static auto info = ImGui::mini::PatchSurfaceInfo{.size_x = 10.F, .size_y = 10.F};
+    static auto info = ImGui::mini::PatchSurfaceInfo{
+        .r      = 3.F,
+        .h      = 10.F,
+        .size_x = 10.F,
+        .size_y = 10.F,
+    };
     if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", info)) {
       switch (chosen_patch_surface_type) {
         case PatchSurfaceType::BezierPatchSurface:
@@ -860,8 +865,8 @@ bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui
                                eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
       } else {
         auto starter = CylinderPatchSurfaceStarter{
-            .radius = 5.F,
-            .height = 10.F,
+            .radius = info.r,
+            .height = info.h,
         };
         o.value()->set_starter(starter,
                                eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));

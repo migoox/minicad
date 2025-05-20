@@ -114,6 +114,7 @@ bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info) {
       ImGui::DragFloat("Size Y", &info.size_y, 0.1F, 1.F, 50.F);
     } else {
       ImGui::DragFloat("Radius", &info.r);
+      ImGui::DragFloat("Height", &info.h);
     }
     if (ImGui::Button("Add", ImVec2(120, 0))) {
       result = true;
