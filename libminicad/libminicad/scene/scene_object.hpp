@@ -439,7 +439,8 @@ class BPatches {
   size_t bezier3_indices_count(ref<const PatchSurface> base) const;
 
  private:
-  static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x);
+  static size_t find_idx(const PatchSurfaceStarter& starter, size_t patch_x, size_t patch_y, size_t point_x,
+                         size_t point_y, size_t dim_x);
 };
 
 template <typename T>

@@ -720,10 +720,7 @@ size_t PatchSurface::grids_indices_count() const {
                         this->object);
 
   return 2 * std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) { return dim.x * dim.y; },
-                                          [&](const CylinderPatchSurfaceStarter&) {
-                                            //
-                                            return (dim.x + 1) * dim.y + 1;
-                                          }},
+                                          [&](const CylinderPatchSurfaceStarter&) { return (dim.x + 1) * dim.y + 1; }},
                         this->starter_);
 }
 
@@ -804,6 +801,7 @@ std::generator<std::uint32_t> BezierPatches::bezier3_indices(ref<const PatchSurf
 size_t BezierPatches::bezier3_indices_count(ref<const PatchSurface> base) const {
   return base.get().dim_.x * base.get().dim_.y * PatchSurface::kPatchSize * PatchSurface::kPatchSize;
 }
+
 size_t BezierPatches::find_idx(const PatchSurfaceStarter& starter, size_t patch_x, size_t patch_y, size_t point_x,
                                size_t point_y, size_t dim_x) {
   return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {
@@ -872,23 +870,22 @@ eray::math::Vec2u BPatches::control_points_dim(const PatchSurfaceStarter& starte
                                                                  dim.y + PatchSurface::kPatchSize - 1);
                                       },
                                       [&](const CylinderPatchSurfaceStarter&) {
-                                        return eray::math::Vec2u(
-                                            dim.x + PatchSurface::kPatchSize - 1,
-                                            dim.y + PatchSurface::kPatchSize - 1);  // TODO(migoox): implement cylinder
+                                        return eray::math::Vec2u(dim.x, dim.y + PatchSurface::kPatchSize - 1);
                                       }},
                     starter);
 }
 
 std::generator<eray::math::Vec3f> BPatches::bezier3_points(ref<const PatchSurface> base) const {
-  auto dim = base.get().dimensions();
+  auto dim     = base.get().dimensions();
+  auto starter = base.get().starter_;
   math::Vec3f bezier_patch[4][4];
   for (auto x = 0U; x < dim.x; ++x) {
     for (auto y = 0U; y < dim.y; ++y) {
       for (auto iy = 0U; iy < PatchSurface::kPatchSize; ++iy) {
-        auto p0 = base.get().points_.unsafe_by_idx(find_idx(x, y, 0, iy, dim.x)).transform.pos();
-        auto p1 = base.get().points_.unsafe_by_idx(find_idx(x, y, 1, iy, dim.x)).transform.pos();
-        auto p2 = base.get().points_.unsafe_by_idx(find_idx(x, y, 2, iy, dim.x)).transform.pos();
-        auto p3 = base.get().points_.unsafe_by_idx(find_idx(x, y, 3, iy, dim.x)).transform.pos();
+        auto p0 = base.get().points_.unsafe_by_idx(find_idx(starter, x, y, 0, iy, dim.x)).transform.pos();
+        auto p1 = base.get().points_.unsafe_by_idx(find_idx(starter, x, y, 1, iy, dim.x)).transform.pos();
+        auto p2 = base.get().points_.unsafe_by_idx(find_idx(starter, x, y, 2, iy, dim.x)).transform.pos();
+        auto p3 = base.get().points_.unsafe_by_idx(find_idx(starter, x, y, 3, iy, dim.x)).transform.pos();
 
         bezier_patch[iy][0] = (p0 + 4 * p1 + p2) / 6.0;
         bezier_patch[iy][1] = (4 * p1 + 2 * p2) / 6.0;
@@ -928,8 +925,16 @@ size_t BPatches::bezier3_indices_count(ref<const PatchSurface> base) const {
   return dim.x * dim.y * (PatchSurface::kPatchSize) * (PatchSurface::kPatchSize) + dim.x * dim.y;
 }
 
-size_t BPatches::find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x) {
-  return (patch_y + point_y) * (dim_x + PatchSurface::kPatchSize - 1) + (patch_x + point_x);
+size_t BPatches::find_idx(const PatchSurfaceStarter& starter, size_t patch_x, size_t patch_y, size_t point_x,
+                          size_t point_y, size_t dim_x) {
+  return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {
+                                        return (patch_y + point_y) * (dim_x + PatchSurface::kPatchSize - 1) +
+                                               (patch_x + point_x);
+                                      },
+                                      [&](const CylinderPatchSurfaceStarter&) {
+                                        return (patch_y + point_y) * dim_x + (patch_x + point_x) % dim_x;
+                                      }},
+                    starter);
 }
 
 }  // namespace mini

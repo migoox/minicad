@@ -106,6 +106,9 @@ bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info) {
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
   if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (info.cylinder) {
+      info.x = std::max(info.x, 3);
+    }
     ImGui::InputInt("X", &info.x);
     ImGui::InputInt("Y", &info.y);
     ImGui::Checkbox("Cylinder", &info.cylinder);
