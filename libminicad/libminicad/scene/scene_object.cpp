@@ -793,7 +793,32 @@ std::generator<std::pair<eray::math::Vec3f, size_t>> BPatches::gen_control_point
       }
     }
   } else if (std::holds_alternative<CylinderPatchSurfaceStarter>(starter)) {
-    co_return;  // TODO(migoox): implement cylinder
+    auto s  = std::get<CylinderPatchSurfaceStarter>(starter);
+    auto n  = dim.x * 2;
+    auto nf = static_cast<float>(n);
+
+    auto alpha      = std::numbers::pi_v<float> * 2.F / nf;
+    auto alpha_half = alpha / 2.F;
+    auto beta       = std::numbers::pi_v<float> * (nf - 2.F) / (2.F * nf);
+    auto gamma      = std::numbers::pi_v<float> - 2.F * beta;
+    auto r          = s.radius * (1.F + std::tan(alpha_half) * std::tan(gamma));
+
+    auto points_dim = control_points_dim(starter, dim);
+
+    for (auto y = 0U; y < points_dim.y; ++y) {
+      auto x_idx = 0U;
+      auto p     = eray::math::Vec3f::filled(0.F);
+      p.y        = s.height * static_cast<float>(y) / static_cast<float>(points_dim.y);
+      for (auto x = 0U; x < points_dim.x; ++x) {
+        auto curr_alpha = static_cast<float>(x) * 2.F * alpha;
+        p.x             = std::cos(curr_alpha) * r;
+        p.z             = std::sin(curr_alpha) * r;
+
+        auto idx = points_dim.x * y + x_idx;
+        co_yield std::make_pair(p, idx);
+        x_idx++;
+      }
+    }
   }
 }
 
@@ -803,7 +828,9 @@ eray::math::Vec2u BPatches::control_points_dim(const PatchSurfaceStarter& starte
                                                                  dim.y + PatchSurface::kPatchSize - 1);
                                       },
                                       [&](const CylinderPatchSurfaceStarter&) {
-                                        return eray::math::Vec2u::filled(0U);  // TODO(migoox): implement cylinder
+                                        return eray::math::Vec2u(
+                                            dim.x + PatchSurface::kPatchSize - 1,
+                                            dim.y + PatchSurface::kPatchSize - 1);  // TODO(migoox): implement cylinder
                                       }},
                     starter);
 }
