@@ -99,7 +99,7 @@ class Arena {
 
   std::expected<Handle, ObjectCreationError> create(Scene& scene, Object::Variant&& variant) {
     if (objects_freed_.empty()) {
-      eray::util::Logger::warn("Reached limit of objects");
+      eray::util::Logger::warn("Reached limit of objects. Available {}. Requested {}.", 0, 1);
       return std::unexpected(ObjectCreationError::ReachedMaxObjects);
     }
 
@@ -109,7 +109,7 @@ class Arena {
   std::expected<std::vector<Handle>, ObjectCreationError> create_many(ref<Scene> scene, Object::Variant variant,
                                                                       size_t count) {
     if (objects_freed_.size() < count) {
-      eray::util::Logger::warn("Reached limit of objects");
+      eray::util::Logger::warn("Reached limit of objects. Available {}. Requested {}.", objects_freed_.size(), count);
       return std::unexpected(ObjectCreationError::ReachedMaxObjects);
     }
 
@@ -154,6 +154,7 @@ class Arena {
       auto idx                   = objects_[h].second;
       objects_order_[idx].obj_id = max_objs_;  // mark handle as invalid
       objects_[h.obj_id]         = std::nullopt;
+      objects_freed_.push(h.obj_id);
     }
 
     for (auto i = 0U, j = 0U; i < objects_order_.size(); ++i) {

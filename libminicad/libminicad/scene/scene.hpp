@@ -91,7 +91,7 @@ class Scene {
   ISceneRenderer& renderer() { return *renderer_; }
 
  public:
-  static constexpr std::size_t kMaxObjects = 100;
+  static constexpr std::size_t kMaxObjects = 10000;
 
  private:
   void remove_from_order(size_t ind);
