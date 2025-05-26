@@ -459,11 +459,12 @@ void MiniCadApp::gui_point_list_window() {
                         }
 
                         if (!std::holds_alternative<Polyline>(obj.value()->object)) {
-                          auto state = m_.scene.renderer().object_rs(obj.value()->handle());
-                          if (state) {
-                            if (ImGui::Checkbox("Polyline", &state->show_polyline)) {
-                              m_.scene.renderer().push_object_rs_cmd(CurveRSCommand(
-                                  obj.value()->handle(), CurveRSCommand::ShowPolyline(state->show_polyline)));
+                          if (auto state = m_.scene.renderer().object_rs(obj.value()->handle())) {
+                            if (auto* s = std::get_if<CurveRS>(&(*state))) {
+                              if (ImGui::Checkbox("Polyline", &s->show_polyline)) {
+                                m_.scene.renderer().push_object_rs_cmd(CurveRSCommand(
+                                    obj.value()->handle(), CurveRSCommand::ShowPolyline(s->show_polyline)));
+                              }
                             }
                           }
                         }

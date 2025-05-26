@@ -4,6 +4,7 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
+#include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
@@ -14,8 +15,7 @@
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
-
-#include "libminicad/renderer/gl/curves_renderer.hpp"
+#include <variant>
 
 namespace mini::gl {
 
@@ -23,6 +23,7 @@ namespace driver = eray::driver;
 namespace gl     = eray::driver::gl;
 namespace res    = eray::res;
 namespace math   = eray::math;
+namespace util   = eray::util;
 
 namespace {
 
@@ -177,21 +178,28 @@ void OpenGLSceneRenderer::push_object_rs_cmd(const RSCommand& cmd) {
                                [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); }},
              cmd);
 }
-
-std::optional<::mini::SceneObjectRS> OpenGLSceneRenderer::object_rs(const SceneObjectHandle& handle) {
-  return scene_objs_renderer_.object_rs(handle);
+std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handle) {
+  return std::visit(
+      eray::util::match{
+          [this](const SceneObjectHandle& handle) -> std::optional<ObjectRS> {
+            return scene_objs_renderer_.object_rs(handle);
+          },
+          [this](const CurveHandle& handle) -> std::optional<ObjectRS> { return curve_renderer_.object_rs(handle); },
+          [this](const PatchSurfaceHandle& handle) -> std::optional<ObjectRS> {
+            return patch_surface_renderer_.object_rs(handle);
+          },
+      },
+      handle);
 }
 
-void OpenGLSceneRenderer::set_object_rs(const SceneObjectHandle& handle, const ::mini::SceneObjectRS& state) {
-  scene_objs_renderer_.set_object_rs(handle, state);
-}
-
-std::optional<::mini::CurveRS> OpenGLSceneRenderer::object_rs(const CurveHandle& handle) {
-  return curve_renderer_.object_rs(handle);
-}
-
-void OpenGLSceneRenderer::set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) {
-  curve_renderer_.set_object_rs(handle, state);
+void OpenGLSceneRenderer::set_object_rs(const ObjectHandle& handle, const ObjectRS& state) {
+  std::visit(
+      eray::util::match{
+          [&](const SceneObjectHandle& h, const SceneObjectRS& s) { scene_objs_renderer_.set_object_rs(h, s); },
+          [&](const CurveHandle& h, const CurveRS& s) { curve_renderer_.set_object_rs(h, s); },
+          [&](const PatchSurfaceHandle& h, const PatchSurfaceRS& s) { patch_surface_renderer_.set_object_rs(h, s); },
+          [&](auto&&, auto&&) { util::Logger::warn("Detected handle and rendering state mismatch."); }},
+      handle, state);
 }
 
 void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
@@ -201,14 +209,6 @@ void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Imag
 void OpenGLSceneRenderer::set_anaglyph_rendering_enabled(bool anaglyph) { global_rs_.anaglyph_enabled = anaglyph; }
 
 bool OpenGLSceneRenderer::is_anaglyph_rendering_enabled() const { return global_rs_.anaglyph_enabled; }
-
-std::optional<::mini::PatchSurfaceRS> OpenGLSceneRenderer::object_rs(const PatchSurfaceHandle& handle) {
-  return patch_surface_renderer_.object_rs(handle);
-}
-
-void OpenGLSceneRenderer::set_object_rs(const PatchSurfaceHandle& handle, const ::mini::PatchSurfaceRS& state) {
-  patch_surface_renderer_.set_object_rs(handle, state);
-}
 
 ::mini::BillboardRS& OpenGLSceneRenderer::billboard(zstring_view name) { return global_rs_.billboards.at(name).state; }
 

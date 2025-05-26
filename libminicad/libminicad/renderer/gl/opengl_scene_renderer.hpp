@@ -34,15 +34,8 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
       const std::filesystem::path& assets_path, eray::math::Vec2i win_size);
 
   void push_object_rs_cmd(const RSCommand& cmd) final;
-
-  std::optional<::mini::SceneObjectRS> object_rs(const SceneObjectHandle& handle) final;
-  void set_object_rs(const SceneObjectHandle& handle, const ::mini::SceneObjectRS& state) final;
-
-  std::optional<::mini::CurveRS> object_rs(const CurveHandle& handle) final;
-  void set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) final;
-
-  std::optional<::mini::PatchSurfaceRS> object_rs(const PatchSurfaceHandle& handle) final;
-  void set_object_rs(const PatchSurfaceHandle& handle, const ::mini::PatchSurfaceRS& state) final;
+  std::optional<ObjectRS> object_rs(const ObjectHandle& handle) final;
+  void set_object_rs(const ObjectHandle& handle, const ObjectRS& state) final;
 
   void add_billboard(zstring_view name, const eray::res::Image& img) final;
   ::mini::BillboardRS& billboard(zstring_view name) final;
