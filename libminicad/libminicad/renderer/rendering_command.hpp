@@ -193,4 +193,10 @@ struct RSCommandPriority<PatchSurfaceRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 
+// ---------------------------------------------------------------------------------------------------------------------
+// - RSCommand ---------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand>;
+
 }  // namespace mini

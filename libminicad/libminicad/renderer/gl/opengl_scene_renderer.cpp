@@ -15,6 +15,8 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
 
+#include "libminicad/renderer/gl/curves_renderer.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -169,7 +171,12 @@ OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs
       framebuffer_(std::move(framebuffer)),
       right_eye_framebuffer_(std::move(right_framebuffer)) {}
 
-void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_renderer_.push_cmd(cmd); }
+void OpenGLSceneRenderer::push_object_rs_cmd(const RSCommand& cmd) {
+  std::visit(eray::util::match{[this](const SceneObjectRSCommand& v) { scene_objs_renderer_.push_cmd(v); },
+                               [this](const CurveRSCommand& v) { curve_renderer_.push_cmd(v); },
+                               [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); }},
+             cmd);
+}
 
 std::optional<::mini::SceneObjectRS> OpenGLSceneRenderer::object_rs(const SceneObjectHandle& handle) {
   return scene_objs_renderer_.object_rs(handle);
@@ -187,8 +194,6 @@ void OpenGLSceneRenderer::set_object_rs(const CurveHandle& handle, const ::mini:
   curve_renderer_.set_object_rs(handle, state);
 }
 
-void OpenGLSceneRenderer::push_object_rs_cmd(const CurveRSCommand& cmd) { curve_renderer_.push_cmd(cmd); }
-
 void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Image& img) {
   auto txt = create_texture(img);
   global_rs_.billboards.insert({name, BillboardRS(std::move(txt))});
@@ -196,10 +201,6 @@ void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Imag
 void OpenGLSceneRenderer::set_anaglyph_rendering_enabled(bool anaglyph) { global_rs_.anaglyph_enabled = anaglyph; }
 
 bool OpenGLSceneRenderer::is_anaglyph_rendering_enabled() const { return global_rs_.anaglyph_enabled; }
-
-void OpenGLSceneRenderer::push_object_rs_cmd(const PatchSurfaceRSCommand& cmd) {
-  patch_surface_renderer_.push_cmd(cmd);
-}
 
 std::optional<::mini::PatchSurfaceRS> OpenGLSceneRenderer::object_rs(const PatchSurfaceHandle& handle) {
   return patch_surface_renderer_.object_rs(handle);

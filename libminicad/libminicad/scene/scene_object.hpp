@@ -16,8 +16,6 @@
 #include <unordered_set>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 #define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
   template <typename Variant>                                                \
   struct ValidateVariant_##TVariant;                                         \

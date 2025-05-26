@@ -32,15 +32,14 @@ class ISceneRenderer {
  public:
   virtual ~ISceneRenderer() = default;
 
-  virtual void push_object_rs_cmd(const SceneObjectRSCommand& cmd)                        = 0;
+  virtual void push_object_rs_cmd(const RSCommand& cmd) = 0;
+
   virtual std::optional<SceneObjectRS> object_rs(const SceneObjectHandle& handle)         = 0;
   virtual void set_object_rs(const SceneObjectHandle& handle, const SceneObjectRS& state) = 0;
 
-  virtual void push_object_rs_cmd(const CurveRSCommand& cmd)                  = 0;
   virtual std::optional<CurveRS> object_rs(const CurveHandle& handle)         = 0;
   virtual void set_object_rs(const CurveHandle& handle, const CurveRS& state) = 0;
 
-  virtual void push_object_rs_cmd(const PatchSurfaceRSCommand& cmd)                         = 0;
   virtual std::optional<PatchSurfaceRS> object_rs(const PatchSurfaceHandle& handle)         = 0;
   virtual void set_object_rs(const PatchSurfaceHandle& handle, const PatchSurfaceRS& state) = 0;
 

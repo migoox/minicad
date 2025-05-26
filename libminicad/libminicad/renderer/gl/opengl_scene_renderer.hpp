@@ -16,8 +16,6 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
-#include "liberay/math/mat_fwd.hpp"
-
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
@@ -35,15 +33,14 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   static std::expected<std::unique_ptr<ISceneRenderer>, SceneRendererCreationError> create(
       const std::filesystem::path& assets_path, eray::math::Vec2i win_size);
 
-  void push_object_rs_cmd(const SceneObjectRSCommand& cmd) final;
+  void push_object_rs_cmd(const RSCommand& cmd) final;
+
   std::optional<::mini::SceneObjectRS> object_rs(const SceneObjectHandle& handle) final;
   void set_object_rs(const SceneObjectHandle& handle, const ::mini::SceneObjectRS& state) final;
 
-  void push_object_rs_cmd(const CurveRSCommand& cmd) final;
   std::optional<::mini::CurveRS> object_rs(const CurveHandle& handle) final;
   void set_object_rs(const CurveHandle& handle, const ::mini::CurveRS& state) final;
 
-  void push_object_rs_cmd(const PatchSurfaceRSCommand& cmd) final;
   std::optional<::mini::PatchSurfaceRS> object_rs(const PatchSurfaceHandle& handle) final;
   void set_object_rs(const PatchSurfaceHandle& handle, const ::mini::PatchSurfaceRS& state) final;
 
