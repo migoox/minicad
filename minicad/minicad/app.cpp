@@ -591,6 +591,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       m_.scene.renderer().show_polylines(polylines);
     }
 
+    bool anaglyph = m_.scene.renderer().is_anaglyph_rendering_enabled();
+    if (ImGui::Checkbox("Anaglyph enabled", &anaglyph)) {
+      m_.scene.renderer().set_anaglyph_rendering_enabled(anaglyph);
+    }
+
     if (ImGui::Button("Look at cursor")) {
       m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
     }

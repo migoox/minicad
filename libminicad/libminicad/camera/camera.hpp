@@ -24,10 +24,12 @@ class Camera {
   void set_near_plane(float near_plane);
   void set_far_plane(float far_plane);
 
-  eray::math::Mat4f view_matrix() const { return transform.world_to_local_matrix(); }
-  eray::math::Mat4f inverse_view_matrix() const { return transform.local_to_world_matrix(); }
-  eray::math::Mat4f proj_matrix() const { return projection_; }
-  eray::math::Mat4f inverse_proj_matrix() const { return projection_inv_; }
+  const eray::math::Mat4f& view_matrix() const { return transform.world_to_local_matrix(); }
+  const eray::math::Mat4f& inverse_view_matrix() const { return transform.local_to_world_matrix(); }
+  const eray::math::Mat4f& proj_matrix() const { return projection_; }
+  eray::math::Mat4f stereo_right_proj_matrix() const;
+  eray::math::Mat4f stereo_left_proj_matrix() const;
+  const eray::math::Mat4f& inverse_proj_matrix() const { return projection_inv_; }
 
   void recalculate_projection();
 

@@ -16,6 +16,8 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "liberay/math/mat_fwd.hpp"
+
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
@@ -60,8 +62,15 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   void resize_viewport(eray::math::Vec2i win_size) final;
   SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const final;
 
+  void set_anaglyph_rendering_enabled(bool anaglyph) final;
+  bool is_anaglyph_rendering_enabled() const final;
+
   void update(Scene& scene) final;
-  void render(Camera& camera) final;
+  void render(const Camera& camera) final;
+
+ private:
+  void render_internal(eray::driver::gl::ViewportFramebuffer& fb, const Camera& camera,
+                       const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat);
 
  private:
   friend SceneObjectRSCommandHandler;
@@ -77,6 +86,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> instanced_sprite;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> helper_points;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> screen_quad;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> anaglyph_merger;
   } shaders_;
 
   struct GlobalRS {
@@ -88,6 +98,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     bool show_grid;
     bool show_polylines;
     bool show_points;
+    bool anaglyph_enabled;
   } global_rs_;
 
   CurvesRenderer curve_renderer_;
@@ -95,11 +106,13 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   PatchSurfaceRenderer patch_surface_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
+  std::unique_ptr<eray::driver::gl::ViewportFramebuffer> right_eye_framebuffer_;
 
  private:
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
-                               std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer);
+                               std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
+                               std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer);
 };
 
 }  // namespace mini::gl

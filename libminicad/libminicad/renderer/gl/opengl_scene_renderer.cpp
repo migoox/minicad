@@ -122,6 +122,12 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                      gl::RenderingShaderProgram::create("screen_quad_shader", std::move(screen_quad_vert),
                                                         std::move(screen_quad_frag)));
 
+  TRY_UNWRAP_ASSET(anaglyph_merger_vert, manager.load_shader(shaders_path / "utils" / "screen_quad.vert"));
+  TRY_UNWRAP_ASSET(anaglyph_merger_frag, manager.load_shader(shaders_path / "utils" / "anaglyph_merger.frag"));
+  TRY_UNWRAP_PROGRAM(anaglyph_merger_prog,
+                     gl::RenderingShaderProgram::create("anaglyph_merger_shader", std::move(anaglyph_merger_vert),
+                                                        std::move(anaglyph_merger_frag)));
+
   auto shaders = Shaders{
       .param            = std::move(param_prog),                      //
       .grid             = std::move(grid_prog),                       //
@@ -132,6 +138,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .instanced_sprite = std::move(instanced_sprite_prog),           //
       .helper_points    = std::move(instanced_no_state_sprite_prog),  //
       .screen_quad      = std::move(screen_quad_prog),                //
+      .anaglyph_merger  = std::move(anaglyph_merger_prog)             //
   };
 
   auto global_rs = GlobalRS{
@@ -140,23 +147,27 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .helper_point_txt = create_texture(helper_point_img),  //
       .show_grid        = true,                              //
       .show_polylines   = true,                              //
-      .show_points      = true                               //
+      .show_points      = true,                              //
+      .anaglyph_enabled = false,
   };
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
       std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), CurvesRenderer::create(),
-      PatchSurfaceRenderer::create(), std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
+      PatchSurfaceRenderer::create(), std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
+      std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
 
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                          CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
-                                         std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer)
+                                         std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
+                                         std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
       curve_renderer_(std::move(curve_objs_rs)),
       scene_objs_renderer_(std::move(objs_rs)),
       patch_surface_renderer_(std::move(patch_surface_rs)),
-      framebuffer_(std::move(framebuffer)) {}
+      framebuffer_(std::move(framebuffer)),
+      right_eye_framebuffer_(std::move(right_framebuffer)) {}
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const SceneObjectRSCommand& cmd) { scene_objs_renderer_.push_cmd(cmd); }
 
@@ -182,6 +193,9 @@ void OpenGLSceneRenderer::add_billboard(zstring_view name, const eray::res::Imag
   auto txt = create_texture(img);
   global_rs_.billboards.insert({name, BillboardRS(std::move(txt))});
 }
+void OpenGLSceneRenderer::set_anaglyph_rendering_enabled(bool anaglyph) { global_rs_.anaglyph_enabled = anaglyph; }
+
+bool OpenGLSceneRenderer::is_anaglyph_rendering_enabled() const { return global_rs_.anaglyph_enabled; }
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const PatchSurfaceRSCommand& cmd) {
   patch_surface_renderer_.push_cmd(cmd);
@@ -199,6 +213,7 @@ void OpenGLSceneRenderer::set_object_rs(const PatchSurfaceHandle& handle, const 
 
 void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
   framebuffer_->resize(static_cast<size_t>(win_size.x), static_cast<size_t>(win_size.y));
+  right_eye_framebuffer_->resize(static_cast<size_t>(win_size.x), static_cast<size_t>(win_size.y));
 }
 
 void OpenGLSceneRenderer::update(Scene& scene) {
@@ -240,9 +255,47 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
   return SampledSceneObjects{.handles = handles};
 }
 
-void OpenGLSceneRenderer::render(Camera& camera) {
-  framebuffer_->bind();
-  framebuffer_->clear_pick_render();
+void OpenGLSceneRenderer::render(const Camera& camera) {
+  if (!is_anaglyph_rendering_enabled()) {
+    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.proj_matrix());
+
+    // Render to the default framebuffer
+    ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+    ERAY_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+    ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, framebuffer_->color_texture()));
+
+    ERAY_GL_CALL(glClearColor(1.0F, 1.0F, 1.0F, 1.0F));
+    ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT));
+    shaders_.screen_quad->bind();
+    shaders_.screen_quad->set_uniform("u_textureSampler", 0);
+    ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+  } else {
+    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.stereo_left_proj_matrix());
+    render_internal(*right_eye_framebuffer_, camera, camera.view_matrix(), camera.stereo_right_proj_matrix());
+    ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+    ERAY_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+    ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, framebuffer_->color_texture()));
+
+    ERAY_GL_CALL(glActiveTexture(GL_TEXTURE1));
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, right_eye_framebuffer_->color_texture()));
+
+    ERAY_GL_CALL(glClearColor(1.0F, 1.0F, 1.0F, 1.0F));
+    ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT));
+    shaders_.anaglyph_merger->bind();
+    shaders_.anaglyph_merger->set_uniform("u_left", 0);
+    shaders_.anaglyph_merger->set_uniform("u_right", 1);
+    ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+  }
+}
+
+void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer& fb, const Camera& camera,
+                                          const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat) {
+  fb.bind();
+  fb.clear_pick_render();
 
   // Prepare the framebuffer
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
@@ -253,38 +306,38 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
   // Render parameterized surfaces
-  framebuffer_->begin_pick_render();
+  fb.begin_pick_render();
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
-  shaders_.param->set_uniform("u_vMat", camera.view_matrix());
-  shaders_.param->set_uniform("u_pMat", camera.proj_matrix());
+  shaders_.param->set_uniform("u_vMat", view_mat);
+  shaders_.param->set_uniform("u_pMat", proj_mat);
   shaders_.param->bind();
   shaders_.param->set_uniform("u_fill", true);
   scene_objs_renderer_.render_parameterized_surfaces_filled();
-  framebuffer_->end_pick_render();
+  fb.end_pick_render();
   shaders_.param->set_uniform("u_fill", false);
   scene_objs_renderer_.render_parameterized_surfaces();
 
   // Render polylines and control grids
   if (are_polylines_shown()) {
     shaders_.polyline->bind();
-    shaders_.polyline->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
     curve_renderer_.render_polylines();
     patch_surface_renderer_.render_control_grids();
   }
 
   // Render Curves
   shaders_.bezier->bind();
-  shaders_.bezier->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
-  shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
+  shaders_.bezier->set_uniform("u_pvMat", proj_mat * view_mat);
+  shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
+  shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
   shaders_.bezier->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   curve_renderer_.render_curves();
 
   // Render Patch Surface
   shaders_.bezier_surf->bind();
-  shaders_.bezier_surf->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
-  shaders_.bezier->set_uniform("u_width", static_cast<float>(framebuffer_->width()));
-  shaders_.bezier->set_uniform("u_height", static_cast<float>(framebuffer_->height()));
+  shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
+  shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
+  shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
   shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   shaders_.bezier_surf->set_uniform("u_horizontal", true);
   patch_surface_renderer_.render_surfaces();
@@ -294,7 +347,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
   // Render grid
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   if (global_rs_.show_grid) {
-    shaders_.grid->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.grid->set_uniform("u_pvMat", proj_mat * view_mat);
     shaders_.grid->set_uniform("u_vInvMat", camera.inverse_view_matrix());
     shaders_.grid->set_uniform("u_camWorldPos", camera.transform.pos());
     shaders_.grid->bind();
@@ -306,30 +359,30 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
   // Render Bernstein control points for B-Splines
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-  framebuffer_->begin_pick_render();
+  fb.begin_pick_render();
   ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
   ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.helper_point_txt.get()));
-  shaders_.helper_points->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+  shaders_.helper_points->set_uniform("u_pvMat", proj_mat * view_mat);
   shaders_.helper_points->set_uniform("u_scale", 0.02F);
   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.helper_points->set_uniform("u_textureSampler", 0);
   shaders_.helper_points->bind();
   curve_renderer_.render_helper_points();
-  framebuffer_->end_pick_render();
+  fb.end_pick_render();
 
   // Render control points
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   if (are_points_shown()) {
-    framebuffer_->begin_pick_render();
+    fb.begin_pick_render();
     ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
     ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.point_txt.get()));
-    shaders_.instanced_sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.instanced_sprite->set_uniform("u_pvMat", proj_mat * view_mat);
     shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
     shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
     shaders_.instanced_sprite->bind();
     scene_objs_renderer_.render_control_points();
-    framebuffer_->end_pick_render();
+    fb.end_pick_render();
   }
 
   // Render billboards
@@ -341,7 +394,7 @@ void OpenGLSceneRenderer::render(Camera& camera) {
 
     ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, billboard.texture.get()));
     shaders_.sprite->set_uniform("u_worldPos", billboard.state.position);
-    shaders_.sprite->set_uniform("u_pvMat", camera.proj_matrix() * camera.view_matrix());
+    shaders_.sprite->set_uniform("u_pvMat", proj_mat * view_mat);
     shaders_.sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.sprite->set_uniform("u_scale", billboard.state.scale);
     shaders_.sprite->set_uniform("u_textureSampler", 0);
@@ -349,16 +402,6 @@ void OpenGLSceneRenderer::render(Camera& camera) {
     ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   }
   ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
-
-  // Render to the default framebuffer
-  ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
-  ERAY_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-  ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, framebuffer_->color_texture()));
-  ERAY_GL_CALL(glClearColor(1.0F, 1.0F, 1.0F, 1.0F));
-  ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT));
-  shaders_.screen_quad->bind();
-  shaders_.screen_quad->set_uniform("u_textureSampler", 0);
-  ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
 }
 
 }  // namespace mini::gl
