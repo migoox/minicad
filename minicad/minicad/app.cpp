@@ -579,6 +579,24 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::Begin("MiNI CAD");
   {
+    static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
+        os::FileDialog::FilterItem("Project", "json")};
+
+    if (ImGui::Button("Load...")) {
+      if (auto result =
+              System::file_dialog().open_file([this](const auto& p) { this->on_project_open(p); }, kFileDialogFilters);
+          !result) {
+        util::Logger::err("Failed to open file dialog");
+      }
+    }
+    if (ImGui::Button("Save as...")) {
+      if (auto result =
+              System::file_dialog().save_file([this](const auto& p) { this->on_project_save(p); }, kFileDialogFilters);
+          !result) {
+        util::Logger::err("Failed to open file dialog");
+      }
+    }
+
     ImGui::Text("FPS: %d", fps_);
     ImGui::Checkbox("Grid", &m_.grid_on);
 
@@ -1048,6 +1066,16 @@ bool MiniCadApp::on_tool_action_start() {
   }
 
   return false;
+}
+
+bool MiniCadApp::on_project_open(const std::filesystem::path& path) {
+  util::Logger::info("Opened file with path: {}", path.string());
+  return true;
+}
+
+bool MiniCadApp::on_project_save(const std::filesystem::path& path) {
+  util::Logger::info("Saved file to path: {}", path.string());
+  return true;
 }
 
 bool MiniCadApp::on_tool_action_end() {

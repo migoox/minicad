@@ -19,14 +19,13 @@
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
+#include <minicad/imgui/modals.hpp>
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
-
-#include "libminicad/scene/scene_object_handle.hpp"
-#include "minicad/imgui/modals.hpp"
 
 namespace mini {
 
@@ -133,6 +132,9 @@ class MiniCadApp final : public eray::os::Application {
   bool on_point_lists_selection_set_single(const PointListObjectHandle& handle);
   bool on_point_lists_selection_remove(const PointListObjectHandle& handle);
   bool on_point_lists_selection_clear();
+
+  bool on_project_open(const std::filesystem::path& path);
+  bool on_project_save(const std::filesystem::path& path);
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
