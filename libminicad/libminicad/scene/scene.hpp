@@ -25,17 +25,30 @@ class Scene {
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
 
   template <typename TObject>
-  Arena<TObject>& arena() {
+  [[nodiscard]] Arena<TObject>& arena() {
     return std::get<Arena<TObject>>(arenas_);
   }
 
   template <typename TObject>
-  const Arena<TObject>& arena() const {
+  [[nodiscard]] const Arena<TObject>& arena() const {
     return std::get<Arena<TObject>>(arenas_);
   }
 
   bool add_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
   bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
+
+  template <CObject TObject>
+  std::expected<ObserverPtr<TObject>, ObjectCreationError> create_obj_and_get(TObject::Variant&& variant) {
+    auto obj = arena<TObject>().create_and_get(*this, std::move(variant));
+    if (!obj) {
+      return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+    }
+    auto handle             = obj.value()->handle();
+    obj.value()->order_idx_ = objects_order_.size();
+    objects_order_.emplace_back(handle);
+
+    return std::move(*obj);
+  }
 
   template <CObject TObject>
   std::expected<eray::util::Handle<TObject>, ObjectCreationError> create_obj(TObject::Variant&& variant) {
@@ -79,7 +92,7 @@ class Scene {
 
   // TODO(migoox): delete many objs
 
-  const std::vector<ObjectHandle>& objs() const { return objects_order_; }
+  const std::vector<ObjectHandle>& handles() const { return objects_order_; }
 
   /**
    * @brief Calls renderer update, which fetches the commands from the queues and applies the changes
@@ -89,6 +102,8 @@ class Scene {
   void update_rendering_state() { renderer_->update(*this); }
 
   ISceneRenderer& renderer() { return *renderer_; }
+
+  void clear();
 
  public:
   static constexpr std::size_t kMaxObjects = 10000;

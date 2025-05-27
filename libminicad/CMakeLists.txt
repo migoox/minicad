@@ -10,7 +10,7 @@ file(GLOB_RECURSE SOURCES
 
 add_library(${PROJECT_NAME} ${SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PUBLIC liberay)
+target_link_libraries(${PROJECT_NAME} PUBLIC liberay nlohmann_json)
 
 target_compile_options(${PROJECT_NAME} PRIVATE ${PROJ_CXX_FLAGS})
 target_link_options(${PROJECT_NAME} PRIVATE ${PROJ_SHARED_LINKER_FLAGS})

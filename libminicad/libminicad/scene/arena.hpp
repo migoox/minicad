@@ -10,6 +10,8 @@
 #include <stack>
 #include <vector>
 
+#include "libminicad/scene/scene_object_handle.hpp"
+
 namespace mini {
 
 template <CObject Object>
@@ -72,17 +74,23 @@ class Arena {
 
   const std::vector<Handle>& objs_handles() const { return objects_order_; }
 
-  const auto& objs() const {
-    return objects_order_ |
-           std::ranges::views::transform([this](const Handle& handle) { return objects_[handle.obj_id].first; });
+  auto objs() const {
+    return objects_order_ | std::ranges::views::transform([this](const Handle& handle) -> const Object& {
+             return objects_[handle.obj_id]->first;
+           });
   }
 
-  auto& objs() {
-    return objects_order_ |
-           std::ranges::views::transform([this](const Handle& handle) { return objects_[handle.obj_id].first; });
+  auto objs() {
+    return objects_order_ | std::ranges::views::transform(
+                                [this](const Handle& handle) -> Object& { return objects_[handle.obj_id]->first; });
   }
 
   std::uint32_t curr_obj_idx() const { return object_idx_; }
+
+  void clear() {
+    auto cpy = std::vector(objects_order_);
+    delete_many(cpy);
+  }
 
  protected:
   friend Scene;
@@ -95,6 +103,15 @@ class Arena {
     }
     objects_freed_.push(0U);
     objects_.resize(max_objs);
+  }
+
+  std::expected<ObserverPtr<Object>, ObjectCreationError> create_and_get(Scene& scene, Object::Variant&& variant) {
+    if (objects_freed_.empty()) {
+      eray::util::Logger::warn("Reached limit of objects. Available {}. Requested {}.", 0, 1);
+      return std::unexpected(ObjectCreationError::ReachedMaxObjects);
+    }
+    auto h = unsafe_create(scene, std::move(variant));
+    return ObserverPtr<Object>(objects_[h.obj_id]->first);
   }
 
   std::expected<Handle, ObjectCreationError> create(Scene& scene, Object::Variant&& variant) {
@@ -151,8 +168,8 @@ class Arena {
       }
       ++count;
 
-      auto idx                   = objects_[h].second;
-      objects_order_[idx].obj_id = max_objs_;  // mark handle as invalid
+      auto idx                   = objects_[h.obj_id]->second;
+      objects_order_[idx].obj_id = static_cast<uint32_t>(max_objs_);  // mark handle as invalid
       objects_[h.obj_id]         = std::nullopt;
       objects_freed_.push(h.obj_id);
     }
@@ -162,11 +179,13 @@ class Arena {
         objects_order_[j++] = objects_order_[i];
       }
     }
-    objects_order_.resize(objects_order_.size() - count);
+    objects_order_.resize(objects_order_.size() - count, Handle(0U, 0U, 0U));
 
     for (auto i = 0U; auto& h : objects_order_) {
-      objects_[h].second = i++;
+      objects_[h.obj_id]->second = i++;
     }
+
+    return count > 0;
   }
 
   Object& unsafe_at(const Handle& handle) { return objects_.at(handle.obj_id)->first; }

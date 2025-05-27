@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <format>
+#include <fstream>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
@@ -32,6 +33,7 @@
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/serialization/json/json.hpp>
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
@@ -233,7 +235,7 @@ void MiniCadApp::gui_objects_list_window() {
   ImGui::Separator();
 
   static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
-  for (const auto& obj : m_.scene.objs()) {
+  for (const auto& obj : m_.scene.handles()) {
     std::visit(  //
         util::match{
             [&](const SceneObjectHandle& handle) {
@@ -1069,12 +1071,36 @@ bool MiniCadApp::on_tool_action_start() {
 }
 
 bool MiniCadApp::on_project_open(const std::filesystem::path& path) {
-  util::Logger::info("Opened file with path: {}", path.string());
+  util::Logger::info("Received file path: {}", path.string());
+  auto deserializer = JsonDeserializer::create();
+  if (auto file = std::ifstream(path)) {
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    auto json = ss.str();
+
+    if (auto result = deserializer.deserialize(m_.scene, json); !result) {
+      util::Logger::err("Could deserialize file with path {}.", path.string());
+    } else {
+      util::Logger::succ("Loaded project from file: {}", path.string());
+    }
+
+  } else {
+    util::Logger::err("Could not open file {}. Input stream could not be opened.", path.string());
+  }
+
   return true;
 }
 
-bool MiniCadApp::on_project_save(const std::filesystem::path& path) {
-  util::Logger::info("Saved file to path: {}", path.string());
+bool MiniCadApp::on_project_save(const std::filesystem::path& path) const {
+  util::Logger::info("Received file path: {}", path.string());
+  auto serializer = JsonSerializer::create();
+  auto str        = serializer.serialize(m_.scene);
+  if (auto file = std::ofstream(path); file) {
+    file << str;
+    util::Logger::succ("Saved project to file: {}", path.string());
+  } else {
+    util::Logger::err("Could save to file {}. Output stream could not be opened.", path.string());
+  }
   return true;
 }
 

@@ -56,4 +56,9 @@ void Scene::remove_from_order(size_t ind) {
   objects_order_.erase(objects_order_.begin() + static_cast<int>(ind));
 }
 
+void Scene::clear() {
+  std::apply([](auto&... arena) { ((arena.clear()), ...); }, arenas_);
+  objects_order_.clear();
+}
+
 }  // namespace mini

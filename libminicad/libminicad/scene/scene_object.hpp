@@ -16,6 +16,8 @@
 #include <unordered_set>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 #define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
   template <typename Variant>                                                \
   struct ValidateVariant_##TVariant;                                         \
@@ -126,7 +128,6 @@ class PointListObjectBase {
  public:
   auto point_objects() { return points_.point_objects(); }
   auto point_objects() const { return points_.point_objects(); }
-  auto point_handles() { return points_.point_handles(); }
   auto point_handles() const { return points_.point_handles(); }
 
   auto points() const {
@@ -484,13 +485,29 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   void set_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
 
-  void update() {}
+  enum class StarterError : uint8_t {
+    PointsAndDimensionsMismatch = 0,
+    SceneObjectIsNotAPoint      = 1,
+    SceneObjectDoesNotExist     = 2,
+  };
+
+  std::expected<void, StarterError> set_starter_from_points(const PatchSurfaceStarter& starter, eray::math::Vec2u dim,
+                                                            const std::vector<SceneObjectHandle>& points);
+
+  void update();
   void on_delete();
   bool can_be_deleted() { return true; }
 
   const eray::math::Vec2u& dimensions() const { return dim_; }
+  eray::math::Vec2u control_points_dim() const;
+
   std::optional<int> tess_level(size_t x, size_t y) const;
   void set_tess_level(size_t x, size_t y, int tesselation);
+  void set_tess_level_for_all(int tesselation);
+
+ private:
+  void clear();
+  void reset_tess_level(eray::math::Vec2u dim);
 
  private:
   friend BezierPatches;

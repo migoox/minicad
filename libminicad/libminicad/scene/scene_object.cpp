@@ -544,37 +544,16 @@ void PatchSurface::set_starter(const PatchSurfaceStarter& starter, eray::math::V
   dim.x = std::max(dim.x, 1U);
   dim.y = std::max(dim.y, 1U);
 
-  for (const auto& h : points_.point_handles()) {
-    if (auto o = scene().arena<SceneObject>().get_obj(h)) {
-      auto& obj = *o.value();
-      auto it   = obj.patch_surfaces_.find(handle());
-      if (it == obj.patch_surfaces_.end()) {
-        eray::util::Logger::warn(
-            "Attempted to unregister a point list from a point, but the point did not reference that point list.");
-        continue;
-      }
-      obj.patch_surfaces_.erase(it);
-      if (obj.can_be_deleted()) {
-        scene().delete_obj(obj.handle());
-      }
-    }
-  }
-  points_.clear();
-  dim_ = dim;
-  tess_level_.resize(dim_.x * dim_.y);
-  for (auto x = 0U; x < dim_.x; ++x) {
-    for (auto y = 0U; y < dim_.y; ++y) {
-      size_t idx       = y * dim_.x + x;
-      tess_level_[idx] = 4;
-    }
-  }
-  starter_ = starter;
+  clear();
+  reset_tess_level(dim);
 
-  auto new_points_count  = std::visit(eray::util::match{[&](auto& obj) {
+  starter_              = starter;
+  auto new_points_count = std::visit(eray::util::match{[&](auto& obj) {
                                        auto points_dim = obj.control_points_dim(starter, dim);
                                        return points_dim.x * points_dim.y;
                                      }},
-                                      this->object);
+                                     this->object);
+
   auto new_point_handles = scene().create_many_objs<SceneObject>(Point{}, new_points_count);
   if (!new_point_handles) {
     util::Logger::err("Could not create new point objects");
@@ -592,6 +571,85 @@ void PatchSurface::set_starter(const PatchSurfaceStarter& starter, eray::math::V
                }
              }},
              this->object);
+}
+std::expected<void, PatchSurface::StarterError> PatchSurface::set_starter_from_points(
+    const PatchSurfaceStarter& starter, eray::math::Vec2u dim, const std::vector<SceneObjectHandle>& points) {
+  dim.x                 = std::max(dim.x, 1U);
+  dim.y                 = std::max(dim.y, 1U);
+  auto new_points_count = std::visit(eray::util::match{[&](auto& obj) {
+                                       auto points_dim = obj.control_points_dim(starter, dim);
+                                       return points_dim.x * points_dim.y;
+                                     }},
+                                     this->object);
+  if (new_points_count != points.size()) {
+    util::Logger::err("The number of provided points does not match the provided size");
+    return std::unexpected(StarterError::PointsAndDimensionsMismatch);
+  }
+
+  for (const auto& h : points) {
+    if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+      auto& obj = **opt;
+      if (obj.has_type<Point>()) {
+        obj.patch_surfaces_.insert(handle_);
+      } else {
+        util::Logger::err("One of the provided scene object is not a point");
+        return std::unexpected(StarterError::SceneObjectIsNotAPoint);
+      }
+    } else {
+      util::Logger::err("One of the provided scene object does not exist");
+      return std::unexpected(StarterError::SceneObjectDoesNotExist);
+    }
+  }
+
+  clear();
+  reset_tess_level(dim);
+  starter_ = starter;
+  points_.unsafe_set(scene(), points);
+
+  return {};
+}
+
+void PatchSurface::clear() {
+  for (const auto& h : points_.point_handles()) {
+    if (auto o = scene().arena<SceneObject>().get_obj(h)) {
+      auto& obj = *o.value();
+      auto it   = obj.patch_surfaces_.find(handle());
+      if (it == obj.patch_surfaces_.end()) {
+        eray::util::Logger::warn(
+            "Attempted to unregister a point list from a point, but the point did not reference that point list.");
+        continue;
+      }
+      obj.patch_surfaces_.erase(it);
+      if (obj.can_be_deleted()) {
+        scene().delete_obj(obj.handle());
+      }
+    }
+  }
+  points_.clear();
+}
+
+void PatchSurface::reset_tess_level(eray::math::Vec2u dim) {
+  dim_ = dim;
+  tess_level_.resize(dim_.x * dim_.y);
+  for (auto x = 0U; x < dim_.x; ++x) {
+    for (auto y = 0U; y < dim_.y; ++y) {
+      size_t idx       = y * dim_.x + x;
+      tess_level_[idx] = 4;
+    }
+  }
+}
+
+void PatchSurface::set_tess_level_for_all(int tesselation) {
+  // fix tesselation
+  auto st     = static_cast<int>(std::sqrt(tesselation));
+  tesselation = st * st;
+
+  for (auto x = 0U; x < dim_.x; ++x) {
+    for (auto y = 0U; y < dim_.y; ++y) {
+      size_t idx       = y * dim_.x + x;
+      tess_level_[idx] = tesselation;
+    }
+  }
 }
 
 std::generator<std::pair<eray::math::Vec3f, size_t>> BezierPatches::gen_control_points(PatchSurfaceStarter starter,
@@ -752,6 +810,11 @@ void PatchSurface::set_tess_level(size_t x, size_t y, int tesselation) {
   if (x > dim_.x || y > dim_.y) {
     return;
   }
+
+  // fix tesselation
+  auto st     = static_cast<int>(std::sqrt(tesselation));
+  tesselation = st * st;
+
   size_t idx       = y * dim_.x + x;
   tess_level_[idx] = tesselation;
 
@@ -935,6 +998,15 @@ size_t BPatches::find_idx(const PatchSurfaceStarter& starter, size_t patch_x, si
                                         return (patch_y + point_y) * dim_x + (patch_x + point_x) % dim_x;
                                       }},
                     starter);
+}
+
+eray::math::Vec2u PatchSurface::control_points_dim() const {
+  return std::visit(eray::util::match{[&](const auto& v) { return v.control_points_dim(starter_, dim_); }}, object);
+}
+
+void PatchSurface::update() {
+  scene().renderer().push_object_rs_cmd(
+      PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
 }
 
 }  // namespace mini

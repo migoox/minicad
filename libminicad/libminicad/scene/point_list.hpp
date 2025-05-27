@@ -35,8 +35,10 @@ class PointList {
     return points_ | std::ranges::views::transform([](const auto& ref) -> const auto& { return ref.get(); });
   }
 
-  auto point_handles() const { return points_map_ | std::views::keys; }
-  auto point_handles() { return points_map_ | std::views::keys; }
+  auto point_handles() const {
+    return points_ |
+           std::views::transform([](const auto& obj) -> const SceneObjectHandle& { return obj.get().handle(); });
+  }
 
   std::optional<size_t> point_idx(const SceneObjectHandle& handle) {
     auto it = points_map_.find(handle);

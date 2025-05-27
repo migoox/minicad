@@ -134,7 +134,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_point_lists_selection_clear();
 
   bool on_project_open(const std::filesystem::path& path);
-  bool on_project_save(const std::filesystem::path& path);
+  bool on_project_save(const std::filesystem::path& path) const;
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
