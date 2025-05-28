@@ -127,17 +127,11 @@ std::string JsonSerializer::serialize(const Scene& scene) {
     }
     geometry.set_control_points(control_points);
 
-    if (auto tess_level = surface.tess_level(0, 0)) {
-      auto target_uv = json_schema::Uint2();
-      target_uv.set_u(*tess_level);
-      target_uv.set_v(*tess_level);
-      geometry.set_samples(target_uv);
-    } else {
-      auto target_uv = json_schema::Uint2();
-      target_uv.set_u(4);
-      target_uv.set_v(4);
-      geometry.set_samples(target_uv);
-    }
+    auto tess_level = surface.tess_level();
+    auto target_uv  = json_schema::Uint2();
+    target_uv.set_u(tess_level);
+    target_uv.set_v(tess_level);
+    geometry.set_samples(target_uv);
 
     auto target_size = json_schema::Uint2();
     auto dim         = surface.control_points_dim();
@@ -328,7 +322,7 @@ void JsonDeserializer::Visitor::operator()(PatchSurfaceVariant&& v, const json_s
       if (s->get_u() != s->get_v()) {
         eray::util::Logger::warn("Expected the same u and v samples for surface with id {}", elem.get_id());
       }
-      obj.set_tess_level_for_all(static_cast<int>(std::max(s->get_u(), s->get_v())));
+      obj.set_tess_level(static_cast<int>(std::max(s->get_u(), s->get_v())));
     } else {
       eray::util::Logger::warn("Expected samples for surface with id {}", elem.get_id());
     }

@@ -404,37 +404,39 @@ struct CylinderPatchSurfaceStarter {
 
 using PatchSurfaceStarter = std::variant<PlanePatchSurfaceStarter, CylinderPatchSurfaceStarter>;
 
-class BezierPatches {
+struct BezierPatches {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Bezier Patches"; }
-  static void set_control_points(PointList& points, PatchSurfaceStarter starter, eray::math::Vec2u dim);
+  static void set_control_points(PointList& points, const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   [[nodiscard]] static eray::math::Vec2u control_points_dim(eray::math::Vec2u patches_dim);
   [[nodiscard]] static eray::math::Vec2u unique_control_points_dim(const PatchSurfaceStarter& starter,
                                                                    eray::math::Vec2u patches_dim);
 
-  std::generator<eray::math::Vec3f> bezier3_points(ref<const PatchSurface> base) const;
-  size_t bezier3_points_count(ref<const PatchSurface> base) const;
-
-  std::generator<std::uint32_t> bezier3_indices(ref<const PatchSurface> base) const;
-  size_t bezier3_indices_count(ref<const PatchSurface> base) const;
+  /**
+   * @brief Every 17th point stores info about tesselation.
+   *
+   * @param bezier
+   */
+  void update_bezier3_points(PatchSurface& base);
 
  private:
   static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x);
 };
 
-class BPatches {
+struct BPatches {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "B-Patches"; }
-  static void set_control_points(PointList& points, PatchSurfaceStarter starter, eray::math::Vec2u dim);
+  static void set_control_points(PointList& points, const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   [[nodiscard]] static eray::math::Vec2u control_points_dim(eray::math::Vec2u patches_dim);
   [[nodiscard]] static eray::math::Vec2u unique_control_points_dim(const PatchSurfaceStarter& starter,
                                                                    eray::math::Vec2u patches_dim);
 
-  std::generator<eray::math::Vec3f> bezier3_points(ref<const PatchSurface> base) const;
-  size_t bezier3_points_count(ref<const PatchSurface> base) const;
-
-  std::generator<std::uint32_t> bezier3_indices(ref<const PatchSurface> base) const;
-  size_t bezier3_indices_count(ref<const PatchSurface> base) const;
+  /**
+   * @brief Every 17th point stores info about tesselation.
+   *
+   * @param bezier
+   */
+  void update_bezier3_points(PatchSurface& base);
 
  private:
   static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x);
@@ -442,16 +444,13 @@ class BPatches {
 
 template <typename T>
 concept CPatchSurfaceType =
-    requires(T t, ref<const PatchSurface> gen, eray::math::Vec2u dim, const PatchSurfaceStarter& starter_ref,
-             PatchSurfaceStarter starter, PointList& points) {
+    requires(T t, PatchSurface& base, eray::math::Vec2u dim, const PatchSurfaceStarter& starter_ref,
+             const PatchSurfaceStarter& starter, PointList& points) {
       { T::type_name() } -> std::same_as<zstring_view>;
       { T::set_control_points(points, starter, dim) } -> std::same_as<void>;
       { T::control_points_dim(dim) } -> std::same_as<eray::math::Vec2u>;
       { T::unique_control_points_dim(starter_ref, dim) } -> std::same_as<eray::math::Vec2u>;
-      { t.bezier3_points(gen) } -> std::same_as<std::generator<eray::math::Vec3f>>;
-      { t.bezier3_points_count(gen) } -> std::same_as<size_t>;
-      { t.bezier3_indices(gen) } -> std::same_as<std::generator<std::uint32_t>>;
-      { t.bezier3_indices_count(gen) } -> std::same_as<size_t>;
+      { t.update_bezier3_points(base) } -> std::same_as<void>;
     };
 
 using PatchSurfaceVariant = std::variant<BezierPatches, BPatches>;
@@ -469,19 +468,13 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   ERAY_DEFAULT_MOVE(PatchSurface)
   ERAY_DELETE_COPY(PatchSurface)
 
-  static constexpr int kPatchSize = 4;
+  static constexpr int kPatchSize        = 4;
+  static constexpr int kDefaultTessLevel = 4;
 
-  std::generator<eray::math::Vec3f> control_points() const;
-  size_t control_points_count() const;
+  std::generator<eray::math::Vec3f> control_grid_points() const;
+  size_t control_grid_points_count() const;
 
-  std::generator<std::uint32_t> grids_indices() const;
-  size_t grids_indices_count() const;
-
-  std::generator<eray::math::Vec3f> bezier3_points() const;
-  size_t bezier3_points_count() const;
-
-  std::generator<std::uint32_t> bezier3_indices() const;
-  size_t bezier3_indices_count() const;
+  const std::vector<eray::math::Vec3f>& bezier3_points();
 
   void set_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
 
@@ -501,20 +494,23 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   const eray::math::Vec2u& dimensions() const { return dim_; }
   eray::math::Vec2u control_points_dim() const;
 
-  std::optional<int> tess_level(size_t x, size_t y) const;
-  void set_tess_level(size_t x, size_t y, int tesselation);
-  void set_tess_level_for_all(int tesselation);
+  int tess_level() const { return tess_level_; }
+  void set_tess_level(int tesselation);
 
  private:
+  void mark_bezier3_dirty() { bezier_dirty_ = true; }
   void clear();
-  void reset_tess_level(eray::math::Vec2u dim);
 
  private:
+  friend SceneObject;
+  friend Point;
   friend BezierPatches;
   friend BPatches;
 
   eray::math::Vec2u dim_;
-  std::vector<int> tess_level_;
+  int tess_level_ = kDefaultTessLevel;
+  std::vector<eray::math::Vec3f> bezier_points_;
+  bool bezier_dirty_ = true;
 };
 
 }  // namespace mini

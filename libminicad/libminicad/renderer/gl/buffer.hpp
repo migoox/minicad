@@ -67,7 +67,7 @@ class ChunksBuffer {
   }
 
   void update_chunk(const ChunkOwnerHandle& owner, const std::vector<CPUSourceType>& data) {
-    update_chunk(owner, std::move(eray::util::container_to_generator(data)), data.size());
+    update_chunk(owner, std::move(eray::util::container_to_generator(std::ref(data))), data.size());
   }
 
   void update_chunk(const ChunkOwnerHandle& owner, std::generator<CPUSourceType> data, size_t count) {

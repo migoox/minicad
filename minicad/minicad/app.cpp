@@ -547,28 +547,9 @@ void MiniCadApp::gui_point_list_window() {
                           obj.value()->name = object_name;
                         }
 
-                        auto dim = obj.value()->dimensions();
-                        static std::string input_int_label;
-                        for (auto i = 0U; i < dim.x; ++i) {
-                          for (auto j = 0U; j < dim.y; ++j) {
-                            auto tess_level = obj.value()->tess_level(i, j);
-                            if (!tess_level) {
-                              continue;
-                            }
-                            auto t          = *tess_level;
-                            auto st         = static_cast<int>(std::sqrt(t));
-                            auto left       = static_cast<int>(std::pow(st - 1, 2));
-                            auto right      = static_cast<int>(std::pow(st + 1, 2));
-                            input_int_label = std::format("X={}, Y={}", i, j);
-                            if (ImGui::InputInt(input_int_label.c_str(), &(*tess_level))) {
-                              if (*tess_level > t) {
-                                t = right;
-                              } else {
-                                t = left;
-                              }
-                              obj.value()->set_tess_level(i, j, std::max(t, 4));
-                            }
-                          }
+                        auto tess_level = obj.value()->tess_level();
+                        if (ImGui::InputInt("Tesselation level", &tess_level)) {
+                          obj.value()->set_tess_level(tess_level);
                         }
                       }
                     }},
