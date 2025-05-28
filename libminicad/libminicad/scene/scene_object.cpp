@@ -515,10 +515,14 @@ void NaturalSplineCurve::update(Curve& base) { reset_segments(base); }
 
 std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const Curve> /*base*/) const {
   for (const auto& s : segments_) {
+    auto b = s.b * s.chord_length;
+    auto c = s.c * s.chord_length * s.chord_length;
+    auto d = s.d * s.chord_length * s.chord_length * s.chord_length;
+
     co_yield s.a;
-    co_yield s.a + 1.F / 3.F * s.b;
-    co_yield s.a + 2.F / 3.F * s.b + 1.F / 3.F * s.c;
-    co_yield s.a + s.b + s.c + s.d;
+    co_yield s.a + 1.F / 3.F * b;
+    co_yield s.a + 2.F / 3.F * b + 1.F / 3.F * c;
+    co_yield s.a + b + c + d;
   }
 }
 
@@ -712,6 +716,9 @@ const std::vector<eray::math::Vec3f>& PatchSurface::bezier3_points() {
 }
 
 std::generator<eray::math::Vec3f> PatchSurface::control_grid_points() const {
+  if (dim_.x <= 0 || dim_.x <= 0) {
+    co_return;
+  }
   auto dim =
       std::visit(eray::util::match{[this](const auto& type) { return type.control_points_dim(dim_); }}, this->object);
 
