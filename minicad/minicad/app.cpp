@@ -896,15 +896,15 @@ bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui
       Logger::info("Created patch surface \"{}\"", o.value()->name);
       if (!info.cylinder) {
         auto starter = PlanePatchSurfaceStarter{.size = math::Vec2f(info.size_x, info.size_y)};
-        o.value()->set_starter(starter,
-                               eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
+        o.value()->set_from_starter(starter,
+                                    eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
       } else {
         auto starter = CylinderPatchSurfaceStarter{
             .radius = info.r,
             .height = info.h,
         };
-        o.value()->set_starter(starter,
-                               eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
+        o.value()->set_from_starter(starter,
+                                    eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
       }
     }
 

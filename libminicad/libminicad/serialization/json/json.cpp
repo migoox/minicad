@@ -314,45 +314,15 @@ void JsonDeserializer::Visitor::operator()(PatchSurfaceVariant&& v, const json_s
     }
 
     if (auto s = elem.get_size()) {
-      if (s->get_u() % 3 == 1 && s->get_v() % 3 == 1) {
-        auto starter = PatchSurfaceStarter{PlanePatchSurfaceStarter{}};
-        if (!obj.set_starter_from_points(
-                starter,
-                eray::math::Vec2u(static_cast<uint32_t>(s->get_u() / 3), static_cast<uint32_t>(s->get_v() / 3)),
-                point_handles)) {
-          eray::util::Logger::err("Could not add points to surface");
-        }
-      } else if (s->get_u() % 3 == 0 && s->get_v() % 3 == 1) {
-        auto starter = PatchSurfaceStarter{CylinderPatchSurfaceStarter{}};
-        if (!obj.set_starter_from_points(
-                starter,
-                eray::math::Vec2u(static_cast<uint32_t>(s->get_u() / 3), static_cast<uint32_t>(s->get_v() / 3)),
-                point_handles)) {
-          eray::util::Logger::err("Could not add points to surface");
-        }
-      } else if (s->get_u() % 3 == 1 && s->get_v() % 3 == 0) {
-        auto starter = PatchSurfaceStarter{CylinderPatchSurfaceStarter{}};
-
-        // transpose
-        auto size_v = static_cast<size_t>(s->get_v());
-        auto size_u = static_cast<size_t>(s->get_u());
-        for (auto i = 0U; i < size_v; ++i) {
-          for (auto j = i + 1; j < size_u; ++j) {
-            std::swap(point_handles[i * size_u + j], point_handles[j * size_u + i]);
-          }
-        }
-
-        if (!obj.set_starter_from_points(
-                starter,
-                eray::math::Vec2u(static_cast<uint32_t>(s->get_u() / 3), static_cast<uint32_t>(s->get_v() / 3)),
-                point_handles)) {
-          eray::util::Logger::err("Could not add points to surface");
-        }
-      } else {
+      if ((s->get_u() % 3 != 1 && s->get_u() >= 4) || (s->get_v() % 3 != 1 && s->get_v() >= 4)) {
         eray::util::Logger::err("Invalid surface size");
+      } else {
+        if (!obj.set_from_points(
+                eray::math::Vec2u(static_cast<uint32_t>(s->get_u() / 3), static_cast<uint32_t>(s->get_v() / 3)),
+                point_handles)) {
+          eray::util::Logger::err("Could not add points to surface");
+        }
       }
-    } else {
-      eray::util::Logger::warn("Expected size for surface with id {}", elem.get_id());
     }
     if (auto s = elem.get_samples()) {
       if (s->get_u() != s->get_v()) {
@@ -363,6 +333,8 @@ void JsonDeserializer::Visitor::operator()(PatchSurfaceVariant&& v, const json_s
       eray::util::Logger::warn("Expected samples for surface with id {}", elem.get_id());
     }
     obj.update();
+  } else {
+    eray::util::Logger::warn("Expected size for surface with id {}", elem.get_id());
   }
 }
 
