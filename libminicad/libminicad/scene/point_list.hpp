@@ -59,7 +59,7 @@ class PointList {
            std::views::transform([](const auto& obj) -> const SceneObjectHandle& { return obj.get().handle(); });
   }
 
-  std::optional<size_t> point_first_idx(const SceneObjectHandle& handle) {
+  std::optional<size_t> point_first_idx(const SceneObjectHandle& handle) const {
     auto it = points_map_.find(handle);
     if (it == points_map_.end()) {
       return std::nullopt;

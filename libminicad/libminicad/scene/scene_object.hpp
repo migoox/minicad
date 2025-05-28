@@ -138,7 +138,9 @@ class PointListObjectBase {
 
   OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point(handle); }
 
-  std::optional<size_t> point_idx(const SceneObjectHandle& handle) { return points_.point_first_idx(handle); }
+  std::optional<size_t> point_idx(const SceneObjectHandle& handle) const { return points_.point_first_idx(handle); }
+
+  size_t points_count() const { return points_.size(); }
 
  protected:
   PointList points_;
@@ -256,7 +258,7 @@ struct BSplineCurve {
    * @brief Updates the Bernstein points (scene point objects) basing on the de Boor points.
    *
    */
-  void update_bernstein_points(Curve& base, const SceneObjectHandle& handle);
+  void update_bernstein_points(const Curve& base, const SceneObjectHandle& handle);
 
   const std::vector<eray::math::Vec3f>& bernstein_points() const { return bezier_points_; }
 

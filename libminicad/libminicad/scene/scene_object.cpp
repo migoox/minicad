@@ -287,7 +287,7 @@ void BSplineCurve::update_bernstein_segment(const Curve& base, int cp_idx) {
   bezier_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
 }
 
-void BSplineCurve::update_bernstein_points(Curve& base, const SceneObjectHandle& handle) {
+void BSplineCurve::update_bernstein_points(const Curve& base, const SceneObjectHandle& handle) {
   if (auto o = base.point_idx(handle)) {
     auto cp_idx = static_cast<int>(o.value());
     update_bernstein_segment(base, cp_idx - 2);
@@ -325,15 +325,10 @@ void BSplineCurve::set_bernstein_point(Curve& base, size_t idx, const eray::math
   p2.transform.set_local_pos(-bp1 + 2 * bp2);
   p3.transform.set_local_pos(2 * bp1 - 7 * bp2 + 6 * bp3);
 
-  // TODO(migoox): update points list that depend on these points
-  base.scene().renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(p0.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
-  base.scene().renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(p1.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
-  base.scene().renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(p2.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
-  base.scene().renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(p3.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+  p0.update();
+  p1.update();
+  p2.update();
+  p3.update();
 
   auto cp_idx_int = static_cast<int>(cp_idx);
   update_bernstein_segment(base, cp_idx_int - 2);
