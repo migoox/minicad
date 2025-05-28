@@ -10,6 +10,7 @@ Camera::Camera(bool orthographic, float fov, float aspect_ratio, float near_plan
       height_(),
       near_plane_(near_plane),
       far_plane_(far_plane),
+      stereo_convergence_distance_(1.F),
       projection_(eray::math::Mat4f::identity()) {
   recalculate_projection();
 }
@@ -36,14 +37,6 @@ void Camera::set_near_plane(float near_plane) {
 
 void Camera::set_far_plane(float far_plane) { far_plane_ = far_plane; }
 
-eray::math::Mat4f Camera::stereo_right_proj_matrix() const {
-  return eray::math::stereo_right_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
-}
-
-eray::math::Mat4f Camera::stereo_left_proj_matrix() const {
-  return eray::math::stereo_left_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
-}
-
 void Camera::recalculate_projection() {
   float focal_length = is_orthographic_ ? eray::math::length(transform.local_pos()) : near_plane_;
   height_            = focal_length * std::tan(fov_ * 0.5F);
@@ -56,6 +49,15 @@ void Camera::recalculate_projection() {
     projection_     = eray::math::perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
     projection_inv_ = eray::math::inv_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_);
   }
+}
+
+eray::math::Mat4f Camera::stereo_left_proj_matrix() const {
+  return eray::math::stereo_left_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_,
+                                                   stereo_convergence_distance_);
+}
+eray::math::Mat4f Camera::stereo_right_proj_matrix() const {
+  return eray::math::stereo_right_perspective_gl_rh(fov_, aspect_ratio_, near_plane_, far_plane_,
+                                                    stereo_convergence_distance_);
 }
 
 }  // namespace mini

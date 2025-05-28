@@ -1,6 +1,7 @@
 #include <glad/gl.h>
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/math/mat.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
@@ -258,7 +259,8 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
 
 void OpenGLSceneRenderer::render(const Camera& camera) {
   if (!is_anaglyph_rendering_enabled()) {
-    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.proj_matrix());
+    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.proj_matrix(),
+                    math::Vec3f(0.09F, 0.05F, 0.09F));
 
     // Render to the default framebuffer
     ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
@@ -273,8 +275,11 @@ void OpenGLSceneRenderer::render(const Camera& camera) {
     shaders_.screen_quad->set_uniform("u_textureSampler", 0);
     ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   } else {
-    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.stereo_left_proj_matrix());
-    render_internal(*right_eye_framebuffer_, camera, camera.view_matrix(), camera.stereo_right_proj_matrix());
+    render_internal(*framebuffer_, camera, camera.view_matrix(), camera.stereo_left_proj_matrix(),
+                    math::Vec3f(0.0F, 0.0F, 0.0F));
+    render_internal(*right_eye_framebuffer_, camera, camera.view_matrix(), camera.stereo_right_proj_matrix(),
+                    math::Vec3f(0.0F, 0.0F, 0.0F));
+
     ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
     ERAY_GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
@@ -294,7 +299,8 @@ void OpenGLSceneRenderer::render(const Camera& camera) {
 }
 
 void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer& fb, const Camera& camera,
-                                          const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat) {
+                                          const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat,
+                                          const eray::math::Vec3f& background_color) {
   fb.bind();
   fb.clear_pick_render();
 
@@ -303,7 +309,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   ERAY_GL_CALL(glEnable(GL_DEPTH_TEST));
   ERAY_GL_CALL(glEnable(GL_BLEND));
   ERAY_GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
-  ERAY_GL_CALL(glClearColor(0.09, 0.05, 0.09, 1.F));
+  ERAY_GL_CALL(glClearColor(background_color.x, background_color.y, background_color.z, 1.0));
   ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
   // Render parameterized surfaces

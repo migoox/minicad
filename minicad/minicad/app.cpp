@@ -616,6 +616,10 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::Checkbox("Anaglyph enabled", &anaglyph)) {
       m_.scene.renderer().set_anaglyph_rendering_enabled(anaglyph);
     }
+    auto dist = m_.camera->stereo_convergence_distance();
+    if (ImGui::SliderFloat("Focal length", &dist, 0.2F, 5.F)) {
+      m_.camera->set_stereo_convergence_distance(dist);
+    }
 
     if (ImGui::Button("Look at cursor")) {
       m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());

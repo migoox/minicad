@@ -8,11 +8,24 @@ uniform sampler2D u_right;
 in vec2 texCoord;
 
 void main() {
-    vec4 right = texture(u_right, texCoord);
-    right.r = 0;
-    vec4 left = texture(u_left, texCoord);
-    left.g = 0;
-    left.b = 0;
-    fragColor = right + left;
+    vec4 R = texture(u_right, texCoord);
+
+    vec4 L = texture(u_left, texCoord);
+    
+    vec3 result;
+    result.r = L.r;
+    result.g = R.g;
+    result.b = R.b;
+    // result.r = 0.4561 * L.r + 0.500484 * L.g + 0.176381 * L.b - 0.0434706 * R.r - 0.0879388 * R.g - 0.00155529 * R.b;
+    // result.g =  -0.0400822 * L.r - 0.0378246 * L.g - 0.0157589 * L.b + 0.378476 * R.r + 0.73364 * R.g - 0.0184503 * R.b;
+    // result.b = -0.0152161 * L.r - 0.0205971 * L.g - 0.00546856 * L.b - 0.0721527 * R.r - 0.112961 * R.g + 1.2264 * R.b;
+
+    //result.r = 0.299 * L.r + 0.587 * L.g + 0.114 * L.b;
+    //result.g =  R.r;
+    //result.b = 0.299 * R.r + 0.587 * R.g + 0.114 * R.b;
+
+
+
+    fragColor = vec4(result, 1.0);
 }
 

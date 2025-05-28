@@ -60,7 +60,8 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
 
  private:
   void render_internal(eray::driver::gl::ViewportFramebuffer& fb, const Camera& camera,
-                       const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat);
+                       const eray::math::Mat4f& view_mat, const eray::math::Mat4f& proj_mat,
+                       const eray::math::Vec3f& background_color);
 
  private:
   friend SceneObjectRSCommandHandler;
