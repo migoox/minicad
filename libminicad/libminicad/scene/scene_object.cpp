@@ -734,7 +734,7 @@ size_t PatchSurface::control_grid_points_count() const {
   auto dim =
       std::visit(eray::util::match{[this](const auto& type) { return type.control_points_dim(dim_); }}, this->object);
 
-  return 2 * dim.x * dim.y;
+  return 2 * ((dim.y - 1) * dim.x + dim.y * (dim.x - 1));
 }
 
 void PatchSurface::set_tess_level(int tesselation) {

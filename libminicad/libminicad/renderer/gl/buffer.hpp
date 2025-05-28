@@ -116,13 +116,15 @@ class ChunksBuffer {
     }
     auto range = it->second;
 
-    if (count == range.end_idx) {
+    if (kGPUTargetPrimitiveCount * count == range.size()) {
+      // update values only
       for (auto i = range.begin_idx; const auto& p : data) {
         TypeInserter(p, &data_[i]);
         i += kGPUTargetPrimitiveCount;
       }
 
     } else {
+      // the size has changed
       for (auto i = range.begin_idx, j = range.end_idx; j < data_.size(); ++i, ++j) {
         data_[i] = data_[j];
       }
