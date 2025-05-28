@@ -115,11 +115,8 @@ OptionalObserverPtr<SceneObject> PointList::point(const SceneObjectHandle& handl
 }
 
 void PointList::update_indices() {
-  for (auto i = points_.size() - 1; i > 0; --i) {
+  for (size_t i = points_.size(); i-- > 0;) {
     points_map_.at(points_[i].get().handle()) = i;
-  }
-  if (!points_.empty()) {
-    points_map_.at(points_[0].get().handle()) = 0;
   }
 }
 
