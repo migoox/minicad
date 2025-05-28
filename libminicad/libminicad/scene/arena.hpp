@@ -36,6 +36,10 @@ class Arena {
     return objects_[id]->first.handle();
   }
 
+  [[nodiscard]] ObserverPtr<Object> unsafe_get_obj(const Handle& handle) {
+    return ObserverPtr<Object>(objects_[handle.obj_id]->first);
+  }
+
   [[nodiscard]] OptionalObserverPtr<Object> get_obj(const Handle& handle) {
     if (!exists(handle)) {
       return std::nullopt;

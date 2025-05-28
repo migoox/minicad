@@ -138,7 +138,7 @@ class PointListObjectBase {
 
   OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point(handle); }
 
-  std::optional<size_t> point_idx(const SceneObjectHandle& handle) { return points_.point_idx(handle); }
+  std::optional<size_t> point_idx(const SceneObjectHandle& handle) { return points_.point_first_idx(handle); }
 
  protected:
   PointList points_;
@@ -372,10 +372,10 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
     InvalidHandle = 2,
   };
 
-  std::expected<void, SceneObjectError> add(const SceneObjectHandle& handle);
+  std::expected<void, SceneObjectError> push_back(const SceneObjectHandle& handle);
   std::expected<void, SceneObjectError> remove(const SceneObjectHandle& handle);
-  std::expected<void, SceneObjectError> move_before(const SceneObjectHandle& dest, const SceneObjectHandle& obj);
-  std::expected<void, SceneObjectError> move_after(const SceneObjectHandle& dest, const SceneObjectHandle& obj);
+  std::expected<void, SceneObjectError> move_before(size_t dest_idx, size_t source_idx);
+  std::expected<void, SceneObjectError> move_after(size_t dest_idx, size_t source_idx);
 
   void update();
   void on_delete();

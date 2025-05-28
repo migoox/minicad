@@ -39,7 +39,7 @@ void SceneObject::on_delete() {
 
     for (const auto& c_h : curves_) {
       if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
-        if (!pl.value()->points_.remove(*this)) {
+        if (pl.value()->points_.remove(*this)) {
           pl.value()->update();
           std::visit(
               eray::util::match{[&](auto& obj) { obj.on_point_remove(*pl.value(), *this, get_variant<Point>()); }},
@@ -86,16 +86,12 @@ void Curve::update() {
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 }
 
-std::expected<void, Curve::SceneObjectError> Curve::add(const SceneObjectHandle& handle) {
-  if (points_.contains(handle)) {
-    return {};
-  }
-
+std::expected<void, Curve::SceneObjectError> Curve::push_back(const SceneObjectHandle& handle) {
   if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
     auto& obj = *o.value();
 
     if (std::holds_alternative<Point>(obj.object)) {
-      auto result = points_.add(obj);
+      auto result = points_.push_back(obj);
       if (!result) {
         return std::unexpected(static_cast<SceneObjectError>(result.error()));
       }
@@ -154,13 +150,8 @@ std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHand
   return std::unexpected(SceneObjectError::InvalidHandle);
 }
 
-std::expected<void, Curve::SceneObjectError> Curve::move_before(const SceneObjectHandle& dest,
-                                                                const SceneObjectHandle& obj) {
-  if (!scene().arena<SceneObject>().exists(dest) || !scene().arena<SceneObject>().exists(obj)) {
-    return std::unexpected(SceneObjectError::InvalidHandle);
-  }
-
-  auto result = points_.move_before(dest, obj);
+std::expected<void, Curve::SceneObjectError> Curve::move_before(size_t dest_idx, size_t source_idx) {
+  auto result = points_.move_before(dest_idx, source_idx);
   if (!result) {
     return std::unexpected(static_cast<SceneObjectError>(result.error()));
   }
@@ -171,13 +162,8 @@ std::expected<void, Curve::SceneObjectError> Curve::move_before(const SceneObjec
   return {};
 }
 
-std::expected<void, Curve::SceneObjectError> Curve::move_after(const SceneObjectHandle& dest,
-                                                               const SceneObjectHandle& obj) {
-  if (!scene().arena<SceneObject>().exists(dest) || !scene().arena<SceneObject>().exists(obj)) {
-    return std::unexpected(SceneObjectError::InvalidHandle);
-  }
-
-  auto result = points_.move_before(dest, obj);
+std::expected<void, Curve::SceneObjectError> Curve::move_after(size_t dest_idx, size_t source_idx) {
+  auto result = points_.move_before(dest_idx, source_idx);
   if (!result) {
     return std::unexpected(static_cast<SceneObjectError>(result.error()));
   }

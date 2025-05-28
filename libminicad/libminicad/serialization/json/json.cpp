@@ -286,7 +286,7 @@ void JsonDeserializer::Visitor::operator()(CurveVariant&& v, const json_schema::
     if (auto control_points = elem.get_control_points()) {
       for (auto& cp : *control_points) {
         const auto& h = deserializer.m_.id_map.at(cp.get_id());
-        if (!obj.add(h)) {
+        if (!obj.push_back(h)) {
           eray::util::Logger::err("Invalid point handle for curve with id {}", elem.get_id());
         }
       }

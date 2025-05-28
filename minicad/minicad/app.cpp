@@ -311,7 +311,7 @@ void MiniCadApp::gui_objects_list_window() {
                                                  ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
                                            IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
                                            auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
-                                           m_.scene.add_point_to_curve(point_handle, h);
+                                           m_.scene.push_back_point_to_curve(point_handle, h);
                                          }
                                          ImGui::EndDragDropTarget();
                                        }
@@ -491,7 +491,7 @@ void MiniCadApp::gui_point_list_window() {
                               ImGui::EndDisabled();
                             }
 
-                            for (auto& p : obj.value()->point_objects()) {
+                            for (auto idx = 0U; auto& p : obj.value()->point_objects()) {
                               ImGui::PushID(static_cast<int>(p.id()));
 
                               bool is_selected = m_.selection->contains(p.handle());
@@ -502,9 +502,10 @@ void MiniCadApp::gui_point_list_window() {
                                   on_selection_add(p.handle());
                                 }
                               }
-                              reorder_dnd.drag_and_drop_component(p, true);
+                              reorder_dnd.drag_and_drop_component(p, idx, true);
 
                               ImGui::PopID();
+                              ++idx;
                             }
                             ImGui::EndTabItem();
                           }
@@ -808,7 +809,7 @@ bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
   }
 
   if (auto o = m_.scene.arena<SceneObject>().get_obj(*obj_handle)) {
-    m_.scene.add_point_to_curve(*obj_handle, handle);
+    m_.scene.push_back_point_to_curve(*obj_handle, handle);
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
     o.value()->update();
     on_selection_clear();
@@ -864,7 +865,7 @@ bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
 
       if (m_.selection->is_points_only()) {
         for (const auto& h : *m_.selection) {
-          if (!o.value()->add(h)) {
+          if (!o.value()->push_back(h)) {
             Logger::warn("Could not add scene object with id to curve\"{}\"", h.obj_id);
           }
         }
@@ -924,9 +925,8 @@ bool MiniCadApp::on_patch_surface_deleted(const PatchSurfaceHandle& handle) {
   return false;
 }
 
-bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optional<SceneObjectHandle>& source,
-                                   const std::optional<SceneObjectHandle>& before_dest,
-                                   const std::optional<SceneObjectHandle>& after_dest) {
+bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optional<size_t>& source,
+                                   const std::optional<size_t>& before_dest, const std::optional<size_t>& after_dest) {
   if (auto obj = m_.scene.arena<Curve>().get_obj(handle)) {
     if (source && before_dest) {
       if (!obj.value()->move_before(*before_dest, *source)) {

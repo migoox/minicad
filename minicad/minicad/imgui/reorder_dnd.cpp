@@ -4,10 +4,9 @@
 
 namespace ImGui::mini {
 
-void mini::ReorderDnD::drag_and_drop_component(const ::mini::SceneObject& obj, bool ignore_middle) {
-  auto curr_source_handle = obj.handle();
+void mini::ReorderDnD::drag_and_drop_component(const ::mini::SceneObject& obj, const size_t idx, bool ignore_middle) {
   if (ImGui::BeginDragDropSource()) {
-    ImGui::SetDragDropPayload(payload_type_.c_str(), &curr_source_handle, sizeof(::mini::SceneObjectHandle));
+    ImGui::SetDragDropPayload(payload_type_.c_str(), &idx, sizeof(size_t));
     ImGui::Text("%s", obj.name.c_str());
     ImGui::EndDragDropSource();
   }
@@ -32,15 +31,15 @@ void mini::ReorderDnD::drag_and_drop_component(const ::mini::SceneObject& obj, b
 
     if (const ImGuiPayload* payload =
             ImGui::AcceptDragDropPayload(payload_type_.c_str(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
-      IM_ASSERT(payload->DataSize == sizeof(::mini::SceneObjectHandle));
+      IM_ASSERT(payload->DataSize == sizeof(size_t));
 
-      source = *static_cast<::mini::SceneObjectHandle*>(payload->Data);
+      source = *static_cast<size_t*>(payload->Data);
       if (middle) {
-        middle_dest = obj.handle();
+        middle_dest = idx;
       } else if (below) {
-        after_dest = obj.handle();
+        after_dest = idx;
       } else {
-        before_dest = obj.handle();
+        before_dest = idx;
       }
     }
 

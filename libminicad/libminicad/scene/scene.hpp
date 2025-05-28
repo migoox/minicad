@@ -34,7 +34,7 @@ class Scene {
     return std::get<Arena<TObject>>(arenas_);
   }
 
-  bool add_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
+  bool push_back_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
   bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
 
   template <CObject TObject>

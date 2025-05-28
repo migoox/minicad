@@ -22,11 +22,11 @@ Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
   arena<PatchSurface>().init(kMaxObjects, signature_);
 }
 
-bool Scene::add_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle) {
+bool Scene::push_back_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle) {
   if (auto c = arena<Curve>().get_obj(c_handle)) {
     if (auto p = arena<SceneObject>().get_obj(p_handle)) {
       if (p.value()->has_type<Point>()) {
-        return c.value()->add(p_handle).has_value();
+        return c.value()->push_back(p_handle).has_value();
       }
     }
   }
