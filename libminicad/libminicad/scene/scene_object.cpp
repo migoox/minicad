@@ -509,20 +509,27 @@ void NaturalSplineCurve::reset_segments(Curve& base) {
   auto l          = segments_[n - 2].chord_length;
   segments_[n - 2].d =
       (last_point - segments_[n - 2].a) / (l * l * l) - segments_[n - 2].b / (l * l) - segments_[n - 2].c / l;
+
+  // Convert the power basis to the Bezier basis
+  for (auto& s : segments_) {
+    auto b = s.b * s.chord_length;
+    auto c = s.c * s.chord_length * s.chord_length;
+    auto d = s.d * s.chord_length * s.chord_length * s.chord_length;
+
+    s.b = s.a + 1.F / 3.F * b;
+    s.c = s.a + 2.F / 3.F * b + 1.F / 3.F * c;
+    s.d = s.a + b + c + d;
+  }
 }
 
 void NaturalSplineCurve::update(Curve& base) { reset_segments(base); }
 
 std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const Curve> /*base*/) const {
   for (const auto& s : segments_) {
-    auto b = s.b * s.chord_length;
-    auto c = s.c * s.chord_length * s.chord_length;
-    auto d = s.d * s.chord_length * s.chord_length * s.chord_length;
-
     co_yield s.a;
-    co_yield s.a + 1.F / 3.F * b;
-    co_yield s.a + 2.F / 3.F * b + 1.F / 3.F * c;
-    co_yield s.a + b + c + d;
+    co_yield s.b;
+    co_yield s.c;
+    co_yield s.d;
   }
 }
 

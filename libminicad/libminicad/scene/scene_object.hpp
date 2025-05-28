@@ -300,7 +300,7 @@ class NaturalSplineCurve {
   [[nodiscard]] static zstring_view type_name() noexcept { return "Natural Spline Curve"; }
 
   /**
-   * @brief Describes one segment in the natural spline using a power basis.
+   * @brief Describes one segment in the natural spline using a bezier basis.
    *
    */
   struct Segment {
