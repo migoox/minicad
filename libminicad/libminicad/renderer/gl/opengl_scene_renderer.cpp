@@ -370,7 +370,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
   ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.helper_point_txt.get()));
   shaders_.helper_points->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.helper_points->set_uniform("u_scale", 0.02F);
+  shaders_.helper_points->set_uniform("u_scale", 0.02F / 2.F);
   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.helper_points->set_uniform("u_textureSampler", 0);
   shaders_.helper_points->bind();
@@ -384,7 +384,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
     ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.point_txt.get()));
     shaders_.instanced_sprite->set_uniform("u_pvMat", proj_mat * view_mat);
-    shaders_.instanced_sprite->set_uniform("u_scale", 0.03F);
+    shaders_.instanced_sprite->set_uniform("u_scale", 0.03F / 2.F);
     shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
     shaders_.instanced_sprite->bind();
