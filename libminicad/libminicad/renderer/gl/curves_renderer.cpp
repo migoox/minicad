@@ -44,7 +44,9 @@ void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::UpdateCon
     auto& obj = *o.value();
 
     renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
-    renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+    if (renderer.rs_.at(handle).show_polyline) {
+      renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
+    }
   } else {
     renderer.push_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::DeleteObject{}));
   }

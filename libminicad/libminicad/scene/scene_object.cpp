@@ -408,9 +408,9 @@ void NaturalSplineCurve::reset_segments(Curve& base) {
     auto p1                   = *(++unique_points_.begin());
     segments_[0].chord_length = math::distance(p0, p1);
     segments_[0].a            = p0;
-    segments_[0].b            = (p1 - p0) / segments_[0].chord_length;
-    segments_[0].c            = math::Vec3f::filled(0.F);
-    segments_[0].d            = math::Vec3f::filled(0.F);
+    segments_[0].b            = p1;
+    segments_[0].c            = p1;
+    segments_[0].d            = p1;
   }
 
   if (n < 3) {
