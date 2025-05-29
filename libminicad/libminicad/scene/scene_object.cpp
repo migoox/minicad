@@ -753,8 +753,7 @@ void PatchSurface::set_tess_level(int tesselation) {
 
   tess_level_ = tesselation;
 
-  scene().renderer().push_object_rs_cmd(
-      PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
+  update();
 }
 
 void PatchSurface::on_delete() {
