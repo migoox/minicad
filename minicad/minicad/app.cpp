@@ -45,6 +45,7 @@
 #include <minicad/tools/select_tool.hpp>
 #include <optional>
 #include <ranges>
+#include <tracy/Tracy.hpp>
 #include <variant>
 
 namespace mini {
@@ -57,7 +58,7 @@ using System = eray::os::System;
 using Logger = eray::util::Logger;
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
-  auto camera = std::make_unique<Camera>(false, math::radians(90.F),
+  auto camera = std::make_unique<Camera>(false, math::radians(60.F),
                                          static_cast<float>(window->size().x) / static_cast<float>(window->size().y),
                                          0.1F, 1000.F);
   camera->transform.set_local_pos(math::Vec3f(0.F, 0.F, 4.F));
@@ -622,7 +623,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       m_.camera->set_stereo_convergence_distance(dist);
     }
     static auto coeffs = eray::math::Vec3f(0.34F, 0.25F, 1.F);
-    ImGui::DragFloat3("debug", coeffs.data, 0.01F, 0.F, 1.F);
+    ImGui::DragFloat3("Coefficients", coeffs.data, 0.01F, 0.F, 1.F);
     m_.scene.renderer().set_anaglyph_output_color_coeffs(coeffs);
   }
   ImGui::End();
@@ -753,6 +754,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 }
 
 void MiniCadApp::render(Application::Duration /* delta */) {
+  ZoneScoped;
+
   m_.camera->set_orthographic(m_.use_ortho);
 
   m_.scene.renderer().update(m_.scene);
