@@ -130,6 +130,13 @@ class ChunksBuffer {
       }
       data_.resize(data_.size() - range.size());
 
+      for (auto& r : chunk_range_ | std::views::values) {
+        if (r.begin_idx > range.begin_idx) {
+          r.begin_idx -= range.size();
+          r.end_idx -= range.size();
+        }
+      }
+
       auto begin_idx = data_.size();
       auto end_idx   = begin_idx;
       for (const auto& p : data) {
