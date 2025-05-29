@@ -1,4 +1,5 @@
 #include <glad/gl.h>
+#include <imgui/imgui.h>
 
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/math/mat.hpp>
@@ -17,6 +18,8 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
 #include <variant>
+
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini::gl {
 
@@ -294,6 +297,8 @@ void OpenGLSceneRenderer::render(const Camera& camera) {
     shaders_.anaglyph_merger->bind();
     shaders_.anaglyph_merger->set_uniform("u_left", 0);
     shaders_.anaglyph_merger->set_uniform("u_right", 1);
+    shaders_.anaglyph_merger->set_uniform("u_output_coeffs", global_rs_.anaglyph_output_coeffs);
+
     ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   }
 }

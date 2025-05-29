@@ -621,6 +621,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::SliderFloat("Focal length", &dist, 0.1F, 20.F)) {
       m_.camera->set_stereo_convergence_distance(dist);
     }
+    static auto coeffs = eray::math::Vec3f(0.34F, 0.25F, 1.F);
+    ImGui::DragFloat3("debug", coeffs.data, 0.01F, 0.F, 1.F);
+    m_.scene.renderer().set_anaglyph_output_color_coeffs(coeffs);
   }
   ImGui::End();
 

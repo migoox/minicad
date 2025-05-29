@@ -54,6 +54,10 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
 
   void set_anaglyph_rendering_enabled(bool anaglyph) final;
   bool is_anaglyph_rendering_enabled() const final;
+  eray::math::Vec3f anaglyph_output_color_coeffs() const final { return global_rs_.anaglyph_output_coeffs; }
+  void set_anaglyph_output_color_coeffs(const eray::math::Vec3f& output_coeffs) final {
+    global_rs_.anaglyph_output_coeffs = output_coeffs;
+  }
 
   void update(Scene& scene) final;
   void render(const Camera& camera) final;
@@ -90,6 +94,8 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     bool show_polylines;
     bool show_points;
     bool anaglyph_enabled;
+
+    eray::math::Vec3f anaglyph_output_coeffs;
   } global_rs_;
 
   CurvesRenderer curve_renderer_;

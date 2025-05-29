@@ -52,8 +52,10 @@ class ISceneRenderer {
   virtual void resize_viewport(eray::math::Vec2i win_size)                                                          = 0;
   virtual SamplingResult sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width, size_t height) const = 0;
 
-  virtual void set_anaglyph_rendering_enabled(bool anaglyph) = 0;
-  virtual bool is_anaglyph_rendering_enabled() const         = 0;
+  virtual void set_anaglyph_rendering_enabled(bool anaglyph)                            = 0;
+  virtual bool is_anaglyph_rendering_enabled() const                                    = 0;
+  virtual eray::math::Vec3f anaglyph_output_color_coeffs() const                        = 0;
+  virtual void set_anaglyph_output_color_coeffs(const eray::math::Vec3f& output_coeffs) = 0;
 
   virtual void update(Scene& scene) = 0;
 
