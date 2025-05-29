@@ -308,14 +308,9 @@ void JsonDeserializer::Visitor::operator()(PatchSurfaceVariant&& v, const json_s
     }
 
     if (auto s = elem.get_size()) {
-      if ((s->get_u() % 3 != 1 && s->get_u() >= 4) || (s->get_v() % 3 != 1 && s->get_v() >= 4)) {
-        eray::util::Logger::err("Invalid surface size");
-      } else {
-        if (!obj.set_from_points(
-                eray::math::Vec2u(static_cast<uint32_t>(s->get_u() / 3), static_cast<uint32_t>(s->get_v() / 3)),
-                point_handles)) {
-          eray::util::Logger::err("Could not add points to surface");
-        }
+      if (!obj.init_from_points(eray::math::Vec2u(static_cast<uint32_t>(s->get_u()), static_cast<uint32_t>(s->get_v())),
+                                point_handles)) {
+        eray::util::Logger::err("Could not add points to surface");
       }
     }
     if (auto s = elem.get_samples()) {

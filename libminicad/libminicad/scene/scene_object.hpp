@@ -411,6 +411,7 @@ struct BezierPatches {
   [[nodiscard]] static zstring_view type_name() noexcept { return "Bezier Patches"; }
   static void set_control_points(PointList& points, const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   [[nodiscard]] static eray::math::Vec2u control_points_dim(eray::math::Vec2u patches_dim);
+  [[nodiscard]] static eray::math::Vec2u patches_dim(eray::math::Vec2u points_dim);
   [[nodiscard]] static eray::math::Vec2u unique_control_points_dim(const PatchSurfaceStarter& starter,
                                                                    eray::math::Vec2u patches_dim);
 
@@ -430,6 +431,7 @@ struct BPatches {
   [[nodiscard]] static zstring_view type_name() noexcept { return "B-Patches"; }
   static void set_control_points(PointList& points, const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   [[nodiscard]] static eray::math::Vec2u control_points_dim(eray::math::Vec2u patches_dim);
+  [[nodiscard]] static eray::math::Vec2u patches_dim(eray::math::Vec2u points_dim);
   [[nodiscard]] static eray::math::Vec2u unique_control_points_dim(const PatchSurfaceStarter& starter,
                                                                    eray::math::Vec2u patches_dim);
 
@@ -451,6 +453,7 @@ concept CPatchSurfaceType =
       { T::type_name() } -> std::same_as<zstring_view>;
       { T::set_control_points(points, starter, dim) } -> std::same_as<void>;
       { T::control_points_dim(dim) } -> std::same_as<eray::math::Vec2u>;
+      { T::patches_dim(dim) } -> std::same_as<eray::math::Vec2u>;
       { T::unique_control_points_dim(starter_ref, dim) } -> std::same_as<eray::math::Vec2u>;
       { t.update_bezier3_points(base) } -> std::same_as<void>;
     };
@@ -478,16 +481,16 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   const std::vector<eray::math::Vec3f>& bezier3_points();
 
-  void set_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
-
-  enum class StarterError : uint8_t {
+  enum class InitError : uint8_t {
     PointsAndDimensionsMismatch = 0,
     SceneObjectIsNotAPoint      = 1,
     SceneObjectDoesNotExist     = 2,
+    NonPositiveDimensions       = 3,
   };
 
-  std::expected<void, StarterError> set_from_points(eray::math::Vec2u dim,
-                                                    const std::vector<SceneObjectHandle>& points);
+  void init_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
+  std::expected<void, InitError> init_from_points(eray::math::Vec2u points_dim,
+                                                  const std::vector<SceneObjectHandle>& points);
 
   void update();
   void on_delete();

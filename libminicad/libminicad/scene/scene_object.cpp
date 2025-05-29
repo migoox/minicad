@@ -535,7 +535,7 @@ PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
 
-void PatchSurface::set_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
+void PatchSurface::init_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
   dim.x = std::max(dim.x, 1U);
   dim.y = std::max(dim.y, 1U);
 
@@ -572,19 +572,15 @@ void PatchSurface::set_from_starter(const PatchSurfaceStarter& starter, eray::ma
   }
 }
 
-std::expected<void, PatchSurface::StarterError> PatchSurface::set_from_points(
-    eray::math::Vec2u dim, const std::vector<SceneObjectHandle>& points) {
-  dim.x                 = std::max(dim.x, 1U);
-  dim.y                 = std::max(dim.y, 1U);
-  auto new_points_count = std::visit(eray::util::match{[&](auto& obj) {
-                                       auto points_dim = obj.control_points_dim(dim);
-                                       return points_dim.x * points_dim.y;
-                                     }},
-                                     this->object);
+std::expected<void, PatchSurface::InitError> PatchSurface::init_from_points(
+    eray::math::Vec2u points_dim, const std::vector<SceneObjectHandle>& points) {
+  if (points_dim.x * points_dim.y != points.size()) {
+    return std::unexpected(InitError::PointsAndDimensionsMismatch);
+  }
 
-  if (new_points_count != points.size()) {
-    util::Logger::err("The number of provided points does not match the provided size");
-    return std::unexpected(StarterError::PointsAndDimensionsMismatch);
+  dim_ = std::visit(eray::util::match{[&](auto& obj) { return obj.patches_dim(points_dim); }}, this->object);
+  if (dim_.x < 1U || dim_.y < 1U) {
+    return std::unexpected(InitError::NonPositiveDimensions);
   }
 
   for (const auto& h : points) {
@@ -594,16 +590,15 @@ std::expected<void, PatchSurface::StarterError> PatchSurface::set_from_points(
         obj.patch_surfaces_.insert(handle_);
       } else {
         util::Logger::err("One of the provided scene object is not a point");
-        return std::unexpected(StarterError::SceneObjectIsNotAPoint);
+        return std::unexpected(InitError::SceneObjectIsNotAPoint);
       }
     } else {
       util::Logger::err("One of the provided scene object does not exist");
-      return std::unexpected(StarterError::SceneObjectDoesNotExist);
+      return std::unexpected(InitError::SceneObjectDoesNotExist);
     }
   }
 
   clear();
-  dim_        = dim;
   tess_level_ = kDefaultTessLevel;
   points_.unsafe_set(scene(), points);
 
@@ -693,6 +688,10 @@ void BezierPatches::set_control_points(PointList& points, const PatchSurfaceStar
 
 eray::math::Vec2u BezierPatches::control_points_dim(eray::math::Vec2u dim) {
   return eray::math::Vec2u(dim.x * (PatchSurface::kPatchSize - 1) + 1, dim.y * (PatchSurface::kPatchSize - 1) + 1);
+}
+
+eray::math::Vec2u BezierPatches::patches_dim(eray::math::Vec2u points_dim) {
+  return eray::math::Vec2u(points_dim.x / 3, points_dim.y / 3);
 }
 
 eray::math::Vec2u BezierPatches::unique_control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
@@ -842,6 +841,10 @@ void BPatches::set_control_points(PointList& points, const PatchSurfaceStarter& 
 
 eray::math::Vec2u BPatches::control_points_dim(eray::math::Vec2u dim) {
   return eray::math::Vec2u(dim.x + PatchSurface::kPatchSize - 1, dim.y + PatchSurface::kPatchSize - 1);
+}
+
+eray::math::Vec2u BPatches::patches_dim(eray::math::Vec2u points_dim) {
+  return eray::math::Vec2u(points_dim.x - PatchSurface::kPatchSize + 1, points_dim.y - PatchSurface::kPatchSize + 1);
 }
 
 eray::math::Vec2u BPatches::unique_control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
