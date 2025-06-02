@@ -4,7 +4,6 @@
 #include <imguizmo/ImGuizmo.h>
 
 #include <cstdint>
-#include <format>
 #include <fstream>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
