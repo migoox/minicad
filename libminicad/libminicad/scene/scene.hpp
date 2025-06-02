@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
+#include <iterator>
+#include <liberay/util/iterator.hpp>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
@@ -10,6 +13,8 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <vector>
+
+#include "liberay/util/logger.hpp"
 
 namespace mini {
 
@@ -23,6 +28,7 @@ class Scene {
   ERAY_DELETE_MOVE_AND_COPY_ASSIGN(Scene)
 
   enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
+  enum class PointsMergeError : uint8_t { NotEnoughPoints = 0, NewPointCreationError = 1 };
 
   template <typename TObject>
   [[nodiscard]] Arena<TObject>& arena() {
@@ -36,6 +42,49 @@ class Scene {
 
   bool push_back_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
   bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
+
+  /**
+   * @brief Replaces all provided points with it's mean point. All the references are updated.
+   *
+   * @tparam It
+   * @param begin
+   * @param end
+   */
+  template <eray::util::Iterator<SceneObjectHandle> It>
+  std::expected<eray::util::Handle<SceneObject>, PointsMergeError> merge_points(const It& begin, const It& end) {
+    auto count = std::ranges::distance(begin, end);
+    if (count <= 1) {
+      eray::util::Logger::warn("Could not merge points. Not enough points provided.");
+      return std::unexpected(PointsMergeError::NotEnoughPoints);
+    }
+
+    auto new_pos = eray::math::Vec3f::filled(0.F);
+
+    auto opt = create_obj_and_get<SceneObject>(Point{});
+    if (!opt) {
+      eray::util::Logger::err("Could not merge points. New point could not be created.");
+      return std::unexpected(PointsMergeError::NewPointCreationError);
+    }
+    auto& obj = **opt;
+
+    for (const auto& handle : std::ranges::subrange(begin, end)) {
+      if (auto opt_old = arena<SceneObject>().get_obj(handle)) {
+        auto& obj_old = **opt_old;
+        if (obj_old.template has_type<Point>()) {
+          obj_old.move_refs_to(obj);
+          new_pos += obj_old.transform.pos();
+          remove_from_order(obj_old.order_idx_);
+          arena<SceneObject>().delete_obj(handle);
+        }
+      }
+    }
+
+    new_pos = new_pos / static_cast<float>(count);
+    obj.transform.set_local_pos(new_pos);
+    obj.update();
+
+    return obj.handle();
+  }
 
   template <CObject TObject>
   std::expected<ObserverPtr<TObject>, ObjectCreationError> create_obj_and_get(TObject::Variant&& variant) {

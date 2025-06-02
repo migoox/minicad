@@ -96,6 +96,8 @@ class MiniCadApp final : public eray::os::Application {
   bool on_points_reorder(const CurveHandle& handle, const std::optional<size_t>& source,
                          const std::optional<size_t>& before_dest, const std::optional<size_t>& after_dest);
 
+  bool on_selection_merge();
+
   bool on_cursor_state_set();
   bool on_select_state_set();
   bool on_tool_action_start();

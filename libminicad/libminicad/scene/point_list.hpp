@@ -4,6 +4,7 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 #include <ranges>
+#include <unordered_set>
 
 namespace mini {
 
@@ -14,8 +15,9 @@ namespace mini {
 class PointList {
  public:
   enum class OperationError : uint8_t {
-    NotAPoint = 0,
-    NotFound  = 1,
+    NotAPoint           = 0,
+    NotFound            = 1,
+    MapInsertionFailure = 2,
   };
 
   std::expected<void, OperationError> push_back(SceneObject& obj);
@@ -36,6 +38,9 @@ class PointList {
    */
   void remove_many(const std::vector<SceneObjectHandle>& handles);
 
+  std::expected<void, OperationError> replace(const SceneObjectHandle& old_point_handle, SceneObject& new_point);
+  std::expected<void, OperationError> replace(const SceneObject& old_point, SceneObject& new_point);
+
   std::expected<bool, OperationError> move_before(size_t dest_idx, size_t source_idx);
   std::expected<bool, OperationError> move_after(size_t dest_idx, size_t source_idx);
 
@@ -45,7 +50,13 @@ class PointList {
 
   void clear();
 
-  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle);
+  /**
+   * @brief Returns first point with the given handle.
+   *
+   * @param handle
+   * @return OptionalObserverPtr<SceneObject>
+   */
+  OptionalObserverPtr<SceneObject> point_first(const SceneObjectHandle& handle);
 
   auto point_objects() {
     return points_ | std::ranges::views::transform([](auto& ref) -> auto& { return ref.get(); });
@@ -64,7 +75,7 @@ class PointList {
     if (it == points_map_.end()) {
       return std::nullopt;
     }
-    return it->second;
+    return *it->second.begin();  // there is always at least one element in this set
   }
 
   SceneObject& unsafe_by_idx(size_t idx);
@@ -73,14 +84,14 @@ class PointList {
   size_t size() const { return points_.size(); }
 
   std::vector<ref<SceneObject>>& unsafe_points() { return points_; }
-  std::unordered_map<SceneObjectHandle, size_t>& unsafe_points_map() { return points_map_; }
+  std::unordered_map<SceneObjectHandle, std::unordered_set<size_t>>& unsafe_points_map() { return points_map_; }
 
  private:
   void update_indices();
 
  private:
   std::vector<ref<SceneObject>> points_;
-  std::unordered_map<SceneObjectHandle, size_t> points_map_;  // first appearance in the points_ vector
+  std::unordered_map<SceneObjectHandle, std::unordered_set<size_t>> points_map_;
 };
 
 }  // namespace mini

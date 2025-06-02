@@ -42,9 +42,10 @@ void SceneObject::on_delete() {
       if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
         if (pl.value()->points_.remove(*this)) {
           pl.value()->update();
-          std::visit(
-              eray::util::match{[&](auto& obj) { obj.on_point_remove(*pl.value(), *this, get_variant<Point>()); }},
-              pl.value()->object);
+          std::visit(eray::util::match{[&](auto& obj) {
+                       obj.on_point_remove(*pl.value(), *this, unsafe_get_variant<Point>());
+                     }},
+                     pl.value()->object);
         }
       }
     }
@@ -59,8 +60,9 @@ void SceneObject::update() {
     for (const auto& c_h : this->curves_) {
       if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
         scene().renderer().push_object_rs_cmd(CurveRSCommand(c_h, CurveRSCommand::Internal::UpdateControlPoints{}));
-        std::visit(eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, get_variant<Point>()); }},
-                   pl.value()->object);
+        std::visit(
+            eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, unsafe_get_variant<Point>()); }},
+            pl.value()->object);
       }
     }
     for (const auto& ps_h : this->patch_surfaces_) {
@@ -72,6 +74,40 @@ void SceneObject::update() {
       }
     }
   }
+}
+
+void SceneObject::move_refs_to(SceneObject& obj) {
+  for (const auto& c_h : curves_) {
+    if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
+      if (auto result = pl.value()->points_.replace(handle(), obj); !result) {
+        util::Logger::warn("Could not replace the scene object");
+      }
+      obj.curves_.insert(c_h);
+
+      scene().renderer().push_object_rs_cmd(CurveRSCommand(c_h, CurveRSCommand::Internal::UpdateControlPoints{}));
+      std::visit(
+          eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, unsafe_get_variant<Point>()); }},
+          pl.value()->object);
+    }
+  }
+
+  for (const auto& ps_h : patch_surfaces_) {
+    if (auto ps = scene().arena<PatchSurface>().get_obj(ps_h)) {
+      auto& ps_obj = **ps;
+
+      if (auto result = ps_obj.points_.replace(handle(), obj); !result) {
+        util::Logger::warn("Could not replace the scene object");
+      }
+      obj.patch_surfaces_.insert(ps_h);
+
+      scene().renderer().push_object_rs_cmd(
+          PatchSurfaceRSCommand(ps_h, PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
+      ps_obj.mark_bezier3_dirty();
+    }
+  }
+
+  curves_.clear();
+  patch_surfaces_.clear();
 }
 
 Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {
@@ -105,7 +141,7 @@ std::expected<void, Curve::SceneObjectError> Curve::push_back(const SceneObjectH
         std::get<BSplineCurve>(this->object).reset_bernstein_points(*this);
         scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::UpdateHelperPoints{}));
       }
-      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.unsafe_get_variant<Point>()); }},
                  this->object);
       scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
@@ -140,7 +176,7 @@ std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHand
       if (obj_it != obj.curves_.end()) {
         obj.curves_.erase(obj_it);
       }
-      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.get_variant<Point>()); }},
+      std::visit(eray::util::match{[&](auto& o) { o.on_point_remove(*this, obj, obj.unsafe_get_variant<Point>()); }},
                  this->object);
       scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 

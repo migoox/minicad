@@ -16,8 +16,6 @@
 #include <unordered_set>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 #define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
   template <typename Variant>                                                \
   struct ValidateVariant_##TVariant;                                         \
@@ -73,7 +71,7 @@ class ObjectBase {
 
   template <typename Type>
     requires std::is_constructible_v<TVariant, Type>
-  bool has_type() {
+  bool has_type() const {
     return std::holds_alternative<Type>(object);
   }
 
@@ -85,8 +83,7 @@ class ObjectBase {
    */
   template <typename Type>
     requires std::is_constructible_v<TVariant, Type>
-  Type& get_variant() {
-    assert(std::holds_alternative<Type>(object) && "Curve is not of the requested type.");
+  Type& unsafe_get_variant() {
     return std::get<Type>(object);
   }
 
@@ -136,7 +133,7 @@ class PointListObjectBase {
 
   bool contains(const SceneObjectHandle& handle) { return points_.contains(handle); }
 
-  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point(handle); }
+  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point_first(handle); }
 
   std::optional<size_t> point_idx(const SceneObjectHandle& handle) const { return points_.point_first_idx(handle); }
 
@@ -153,8 +150,7 @@ class PointListObjectBase {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - SceneObjectType
-// ---------------------------------------------------------------------------------------------------
+// - SceneObjectType ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
 class Point {
@@ -202,6 +198,8 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
   friend Scene;
   friend Curve;
   friend PatchSurface;
+
+  void move_refs_to(SceneObject& obj);
 
  private:
   std::unordered_set<CurveHandle> curves_;

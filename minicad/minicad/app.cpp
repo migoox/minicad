@@ -328,6 +328,11 @@ void MiniCadApp::gui_objects_list_window() {
     if (disabled) {
       ImGui::BeginDisabled();
     }
+
+    if (ImGui::Selectable("Merge points")) {
+      on_selection_merge();
+    }
+
     if (ImGui::BeginMenu("Create Point List")) {
       for (const auto [type, name] : kCurveNames) {
         if (ImGui::Selectable(name.c_str())) {
@@ -871,6 +876,19 @@ bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
   }
 
   return false;
+}
+
+bool MiniCadApp::on_selection_merge() {
+  if (!m_.selection->is_points_only()) {
+    return false;
+  }
+
+  if (!m_.scene.merge_points(m_.selection->begin(), m_.selection->end())) {
+    Logger::warn("Could not merge points");
+    return false;
+  }
+  m_.selection->clear(m_.scene);
+  return true;
 }
 
 bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
