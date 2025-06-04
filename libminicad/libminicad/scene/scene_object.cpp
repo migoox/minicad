@@ -827,6 +827,13 @@ size_t BezierPatches::find_idx(size_t patch_x, size_t patch_y, size_t point_x, s
          ((PatchSurface::kPatchSize - 1) * patch_x + point_x);
 }
 
+size_t BezierPatches::find_patch_offset(size_t patch_x, size_t patch_y, size_t dim_x) {
+  auto size_x = dim_x * (PatchSurface::kPatchSize - 1) + 1U;
+  return patch_y * size_x * (PatchSurface::kPatchSize - 1) + patch_x * (PatchSurface::kPatchSize - 1);
+}
+
+size_t BezierPatches::find_size_x(size_t dim_x) { return dim_x * (PatchSurface::kPatchSize - 1) + 1U; }
+
 void BPatches::set_control_points(PointList& points, const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
   std::visit(
       eray::util::match{
@@ -938,6 +945,12 @@ size_t BPatches::find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t
   return (patch_y + point_y) * (dim_x + PatchSurface::kPatchSize - 1) + (patch_x + point_x);
 }
 
+size_t BPatches::find_patch_offset(size_t patch_x, size_t patch_y, size_t dim_x) {
+  return patch_y * (dim_x + PatchSurface::kPatchSize - 1) + patch_x;
+}
+
+size_t BPatches::find_size_x(size_t dim_x) { return dim_x + PatchSurface::kPatchSize - 1U; }
+
 eray::math::Vec2u PatchSurface::control_points_dim() const {
   return std::visit(eray::util::match{[&](const auto& v) { return v.control_points_dim(dim_); }}, object);
 }
@@ -946,6 +959,47 @@ void PatchSurface::update() {
   mark_bezier3_dirty();
   scene().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
+}
+
+std::expected<std::array<SceneObjectHandle, PatchSurface::kPatchSize * PatchSurface::kPatchSize>,
+              PatchSurface::GetterError>
+PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const {
+  if (patch_coords.x > dim_.x || patch_coords.y > dim_.y) {
+    return std::unexpected(GetterError::OutOfBounds);
+  }
+  return unsafe_patch_control_point_handles(patch_coords);
+}
+
+[[nodiscard]] std::array<SceneObjectHandle, PatchSurface::kPatchSize * PatchSurface::kPatchSize>
+PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const {
+  auto size_x =
+      std::visit(eray::util::match{[&](const auto& variant) { return variant.find_size_x(dim_.x); }}, this->object);
+  auto offset = std::visit(eray::util::match{[&](const auto& variant) {
+                             return variant.find_patch_offset(patch_coords.x, patch_coords.y, dim_.x);
+                           }},
+                           this->object);
+
+  return std::array<SceneObjectHandle, kPatchSize * kPatchSize>{
+      points_.unsafe_by_idx(offset + size_x * 0 + 0).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 0 + 1).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 0 + 2).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 0 + 3).handle(),  //
+
+      points_.unsafe_by_idx(offset + size_x * 1 + 0).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 1 + 1).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 1 + 2).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 1 + 3).handle(),  //
+
+      points_.unsafe_by_idx(offset + size_x * 2 + 0).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 2 + 1).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 2 + 2).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 2 + 3).handle(),  //
+
+      points_.unsafe_by_idx(offset + size_x * 3 + 0).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 3 + 1).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 3 + 2).handle(),  //
+      points_.unsafe_by_idx(offset + size_x * 3 + 3).handle(),  //
+  };
 }
 
 }  // namespace mini

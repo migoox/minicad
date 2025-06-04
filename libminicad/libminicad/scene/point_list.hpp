@@ -78,8 +78,8 @@ class PointList {
     return *it->second.begin();  // there is always at least one element in this set
   }
 
-  SceneObject& unsafe_by_idx(size_t idx);
-  const SceneObject& unsafe_by_idx(size_t idx) const;
+  [[nodiscard]] SceneObject& unsafe_by_idx(size_t idx);
+  [[nodiscard]] const SceneObject& unsafe_by_idx(size_t idx) const;
 
   size_t size() const { return points_.size(); }
 

@@ -420,8 +420,9 @@ struct BezierPatches {
    */
   void update_bezier3_points(PatchSurface& base);
 
- private:
   static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x);
+  static size_t find_patch_offset(size_t patch_x, size_t patch_y, size_t dim_x);
+  static size_t find_size_x(size_t dim_x);
 };
 
 struct BPatches {
@@ -440,19 +441,23 @@ struct BPatches {
    */
   void update_bezier3_points(PatchSurface& base);
 
- private:
   static size_t find_idx(size_t patch_x, size_t patch_y, size_t point_x, size_t point_y, size_t dim_x);
+  static size_t find_patch_offset(size_t patch_x, size_t patch_y, size_t dim_x);
+  static size_t find_size_x(size_t dim_x);
 };
 
 template <typename T>
 concept CPatchSurfaceType =
     requires(T t, PatchSurface& base, eray::math::Vec2u dim, const PatchSurfaceStarter& starter_ref,
-             const PatchSurfaceStarter& starter, PointList& points) {
+             const PatchSurfaceStarter& starter, PointList& points, size_t idx) {
       { T::type_name() } -> std::same_as<zstring_view>;
       { T::set_control_points(points, starter, dim) } -> std::same_as<void>;
       { T::control_points_dim(dim) } -> std::same_as<eray::math::Vec2u>;
       { T::patches_dim(dim) } -> std::same_as<eray::math::Vec2u>;
       { T::unique_control_points_dim(starter_ref, dim) } -> std::same_as<eray::math::Vec2u>;
+      { T::find_idx(idx, idx, idx, idx, idx) } -> std::same_as<size_t>;
+      { T::find_patch_offset(idx, idx, idx) } -> std::same_as<size_t>;
+      { T::find_size_x(idx) } -> std::same_as<size_t>;
       { t.update_bezier3_points(base) } -> std::same_as<void>;
     };
 
@@ -473,6 +478,23 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   static constexpr int kPatchSize        = 4;
   static constexpr int kDefaultTessLevel = 4;
+
+  enum class GetterError : uint8_t {
+    OutOfBounds = 0,
+  };
+
+  [[nodiscard]] std::expected<std::array<SceneObjectHandle, kPatchSize * kPatchSize>, GetterError>
+  patch_control_point_handles(eray::math::Vec2u patch_coords) const;
+  [[nodiscard]] std::array<SceneObjectHandle, kPatchSize * kPatchSize> unsafe_patch_control_point_handles(
+      eray::math::Vec2u patch_coords) const;
+
+  auto patches_control_point_handles() {
+    return std::views::cartesian_product(std::views::iota(0U, dim_.x), std::views::iota(0U, dim_.y)) |
+           std::views::transform([this](auto&& pair) {
+             auto [x, y] = pair;
+             return unsafe_patch_control_point_handles(eray::math::Vec2u(x, y));
+           });
+  }
 
   std::generator<eray::math::Vec3f> control_grid_points() const;
   size_t control_grid_points_count() const;
