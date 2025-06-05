@@ -483,12 +483,13 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
     OutOfBounds = 0,
   };
 
-  [[nodiscard]] std::expected<std::array<SceneObjectHandle, kPatchSize * kPatchSize>, GetterError>
+  [[nodiscard]] std::expected<std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>,
+                              GetterError>
   patch_control_point_handles(eray::math::Vec2u patch_coords) const;
-  [[nodiscard]] std::array<SceneObjectHandle, kPatchSize * kPatchSize> unsafe_patch_control_point_handles(
-      eray::math::Vec2u patch_coords) const;
+  [[nodiscard]] std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>
+  unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const;
 
-  auto patches_control_point_handles() {
+  auto patches_control_point_handles() const {
     return std::views::cartesian_product(std::views::iota(0U, dim_.x), std::views::iota(0U, dim_.y)) |
            std::views::transform([this](auto&& pair) {
              auto [x, y] = pair;

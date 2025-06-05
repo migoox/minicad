@@ -961,8 +961,9 @@ void PatchSurface::update() {
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
 }
 
-std::expected<std::array<SceneObjectHandle, PatchSurface::kPatchSize * PatchSurface::kPatchSize>,
-              PatchSurface::GetterError>
+std::expected<
+    std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>,
+    PatchSurface::GetterError>
 PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const {
   if (patch_coords.x > dim_.x || patch_coords.y > dim_.y) {
     return std::unexpected(GetterError::OutOfBounds);
@@ -970,7 +971,7 @@ PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const 
   return unsafe_patch_control_point_handles(patch_coords);
 }
 
-[[nodiscard]] std::array<SceneObjectHandle, PatchSurface::kPatchSize * PatchSurface::kPatchSize>
+std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>
 PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const {
   auto size_x =
       std::visit(eray::util::match{[&](const auto& variant) { return variant.find_size_x(dim_.x); }}, this->object);
@@ -979,27 +980,30 @@ PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords)
                            }},
                            this->object);
 
-  return std::array<SceneObjectHandle, kPatchSize * kPatchSize>{
-      points_.unsafe_by_idx(offset + size_x * 0 + 0).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 0 + 1).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 0 + 2).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 0 + 3).handle(),  //
-
-      points_.unsafe_by_idx(offset + size_x * 1 + 0).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 1 + 1).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 1 + 2).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 1 + 3).handle(),  //
-
-      points_.unsafe_by_idx(offset + size_x * 2 + 0).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 2 + 1).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 2 + 2).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 2 + 3).handle(),  //
-
-      points_.unsafe_by_idx(offset + size_x * 3 + 0).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 3 + 1).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 3 + 2).handle(),  //
-      points_.unsafe_by_idx(offset + size_x * 3 + 3).handle(),  //
-  };
+  return {{{{
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 0 + 0).handle(), offset + size_x * 0 + 0),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 0 + 1).handle(), offset + size_x * 0 + 1),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 0 + 2).handle(), offset + size_x * 0 + 2),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 0 + 3).handle(), offset + size_x * 0 + 3),
+           }},
+           {{
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 1 + 0).handle(), offset + size_x * 1 + 0),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 1 + 1).handle(), offset + size_x * 1 + 1),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 1 + 2).handle(), offset + size_x * 1 + 2),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 1 + 3).handle(), offset + size_x * 1 + 3),
+           }},
+           {{
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 2 + 0).handle(), offset + size_x * 2 + 0),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 2 + 1).handle(), offset + size_x * 2 + 1),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 2 + 2).handle(), offset + size_x * 2 + 2),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 2 + 3).handle(), offset + size_x * 2 + 3),
+           }},
+           {{
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 0).handle(), offset + size_x * 3 + 0),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 1).handle(), offset + size_x * 3 + 1),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 2).handle(), offset + size_x * 3 + 2),
+               std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 3).handle(), offset + size_x * 3 + 3),
+           }}}};
 }
 
 }  // namespace mini
