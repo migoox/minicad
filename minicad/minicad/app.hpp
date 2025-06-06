@@ -76,15 +76,16 @@ class MiniCadApp final : public eray::os::Application {
 
   // GUI
   void gui_objects_list_window();
-  void gui_selection_window();
+  void gui_transform_window();
   void gui_object_window();
 
   // GUI Events
   bool on_scene_object_added(SceneObjectVariant variant);
+  bool on_point_created_in_point_list(const CurveHandle& handle);
   bool on_curve_added(CurveVariant variant);
   bool on_curve_added_from_points_selection(CurveVariant variant);
   bool on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info);
-  bool on_point_created_in_point_list(const CurveHandle& handle);
+  bool on_fill_in_surface_added(FillInSurfaceVariant variant);
 
   bool on_obj_deleted(const ObjectHandle& handle);
 
@@ -126,6 +127,8 @@ class MiniCadApp final : public eray::os::Application {
   bool on_selection_remove(const ObjectHandle& handle);
   bool on_selection_set_single(const ObjectHandle& handle);
   bool on_selection_clear();
+
+  bool on_fill_in_surface_from_selection();
 
   bool on_project_open(const std::filesystem::path& path);
   bool on_project_save(const std::filesystem::path& path) const;

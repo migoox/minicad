@@ -2,6 +2,7 @@
 #include <expected>
 #include <generator>
 #include <liberay/math/vec.hpp>
+#include <liberay/util/container_extensions.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/panic.hpp>
 #include <liberay/util/try.hpp>
@@ -1018,7 +1019,18 @@ PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords)
            }}}};
 }
 
+FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
+    : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighbors_([] {
+        SurfaceNeighbor default_neighbor{
+            .boundaries = eray::util::make_filled_array<std::array<SceneObjectHandle, 4>, 2>(
+                eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
+            .handle = PatchSurfaceHandle(0, 0, 0)};
+
+        return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
+      }()) {}
+
 void FillInSurface::update() {}
+
 void FillInSurface::on_delete() {}
 
 }  // namespace mini

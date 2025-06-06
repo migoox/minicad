@@ -26,6 +26,7 @@
 #include <liberay/util/panic.hpp>
 #include <liberay/util/timer.hpp>
 #include <liberay/util/variant_match.hpp>
+#include <libminicad/algorithm/hole_finder.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
@@ -36,6 +37,8 @@
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
+#include <minicad/fonts/font_awesome.hpp>
+#include <minicad/gui_components/object_list.hpp>
 #include <minicad/imgui/modals.hpp>
 #include <minicad/imgui/reorder_dnd.hpp>
 #include <minicad/imgui/transform.hpp>
@@ -47,8 +50,6 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
-#include "minicad/gui_components/object_list.hpp"
-
 namespace mini {
 
 namespace util = eray::util;
@@ -59,6 +60,24 @@ using System = eray::os::System;
 using Logger = eray::util::Logger;
 
 MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
+  // Setup fonts
+  ImGuiIO& io = ImGui::GetIO();
+  io.Fonts->AddFontDefault();
+  // 13.0f is the size of the default font. Change to the font size you use.
+  float base_font_size = 20.0F;
+  // FontAwesome fonts need to have their sizes reduced by 2.0f/3.0f in order to align correctly
+  float icon_font_size = base_font_size * 2.0F / 3.0F;
+
+  // Merge in icons from Font Awesome
+  static const ImWchar kIconsRanges[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
+  ImFontConfig icons_config;
+  icons_config.MergeMode        = true;
+  icons_config.PixelSnapH       = true;
+  icons_config.GlyphMinAdvanceX = icon_font_size;
+  auto path                     = System::executable_dir() / "assets" / "fonts" / "fa-solid-900.ttf";
+  io.Fonts->AddFontFromFileTTF(path.c_str(), icon_font_size, &icons_config, kIconsRanges);
+  // use FONT_ICON_FILE_NAME_FAR if you want regular instead of solid
+
   auto camera = std::make_unique<Camera>(false, math::radians(60.F),
                                          static_cast<float>(window->size().x) / static_cast<float>(window->size().y),
                                          0.1F, 1000.F);
@@ -135,20 +154,19 @@ void MiniCadApp::gui_objects_list_window() {
       {PatchSurfaceType::BezierPatchSurface, "Bezier Patch Surface"},  //
       {PatchSurfaceType::BPatchSurface, "B-Patch Surface"},            //
   });
-
   ImGui::Begin("Objects");
-  if (ImGui::Button("Point")) {
+  if (ImGui::Button(ICON_FA_CIRCLE " Point")) {
     on_scene_object_added(Point{});
   }
   ImGui::SameLine();
-  if (ImGui::Button("Curve")) {
+  if (ImGui::Button(ICON_FA_BEZIER_CURVE " Curve")) {
     ImGui::OpenPopup("AddCurvePopup");
   }
-  if (ImGui::Button("Patches")) {
+  if (ImGui::Button(ICON_FA_SOLAR_PANEL " Patches")) {
     ImGui::OpenPopup("AddPatchesPopup");
   }
   ImGui::SameLine();
-  if (ImGui::Button("Param Surface")) {
+  if (ImGui::Button(ICON_FA_GLOBE " Param Surface")) {
     on_scene_object_added(Torus{});
   }
 
@@ -295,7 +313,7 @@ void MiniCadApp::gui_objects_list_window() {
       ImGui::BeginDisabled();
     }
 
-    if (ImGui::Selectable("Merge points")) {
+    if (ImGui::Selectable(ICON_FA_LINK " Merge points")) {
       on_selection_merge();
     }
 
@@ -325,9 +343,13 @@ void MiniCadApp::gui_objects_list_window() {
     if (disabled) {
       ImGui::EndDisabled();
     }
+
+    if (ImGui::Selectable(ICON_FA_FILL " Fill in surface")) {
+      on_fill_in_surface_from_selection();
+    }
     ImGui::Separator();
 
-    if (ImGui::Selectable("Delete")) {
+    if (ImGui::Selectable(ICON_FA_TRASH " Delete")) {
       on_selection_deleted();
     }
 
@@ -337,8 +359,8 @@ void MiniCadApp::gui_objects_list_window() {
   ImGui::End();
 }
 
-void MiniCadApp::gui_selection_window() {
-  ImGui::Begin("Transform");
+void MiniCadApp::gui_transform_window() {
+  ImGui::Begin(ICON_FA_UP_DOWN_LEFT_RIGHT " Transform");
   if (m_.scene_obj_selection->is_single_selection()) {
     if (auto opt = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
       auto& obj = **opt;
@@ -546,7 +568,7 @@ void MiniCadApp::gui_object_window() {
     }
   };
 
-  ImGui::Begin("Object");
+  ImGui::Begin(ICON_FA_PEN " Object");
   if (m_.non_scene_obj_selection->is_single_selection()) {  // non scene objects have priority
     std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface}, m_.non_scene_obj_selection->first());
   } else if (!m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_single_selection()) {
@@ -563,14 +585,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
         os::FileDialog::FilterItem("Project", "json")};
 
-    if (ImGui::Button("Load...")) {
+    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open...")) {
       if (auto result =
               System::file_dialog().open_file([this](const auto& p) { this->on_project_open(p); }, kFileDialogFilters);
           !result) {
         util::Logger::err("Failed to open file dialog");
       }
     }
-    if (ImGui::Button("Save as...")) {
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save as...")) {
       if (auto result =
               System::file_dialog().save_file([this](const auto& p) { this->on_project_save(p); }, kFileDialogFilters);
           !result) {
@@ -579,15 +602,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
 
     ImGui::Text("FPS: %d", fps_);
-    ImGui::Checkbox("Grid", &m_.grid_on);
+    ImGui::Checkbox(ICON_FA_TABLE " Grid", &m_.grid_on);
 
     bool points = m_.scene.renderer().are_points_shown();
-    if (ImGui::Checkbox("Show Points", &points)) {
+    if (ImGui::Checkbox(ICON_FA_CIRCLE " Points", &points)) {
       m_.scene.renderer().show_points(points);
     }
 
     bool polylines = m_.scene.renderer().are_polylines_shown();
-    if (ImGui::Checkbox("Show Polylines", &polylines)) {
+    if (ImGui::Checkbox(ICON_FA_DRAW_POLYGON " Polylines", &polylines)) {
       m_.scene.renderer().show_polylines(polylines);
     }
 
@@ -617,16 +640,16 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::End();
 
   gui_objects_list_window();
-  gui_selection_window();
+  gui_transform_window();
   gui_object_window();
 
-  ImGui::Begin("Tools");
+  ImGui::Begin(ICON_FA_TOOLBOX " Tools");
   bool selected = m_.tool_state == ToolState::Cursor;
-  if (ImGui::Selectable("Cursor", selected)) {
+  if (ImGui::Selectable(ICON_FA_ARROW_POINTER " Cursor", selected)) {
     on_cursor_state_set();
   }
   selected = m_.tool_state == ToolState::Select;
-  if (ImGui::Selectable("Select", selected)) {
+  if (ImGui::Selectable(ICON_FA_SQUARE " Select", selected)) {
     on_select_state_set();
   }
 
@@ -634,7 +657,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   static auto operation = ImGui::mini::gizmo::Operation::Translation;
   static auto mode      = ImGui::mini::gizmo::Mode::World;
-  ImGui::Begin("Tool");
+  ImGui::Begin(ICON_FA_HAMMER " Tool");
   {
     if (m_.tool_state == ToolState::Cursor) {
       auto world_pos = m_.cursor->transform.pos();
@@ -879,6 +902,17 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
     auto name = o.value()->name;
     m_.scene.delete_obj(handle);
     Logger::info("Deleted curve \"{}\"", name);
+    return true;
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant) {
+  if (auto opt = m_.scene.create_obj_and_get<FillInSurface>(std::move(variant))) {
+    auto& obj = **opt;
+    m_.non_scene_obj_selection->add(obj.handle());
+    Logger::info("Created fill in surface \"{}\"", obj.name);
     return true;
   }
 
@@ -1171,6 +1205,41 @@ bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
   if (ev.key_code() == os::KeyCode::G) {
     m_.grid_on = !m_.grid_on;
   }
+  return false;
+}
+
+bool MiniCadApp::on_fill_in_surface_from_selection() {
+  std::vector<PatchSurfaceHandle> handles;
+  auto bezier_surfaces_extractor = [&handles, this](const PatchSurfaceHandle& h) {
+    if (auto opt = m_.scene.arena<PatchSurface>().get_obj(h)) {
+      const auto& obj = **opt;
+      if (obj.has_type<BezierPatches>()) {
+        handles.push_back(h);
+      }
+    }
+  };
+
+  for (const auto& handle : *m_.non_scene_obj_selection) {
+    std::visit(util::match{bezier_surfaces_extractor, [](const auto&) {}}, handle);
+  }
+
+  if (handles.size() < 0) {
+    return false;
+  }
+
+  on_selection_clear();
+  if (auto opt = BezierHole3Finder::find_holes(m_.scene, handles)) {
+    const auto& holes = *opt;
+    for (const auto& hole : holes) {
+      for (const auto& pinfo : hole) {
+        for (const auto& row : pinfo.boundary_) {
+          on_selection_add_many(row.begin(), row.end());
+          return true;
+        }
+      }
+    }
+  }
+
   return false;
 }
 

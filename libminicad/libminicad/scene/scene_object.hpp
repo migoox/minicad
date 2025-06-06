@@ -573,18 +573,23 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   FillInSurface() = delete;
   FillInSurface(const FillInSurfaceHandle& handle, Scene& scene);
 
+  ERAY_DEFAULT_MOVE(FillInSurface)
+  ERAY_DELETE_COPY(FillInSurface)
+
   static constexpr size_t kNeighbors = 3U;
 
+  struct SurfaceNeighbor {
+    std::array<std::array<SceneObjectHandle, 4>, 2> boundaries;  // row-major, rows = 4, columns = 2
+    PatchSurfaceHandle handle;
+  };
+
+  void init();
   void update();
   void on_delete();
   bool can_be_deleted() const { return true; }
 
-  ERAY_DEFAULT_MOVE(FillInSurface)
-  ERAY_DELETE_COPY(FillInSurface)
-
  private:
-  std::array<std::array<SceneObjectHandle, 8>, kNeighbors> boundaries_;  // row-major, rows = 4, columns = 2
-  std::array<PatchSurfaceHandle, kNeighbors> neighbors_;
+  std::array<SurfaceNeighbor, kNeighbors> neighbors_;
 };
 
 }  // namespace mini
