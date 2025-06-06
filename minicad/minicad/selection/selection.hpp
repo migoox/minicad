@@ -11,30 +11,30 @@
 
 namespace mini {
 
-class PointListObjectsSelection {
+class NonSceneObjectSelection {
  public:
-  void remove(const PointListObjectHandle& handle) {
+  void remove(const NonSceneObjectHandle& handle) {
     auto f = objs_.find(handle);
     if (f != objs_.end()) {
       objs_.erase(f);
     }
   }
-  void add(const PointListObjectHandle& handle) { objs_.insert(handle); }
+  void add(const NonSceneObjectHandle& handle) { objs_.insert(handle); }
   void clear() { objs_.clear(); }
 
-  bool contains(const PointListObjectHandle& handle) const { return objs_.contains(handle); }
+  bool contains(const NonSceneObjectHandle& handle) const { return objs_.contains(handle); }
   bool is_multi_selection() const { return objs_.size() > 1; }
   bool is_single_selection() const { return objs_.size() == 1; }
   bool is_empty() const { return objs_.empty(); }
 
-  std::optional<PointListObjectHandle> single() {
+  std::optional<NonSceneObjectHandle> single() {
     if (is_single_selection()) {
       return *objs_.begin();
     }
     return std::nullopt;
   }
 
-  const PointListObjectHandle& first() { return *objs_.begin(); }
+  const NonSceneObjectHandle& first() { return *objs_.begin(); }
 
   auto begin() { return objs_.begin(); }
   auto begin() const { return objs_.begin(); }
@@ -42,7 +42,7 @@ class PointListObjectsSelection {
   auto end() const { return objs_.end(); }
 
  private:
-  std::unordered_set<PointListObjectHandle> objs_;
+  std::unordered_set<NonSceneObjectHandle> objs_;
 };
 
 class SceneObjectsSelection {

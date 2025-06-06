@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <cstdint>
 #include <generator>
@@ -109,9 +110,7 @@ class ObjectBase {
 
   ref<Scene> scene_;  // IMPORTANT: lifetime of the scene always exceeds the lifetime of the scene object
  private:
-  friend SceneObject;
-  friend Curve;
-  friend PatchSurface;
+  friend TObject;
 
   ObjectBase(const eray::util::Handle<TObject>& handle, Scene& scene) : handle_(handle), scene_(scene) {}
 };
@@ -131,7 +130,7 @@ class PointListObjectBase {
     return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
   }
 
-  bool contains(const SceneObjectHandle& handle) { return points_.contains(handle); }
+  bool contains(const SceneObjectHandle& handle) const { return points_.contains(handle); }
 
   OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point_first(handle); }
 
@@ -183,13 +182,14 @@ MINI_VALIDATE_VARIANT_TYPES(SceneObjectVariant, CSceneObjectType);
 class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
  public:
   SceneObject() = delete;
+  SceneObject(SceneObjectHandle handle, Scene& scene);
+
   ERAY_DEFAULT_MOVE(SceneObject)
   ERAY_DELETE_COPY(SceneObject)
-  SceneObject(SceneObjectHandle handle, Scene& scene);
 
   void update();
   void on_delete();
-  bool can_be_deleted();
+  bool can_be_deleted() const;
 
  public:
   eray::math::Transform3f transform;
@@ -357,6 +357,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
  public:
   Curve() = delete;
   Curve(const CurveHandle& handle, Scene& scene);
+
   ERAY_DEFAULT_MOVE(Curve)
   ERAY_DELETE_COPY(Curve)
 
@@ -379,7 +380,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
 
   void update();
   void on_delete();
-  bool can_be_deleted() { return true; }
+  bool can_be_deleted() const { return true; }
 
  private:
   void update_indices_from(size_t start_idx);
@@ -486,6 +487,11 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   [[nodiscard]] std::expected<std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>,
                               GetterError>
   patch_control_point_handles(eray::math::Vec2u patch_coords) const;
+
+  [[nodiscard]] std::expected<std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>,
+                              GetterError>
+  patch_control_point_handles(uint32_t patch_idx) const;
+
   [[nodiscard]] std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>
   unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const;
 
@@ -515,7 +521,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   void update();
   void on_delete();
-  bool can_be_deleted() { return true; }
+  bool can_be_deleted() const { return true; }
 
   const eray::math::Vec2u& dimensions() const { return dim_; }
   eray::math::Vec2u control_points_dim() const;
@@ -537,6 +543,48 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   int tess_level_ = kDefaultTessLevel;
   std::vector<eray::math::Vec3f> bezier_points_;
   bool bezier_dirty_ = true;
+
+  std::unordered_set<FillInSurfaceHandle> dependent_fill_in_surfaces_;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - FillInSurfaceType -------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct GregoryPatches {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Gregory patches"; }
+};
+
+template <typename T>
+concept CFillInSurfaceType = requires(T t) {
+  { T::type_name() } -> std::same_as<zstring_view>;
+};
+
+using FillInSurfaceVariant = std::variant<GregoryPatches>;
+MINI_VALIDATE_VARIANT_TYPES(FillInSurfaceVariant, CFillInSurfaceType);
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - FillInSurface -----------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
+ public:
+  FillInSurface() = delete;
+  FillInSurface(const FillInSurfaceHandle& handle, Scene& scene);
+
+  static constexpr size_t kNeighbors = 3U;
+
+  void update();
+  void on_delete();
+  bool can_be_deleted() const { return true; }
+
+  ERAY_DEFAULT_MOVE(FillInSurface)
+  ERAY_DELETE_COPY(FillInSurface)
+
+ private:
+  std::array<std::array<SceneObjectHandle, 8>, kNeighbors> boundaries_;  // row-major, rows = 4, columns = 2
+  std::array<PatchSurfaceHandle, kNeighbors> neighbors_;
 };
 
 }  // namespace mini

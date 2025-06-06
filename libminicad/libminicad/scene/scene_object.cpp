@@ -25,7 +25,7 @@ SceneObject::SceneObject(SceneObjectHandle handle, Scene& scene)
   scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle, SceneObjectRSCommand::Internal::AddObject{}));
 }
 
-bool SceneObject::can_be_deleted() { return patch_surfaces_.empty(); }
+bool SceneObject::can_be_deleted() const { return patch_surfaces_.empty(); }
 
 void SceneObject::on_delete() {
   if (!can_be_deleted()) {
@@ -971,6 +971,18 @@ PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const 
   return unsafe_patch_control_point_handles(patch_coords);
 }
 
+std::expected<
+    std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>,
+    PatchSurface::GetterError>
+PatchSurface::patch_control_point_handles(uint32_t patch_idx) const {
+  if (patch_idx > dim_.x * dim_.y) {
+    return std::unexpected(GetterError::OutOfBounds);
+  }
+  uint32_t coord_x = patch_idx % kPatchSize;
+  uint32_t coord_y = patch_idx / kPatchSize;
+  return unsafe_patch_control_point_handles(eray::math::Vec2u(coord_x, coord_y));
+}
+
 std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>
 PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const {
   auto size_x =
@@ -1005,5 +1017,8 @@ PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords)
                std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 3).handle(), offset + size_x * 3 + 3),
            }}}};
 }
+
+void FillInSurface::update() {}
+void FillInSurface::on_delete() {}
 
 }  // namespace mini

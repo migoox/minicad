@@ -10,8 +10,6 @@
 #include <stack>
 #include <vector>
 
-#include "libminicad/scene/scene_object_handle.hpp"
-
 namespace mini {
 
 template <CObject Object>
@@ -54,6 +52,42 @@ class Arena {
     }
 
     return OptionalObserverPtr<const Object>(objects_[handle.obj_id]->first);
+  }
+
+  /**
+   * @brief The preferred way is to get the object by handle. Use with caution.
+   *
+   * @param obj_id
+   * @return OptionalObserverPtr<Object>
+   */
+  [[nodiscard]] OptionalObserverPtr<Object> get_obj_by_id(uint32_t obj_id) {
+    if (obj_id >= max_objs_) {
+      return std::nullopt;
+    }
+
+    if (!objects_[obj_id]) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<Object>(objects_[obj_id]->first);
+  }
+
+  /**
+   * @brief The preferred way is to get the object by handle. Use with caution.
+   *
+   * @param obj_id
+   * @return OptionalObserverPtr<Object>
+   */
+  [[nodiscard]] OptionalObserverPtr<const Object> get_obj_by_id(uint32_t obj_id) const {
+    if (obj_id >= max_objs_) {
+      return std::nullopt;
+    }
+
+    if (!objects_[obj_id]) {
+      return std::nullopt;
+    }
+
+    return OptionalObserverPtr<const Object>(objects_[obj_id]->first);
   }
 
   [[nodiscard]] bool exists(const Handle& handle) const {
@@ -158,9 +192,15 @@ class Arena {
       --objects_[objects_order_[i].obj_id]->second;
     }
     objects_order_.erase(objects_order_.begin() + static_cast<int>(ind));
+
+    // save info for logger
+    auto name      = std::move(objects_[handle.obj_id]->first.name);
+    auto type_name = objects_[handle.obj_id]->first.type_name();
+
     objects_[handle.obj_id] = std::nullopt;
     objects_freed_.push(handle.obj_id);
 
+    eray::util::Logger::info(R"(Deleted object "{}" of type "{}" with id "{}")", name, type_name, handle.obj_id);
     return true;
   }
 

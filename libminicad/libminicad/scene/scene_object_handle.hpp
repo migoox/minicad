@@ -25,12 +25,16 @@ using CurveHandle = eray::util::Handle<Curve>;
 class PatchSurface;
 using PatchSurfaceHandle = eray::util::Handle<PatchSurface>;
 
+class FillInSurface;
+using FillInSurfaceHandle = eray::util::Handle<FillInSurface>;
+
 using PointListObjectHandle = std::variant<CurveHandle, PatchSurfaceHandle>;
-using ObjectHandle          = std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle>;
+using NonSceneObjectHandle  = std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle>;
+using ObjectHandle          = std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle>;
 
 template <typename T>
-concept CObjectHandle =
-    std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> || std::is_same_v<T, PatchSurfaceHandle>;
+concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> ||
+                        std::is_same_v<T, PatchSurfaceHandle> || std::is_same_v<T, FillInSurfaceHandle>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;

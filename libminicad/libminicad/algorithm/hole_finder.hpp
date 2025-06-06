@@ -22,22 +22,36 @@ class BezierHole3Finder {
     bool operator==(const Edge& other) const { return u == other.u && v == other.v; }
   };
 
-  struct PatchEdgeInfo {
-    static PatchEdgeInfo create(uint32_t patch_surface_id, uint32_t patch_id, uint32_t u_idx, uint32_t v_idx) {
-      if (u_idx > v_idx) {
-        std::swap(u_idx, v_idx);
-      }
-      return PatchEdgeInfo{.patch_surface_id = patch_surface_id, .patch_id = patch_id, .u_idx = u_idx, .v_idx = v_idx};
+  struct PatchEdgeInternalInfo {
+    enum class BoundaryDirection : uint8_t { Up, Down, Left, Right };
+
+    static PatchEdgeInternalInfo create(uint32_t patch_surface_id, uint32_t patch_idx, BoundaryDirection boundary_dir) {
+      return PatchEdgeInternalInfo{
+          .patch_surface_id = patch_surface_id,
+          .patch_idx        = patch_idx,
+          .boundary_dir     = boundary_dir,
+      };
     }
 
     uint32_t patch_surface_id;
-    uint32_t patch_id;
-    uint32_t u_idx;
-    uint32_t v_idx;
+    uint32_t patch_idx;
+    BoundaryDirection boundary_dir;
 
-    bool is_same_patch(const PatchEdgeInfo& other) const {
-      return patch_surface_id == other.patch_surface_id && patch_id == other.patch_id;
+    bool is_same_patch(const PatchEdgeInternalInfo& other) const {
+      return patch_surface_id == other.patch_surface_id && patch_idx == other.patch_idx;
     }
+  };
+
+  struct PatchEdgeInfo {
+    enum class CreationError : uint8_t {
+      InvalidPatchSurfaceId = 0,
+      InvalidPatchIdx       = 1,
+    };
+
+    static std::expected<PatchEdgeInfo, CreationError> create(const Scene& scene, const PatchEdgeInternalInfo& pinfo);
+
+    PatchSurfaceHandle patch_surface_handle_;
+    std::array<std::array<SceneObjectHandle, 4>, 2> boundary_;  // row-major, rows = 4, columns = 2
   };
 
   using BezierHole = std::array<PatchEdgeInfo, 3>;
@@ -54,19 +68,21 @@ namespace std {
 template <>
 struct hash<mini::BezierHole3Finder::Edge> {
   size_t operator()(const mini::BezierHole3Finder::Edge& edge) const noexcept {
-    size_t h1 = edge.u;
-    size_t h2 = edge.v;
+    auto h1 = static_cast<size_t>(edge.u);
+    auto h2 = static_cast<size_t>(edge.v);
     eray::util::hash_combine(h1, h2);
     return h1;
   }
 };
 
 template <>
-struct hash<mini::BezierHole3Finder::PatchEdgeInfo> {
-  size_t operator()(const mini::BezierHole3Finder::PatchEdgeInfo& pinfo) const noexcept {
-    size_t h1 = pinfo.patch_id;
-    size_t h2 = pinfo.patch_surface_id;
+struct hash<mini::BezierHole3Finder::PatchEdgeInternalInfo> {
+  size_t operator()(const mini::BezierHole3Finder::PatchEdgeInternalInfo& pinfo) const noexcept {
+    auto h1 = static_cast<size_t>(pinfo.patch_idx);
+    auto h2 = static_cast<size_t>(pinfo.patch_surface_id);
+    auto h3 = static_cast<size_t>(pinfo.boundary_dir);
     eray::util::hash_combine(h1, h2);
+    eray::util::hash_combine(h1, h3);
     return h1;
   }
 };

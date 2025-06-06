@@ -47,6 +47,8 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
+#include "minicad/gui_components/object_list.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -88,9 +90,9 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
                                            .select_tool              = SelectTool(),                //
                                            .scene                    = Scene(std::move(sr)),        //
                                            .tool_state               = ToolState::Cursor,
-                                           .selection                = std::make_unique<SceneObjectsSelection>(),    //
-                                           .point_lists_selection  = std::make_unique<PointListObjectsSelection>(),  //
-                                           .helper_point_selection = HelperPointSelection()                          //
+                                           .scene_obj_selection      = std::make_unique<SceneObjectsSelection>(),    //
+                                           .non_scene_obj_selection  = std::make_unique<NonSceneObjectSelection>(),  //
+                                           .helper_point_selection   = HelperPointSelection()                        //
                                        });
 }
 
@@ -212,118 +214,83 @@ void MiniCadApp::gui_objects_list_window() {
     }
   }
 
-  {
-    bool disable = m_.selection->is_empty() && m_.point_lists_selection->is_empty();
-
-    if (disable) {
-      ImGui::BeginDisabled();
-    }
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8F, 0.1F, 0.1F, 1.0F));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0F, 0.2F, 0.2F, 1.0F));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6F, 0.0F, 0.0F, 1.0F));
-
-    if (ImGui::Button("Delete")) {
-      on_selection_deleted();
-    }
-
-    if (disable) {
-      ImGui::EndDisabled();
-    }
-    ImGui::PopStyleColor(3);
-  }
-
+  static auto hide_points = false;
+  ImGui::Checkbox("Hide points", &hide_points);
   ImGui::Separator();
 
   static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
-  for (const auto& obj : m_.scene.handles()) {
-    std::visit(  //
-        util::match{
-            [&](const SceneObjectHandle& handle) {
-              if (auto o = m_.scene.arena<SceneObject>().get_obj(handle)) {
-                bool is_selected = m_.selection->contains(handle);
-                ImGui::Selectable(o.value()->name.c_str(), is_selected);
-                if (ImGui::IsItemHovered()) {
-                  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                    if (is_selected) {
-                      on_selection_remove(handle);
-                    } else {
-                      on_selection_add(handle);
-                    }
-                  }
+  {
+    auto drop_target = [&](const CurveHandle& h) {
+      if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
+          IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
+          auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
+          m_.scene.push_back_point_to_curve(point_handle, h);
+        }
+        ImGui::EndDragDropTarget();
+      }
+    };
 
-                  if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    on_selection_set_single(handle);
-                  }
-                }
-                if (ImGui::IsItemHovered()) {
-                  if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                    ImGui::OpenPopup("SelectionPopup");
-                  }
-                }
-                if (std::holds_alternative<Point>(o.value()->object)) {
-                  if (ImGui::BeginDragDropSource()) {
-                    ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &handle, sizeof(SceneObjectHandle));
-                    ImGui::Text("%s", o.value()->name.c_str());
-                    ImGui::EndDragDropSource();
-                  }
-                }
-              }
-            },
-            [&](const PointListObjectHandle& handle) {
-              bool is_selected = m_.point_lists_selection->contains(handle);
+    auto drop_source = [&](const SceneObjectHandle& h) {
+      if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+        const auto& obj = **opt;
+        if (obj.has_type<Point>()) {
+          if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &h, sizeof(SceneObjectHandle));
+            ImGui::Text("%s", obj.name.c_str());
+            ImGui::EndDragDropSource();
+          }
+        }
+      }
+    };
 
-              auto exists = std::visit(
-                  util::match{//
-                              [&](const auto& h) {
-                                using T = ERAY_HANDLE_OBJ(h);
-                                if (auto o = m_.scene.arena<T>().get_obj(h)) {
-                                  ImGui::Selectable(o.value()->name.c_str(), is_selected);
-                                  return true;
-                                }
-                                return false;
-                              }},
-                  handle);
+    auto on_activate        = [&](const auto& h) { on_selection_add(h); };
+    auto on_deactivate      = [&](const auto& h) { on_selection_remove(h); };
+    auto on_activate_single = [&](const auto& h) { on_selection_set_single(h); };
+    auto on_popup           = [&](const auto&) { ImGui::OpenPopup("SelectionPopup"); };
 
-              if (!exists) {
-                return;
-              }
+    auto draw_item_scene_obj = [&](const SceneObjectHandle& h) {
+      bool is_selected = m_.scene_obj_selection->contains(h);
 
-              if (ImGui::IsItemHovered()) {
-                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                  if (is_selected) {
-                    on_point_lists_selection_remove(handle);
-                  } else {
-                    on_point_lists_selection_add(handle);
-                  }
-                }
-                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                  ImGui::OpenPopup("SelectionPopup");
-                }
-                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                  on_point_lists_selection_set_single(handle);
-                }
-              }
+      using T = ERAY_HANDLE_OBJ(h);
+      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
+                                     on_popup);
+    };
 
-              std::visit(util::match{//
-                                     [&](const CurveHandle& h) {
-                                       if (ImGui::BeginDragDropTarget()) {
-                                         if (const ImGuiPayload* payload =
-                                                 ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
-                                           IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
-                                           auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
-                                           m_.scene.push_back_point_to_curve(point_handle, h);
-                                         }
-                                         ImGui::EndDragDropTarget();
-                                       }
-                                     },
-                                     [](const auto&) {}},
-                         handle);
-            }},
-        obj);
+    auto draw_item_non_scene_obj = [&](const auto& h) {
+      bool is_selected = m_.non_scene_obj_selection->contains(h);
+
+      using T = ERAY_HANDLE_OBJ(h);
+      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
+                                     on_popup);
+    };
+
+    auto skip_point = [&](const SceneObjectHandle& h) {
+      if (hide_points) {
+        if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+          const auto& obj = **opt;
+          if (obj.has_type<Point>()) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    };
+
+    for (const auto& handle : m_.scene.handles()) {
+      if (std::visit(util::match{skip_point, [](const auto&) { return false; }}, handle)) {
+        continue;
+      }
+
+      std::visit(util::match{draw_item_scene_obj, draw_item_non_scene_obj}, handle);
+      std::visit(util::match{drop_target, [](const auto&) {}}, handle);
+      std::visit(util::match{drop_source, [](const auto&) {}}, handle);
+    }
   }
 
   if (ImGui::BeginPopup("SelectionPopup")) {
-    bool disabled = !m_.selection->is_points_only() || !m_.point_lists_selection->is_empty();
+    bool disabled = !m_.scene_obj_selection->is_points_only() || !m_.non_scene_obj_selection->is_empty();
     if (disabled) {
       ImGui::BeginDisabled();
     }
@@ -371,202 +338,219 @@ void MiniCadApp::gui_objects_list_window() {
 }
 
 void MiniCadApp::gui_selection_window() {
-  ImGui::Begin("Selection");
-  if (m_.selection->is_single_selection()) {
-    if (auto scene_obj = m_.scene.arena<SceneObject>().get_obj(m_.selection->first())) {
-      ImGui::Text("Name: %s", scene_obj.value()->name.c_str());
+  ImGui::Begin("Transform");
+  if (m_.scene_obj_selection->is_single_selection()) {
+    if (auto opt = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
+      auto& obj = **opt;
+
+      ImGui::Text("Name: %s", obj.name.c_str());
       ImGui::SameLine();
       static std::string object_name;
       if (ImGui::Button("Rename")) {
         ImGui::mini::OpenModal("Rename object");
-        object_name = scene_obj.value()->name;
+        object_name = obj.name;
       }
-
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
-        scene_obj.value()->name = object_name;
+        obj.name = object_name;
       }
 
-      std::visit(
-          eray::util::match{
-              [&scene_obj](auto& p) {
-                ImGui::Text("Type: %s", p.type_name().c_str());
-                ImGui::SameLine();
-                ImGui::Text("ID: %d", scene_obj.value()->id());
-              },
-          },
-          scene_obj.value()->object);
+      std::visit(util::match{[&](auto& o) {
+                   ImGui::Text("Type: %s", o.type_name().c_str());
+                   ImGui::SameLine();
+                   ImGui::Text("ID: %d", obj.id());
+                 }},
+                 obj.object);
 
-      ImGui::mini::Transform(scene_obj.value()->transform, [&]() { scene_obj.value()->update(); });
-
-      std::visit(eray::util::match{
-                     [](Point& /*p*/) {
-                       //    ImGui::Text("Part of the lists:");
-                       //    for (const auto& p : p()) {
-                       //      if (auto point_list = m_.scene.get_obj(p)) {
-                       //        ImGui::PushID(point_list.value()->id());
-
-                       //        bool is_selected = m_.curve_selection->contains(point_list.value()->handle());
-                       //        if (ImGui::Selectable(point_list.value()->name.c_str(), is_selected)) {
-                       //          m_.curve_selection->add(point_list.value()->handle());
-                       //        }
-
-                       //        ImGui::PopID();
-                       //      }
-                       //    }
-                     },
-                     [&](Torus& t) {
-                       if (ImGui::SliderInt("Tess Level X", &t.tess_level.x, kMinTessLevel, kMaxTessLevel)) {
-                         scene_obj.value()->update();
-                       }
-                       if (ImGui::SliderInt("Tess Level Y", &t.tess_level.y, kMinTessLevel, kMaxTessLevel)) {
-                         scene_obj.value()->update();
-                       }
-                       if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, t.major_radius)) {
-                         scene_obj.value()->update();
-                       }
-                       if (ImGui::SliderFloat("Rad Major", &t.major_radius, t.minor_radius, 5.F)) {
-                         scene_obj.value()->update();
-                       }
-                     },
-                 },
-                 scene_obj.value()->object);
+      ImGui::mini::Transform(obj.transform, [&]() { obj.update(); });
     }
-  } else if (m_.selection->is_multi_selection()) {
-    ImGui::Text("Multiselection");
-    ImGui::mini::Transform(m_.selection->transform, [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); });
-  } else {
-    ImGui::Text("None");
+  } else if (m_.scene_obj_selection->is_multi_selection()) {
+    ImGui::mini::Transform(m_.scene_obj_selection->transform,
+                           [&]() { m_.scene_obj_selection->update_transforms(m_.scene, *m_.cursor); });
   }
+
   ImGui::End();
 }
 
-void MiniCadApp::gui_point_list_window() {
-  ImGui::Begin("Selected Point List");
-  if (m_.point_lists_selection->is_single_selection()) {
-    static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
-    auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
+void MiniCadApp::gui_object_window() {
+  static const zstring_view kReorderPointsDragAndDropPayloadType = "ReorderPointsDragAndDropPayload";
+  auto reorder_dnd = ImGui::mini::ReorderDnD(kReorderPointsDragAndDropPayloadType);
 
-    std::visit(
-        util::match{[&](const CurveHandle& h) {
-                      if (auto obj = m_.scene.arena<Curve>().get_obj(h)) {
-                        auto type_name =
-                            std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
+  auto draw_curve = [&](const CurveHandle& h) {
+    if (auto obj = m_.scene.arena<Curve>().get_obj(h)) {
+      const auto& curve = *obj.value();
+      auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, curve.object);
 
-                        ImGui::Text("Type: %s", type_name.c_str());
-                        ImGui::Text("Name: %s", obj.value()->name.c_str());
-                        ImGui::SameLine();
-                        static std::string object_name;
-                        if (ImGui::Button("Rename")) {
-                          ImGui::mini::OpenModal("Rename object");
-                          object_name = obj.value()->name;
-                        }
+      ImGui::Text("Type: %s", type_name.c_str());
+      ImGui::Text("Name: %s", curve.name.c_str());
+      ImGui::SameLine();
 
-                        if (ImGui::mini::RenameModal("Rename object", object_name)) {
-                          obj.value()->name = object_name;
-                        }
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = curve.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.value()->name = object_name;
+      }
 
-                        if (!std::holds_alternative<Polyline>(obj.value()->object)) {
-                          if (auto state = m_.scene.renderer().object_rs(obj.value()->handle())) {
-                            if (auto* s = std::get_if<CurveRS>(&(*state))) {
-                              if (ImGui::Checkbox("Polyline", &s->show_polyline)) {
-                                m_.scene.renderer().push_object_rs_cmd(CurveRSCommand(
-                                    obj.value()->handle(), CurveRSCommand::ShowPolyline(s->show_polyline)));
-                              }
-                            }
-                          }
-                        }
+      if (!std::holds_alternative<Polyline>(curve.object)) {
+        if (auto state = m_.scene.renderer().object_rs(curve.handle())) {
+          if (auto* s = std::get_if<CurveRS>(&(*state))) {
+            if (ImGui::Checkbox("Polyline", &s->show_polyline)) {
+              m_.scene.renderer().push_object_rs_cmd(
+                  CurveRSCommand(curve.handle(), CurveRSCommand::ShowPolyline(s->show_polyline)));
+            }
+          }
+        }
+      }
 
-                        if (ImGui::BeginTabBar("PointsTabBar", ImGuiTabBarFlags_None)) {
-                          if (ImGui::BeginTabItem("Control Points")) {
-                            m_.selection->is_single_selection();
+      if (ImGui::BeginTabBar("PointsTabBar")) {
+        if (ImGui::BeginTabItem("Control Points")) {
+          if (ImGui::Button("Add")) {
+            on_point_created_in_point_list(h);
+          }
+          ImGui::SameLine();
+          bool disable =
+              !m_.scene_obj_selection->is_single_selection() || !curve.contains(m_.scene_obj_selection->first());
+          if (disable) {
+            ImGui::BeginDisabled();
+          }
+          if (ImGui::Button("Remove")) {
+            m_.scene.remove_point_from_curve(m_.scene_obj_selection->first(), h);
+          }
+          if (disable) {
+            ImGui::EndDisabled();
+          }
 
-                            if (ImGui::Button("Add")) {
-                              on_point_created_in_point_list(h);
-                            }
-                            ImGui::SameLine();
-                            auto disable =
-                                !m_.selection->is_single_selection() || !obj.value()->contains(m_.selection->first());
-                            if (disable) {
-                              ImGui::BeginDisabled();
-                            }
-                            if (ImGui::Button("Remove")) {
-                              m_.scene.remove_point_from_curve(m_.selection->first(), h);
-                            }
-                            if (disable) {
-                              ImGui::EndDisabled();
-                            }
+          for (auto idx = 0U; const auto& p : curve.point_objects()) {
+            ImGui::PushID(static_cast<int>(p.id()));
+            bool is_selected = m_.scene_obj_selection->contains(p.handle());
+            if (ImGui::Selectable(p.name.c_str(), is_selected)) {
+              is_selected ? on_selection_remove(p.handle()) : on_selection_add(p.handle());
+            }
+            reorder_dnd.drag_and_drop_component(p, idx, true);
+            ImGui::PopID();
+            ++idx;
+          }
+          ImGui::EndTabItem();
+        }
 
-                            for (auto idx = 0U; auto& p : obj.value()->point_objects()) {
-                              ImGui::PushID(static_cast<int>(p.id()));
+        if (std::holds_alternative<BSplineCurve>(curve.object) && ImGui::BeginTabItem("Bernstein Points")) {
+          int id = 0;
+          ImGui::Separator();
+          for (const auto& group :
+               std::get<BSplineCurve>(curve.object).bernstein_points() | std::views::slide(4) | std::views::stride(4)) {
+            for (auto p : group) {
+              ImGui::PushID(id++);
+              ImGui::InputFloat3("##Point", p.data, "%.3f", ImGuiInputTextFlags_ReadOnly);
+              ImGui::PopID();
+            }
+            ImGui::Separator();
+          }
+          ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+      }
+      on_points_reorder(h, reorder_dnd.source, reorder_dnd.before_dest, reorder_dnd.after_dest);
+    }
+  };
 
-                              bool is_selected = m_.selection->contains(p.handle());
-                              if (ImGui::Selectable(p.name.c_str(), is_selected)) {
-                                if (is_selected) {
-                                  on_selection_remove(p.handle());
-                                } else {
-                                  on_selection_add(p.handle());
-                                }
-                              }
-                              reorder_dnd.drag_and_drop_component(p, idx, true);
+  auto draw_patch = [&](const PatchSurfaceHandle& h) {
+    if (auto obj = m_.scene.arena<PatchSurface>().get_obj(h)) {
+      const auto& patch = *obj.value();
+      auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, patch.object);
 
-                              ImGui::PopID();
-                              ++idx;
-                            }
-                            ImGui::EndTabItem();
-                          }
-                          if (std::holds_alternative<BSplineCurve>(obj.value()->object) &&
-                              ImGui::BeginTabItem("Bernstein Points")) {
-                            auto id = 0;
-                            ImGui::Separator();
-                            for (const auto& points : std::get<BSplineCurve>(obj.value()->object).bernstein_points() |
-                                                          std::views::slide(4) | std::views::stride(4)) {
-                              for (auto p : points) {
-                                ImGui::PushID(id++);
-                                ImGui::InputFloat3("##Point", p.data, "%.3f", ImGuiInputTextFlags_ReadOnly);
-                                ImGui::PopID();
-                              }
-                              ImGui::Separator();
-                            }
-                            ImGui::EndTabItem();
-                          }
-                          ImGui::EndTabBar();
-                        }
-                      }
-                      on_points_reorder(h, reorder_dnd.source, reorder_dnd.before_dest, reorder_dnd.after_dest);
-                    },
-                    [&](const PatchSurfaceHandle& h) {
-                      if (auto obj = m_.scene.arena<PatchSurface>().get_obj(h)) {
-                        auto type_name =
-                            std::visit(util::match{[](auto& obj) { return obj.type_name(); }}, obj.value()->object);
+      ImGui::Text("Type: %s", type_name.c_str());
+      ImGui::Text("Name: %s", patch.name.c_str());
+      ImGui::SameLine();
 
-                        ImGui::Text("Type: %s", type_name.c_str());
-                        ImGui::Text("Name: %s", obj.value()->name.c_str());
-                        ImGui::SameLine();
-                        static std::string object_name;
-                        if (ImGui::Button("Rename")) {
-                          ImGui::mini::OpenModal("Rename object");
-                          object_name = obj.value()->name;
-                        }
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = patch.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.value()->name = object_name;
+      }
 
-                        if (ImGui::mini::RenameModal("Rename object", object_name)) {
-                          obj.value()->name = object_name;
-                        }
+      int t     = patch.tess_level();
+      int st    = static_cast<int>(std::sqrt(t));
+      int left  = static_cast<int>(std::pow(st - 1, 2));
+      int right = static_cast<int>(std::pow(st + 1, 2));
+      if (ImGui::InputInt("Tesselation level", &t)) {
+        obj.value()->set_tess_level(t < patch.tess_level() ? left : right);
+      }
+    }
+  };
 
-                        auto t     = obj.value()->tess_level();
-                        auto st    = static_cast<int>(std::sqrt(t));
-                        auto left  = static_cast<int>(std::pow(st - 1, 2));
-                        auto right = static_cast<int>(std::pow(st + 1, 2));
-                        if (ImGui::InputInt("Tesselation level", &t)) {
-                          if (obj.value()->tess_level() < t) {
-                            t = right;
-                          } else {
-                            t = left;
-                          }
-                          obj.value()->set_tess_level(t);
-                        }
-                      }
-                    }},
-        m_.point_lists_selection->first());
+  auto draw_scene_object = [&](const SceneObjectHandle& h) {
+    if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+      auto& obj = **opt;
+
+      ImGui::Text("Name: %s", obj.name.c_str());
+      ImGui::SameLine();
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = obj.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.name = object_name;
+      }
+
+      std::visit(util::match{[&](auto& o) {
+                   ImGui::Text("Type: %s", o.type_name().c_str());
+                   ImGui::SameLine();
+                   ImGui::Text("ID: %d", obj.id());
+                 }},
+                 obj.object);
+
+      auto draw_torus = [&](Torus& t) {
+        if (ImGui::SliderInt("Tess Level X", &t.tess_level.x, kMinTessLevel, kMaxTessLevel)) {
+          obj.update();
+        }
+        if (ImGui::SliderInt("Tess Level Y", &t.tess_level.y, kMinTessLevel, kMaxTessLevel)) {
+          obj.update();
+        }
+        if (ImGui::SliderFloat("Rad Minor", &t.minor_radius, 0.1F, t.major_radius)) {
+          obj.update();
+        }
+        if (ImGui::SliderFloat("Rad Major", &t.major_radius, t.minor_radius, 5.F)) {
+          obj.update();
+        }
+      };
+
+      auto draw_point = [&](Point& /*p*/) {};
+
+      std::visit(util::match{draw_point, draw_torus}, obj.object);
+    }
+  };
+
+  auto draw_fill_in_surface = [&](const FillInSurfaceHandle& h) {
+    if (auto obj = m_.scene.arena<FillInSurface>().get_obj(h)) {
+      const auto& patch = *obj.value();
+      auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, patch.object);
+
+      ImGui::Text("Type: %s", type_name.c_str());
+      ImGui::Text("Name: %s", patch.name.c_str());
+      ImGui::SameLine();
+
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = patch.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.value()->name = object_name;
+      }
+    }
+  };
+
+  ImGui::Begin("Object");
+  if (m_.non_scene_obj_selection->is_single_selection()) {  // non scene objects have priority
+    std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface}, m_.non_scene_obj_selection->first());
+  } else if (!m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_single_selection()) {
+    draw_scene_object(m_.scene_obj_selection->first());
   }
   ImGui::End();
 }
@@ -611,7 +595,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
     }
     if (ImGui::Button("Look at origin")) {
-      m_.camera_gimbal->set_local_pos(m_.selection->centroid());
+      m_.camera_gimbal->set_local_pos(m_.scene_obj_selection->centroid());
     }
   }
   ImGui::End();
@@ -634,7 +618,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   gui_objects_list_window();
   gui_selection_window();
-  gui_point_list_window();
+  gui_object_window();
 
   ImGui::Begin("Tools");
   bool selected = m_.tool_state == ToolState::Cursor;
@@ -700,11 +684,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         }
         ImGui::EndCombo();
       }
-      bool cursor_as_origin = m_.selection->is_using_custom_origin();
+      bool cursor_as_origin = m_.scene_obj_selection->is_using_custom_origin();
       if (ImGui::Checkbox("Use cursor as origin", &cursor_as_origin)) {
-        m_.selection->use_custom_origin(m_.scene, cursor_as_origin);
+        m_.scene_obj_selection->use_custom_origin(m_.scene, cursor_as_origin);
         if (cursor_as_origin) {
-          m_.selection->set_custom_origin(m_.scene, m_.cursor->transform.pos());
+          m_.scene_obj_selection->set_custom_origin(m_.scene, m_.cursor->transform.pos());
         }
       }
     }
@@ -733,13 +717,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
 
-    if (m_.selection->is_multi_selection() || m_.selection->is_using_custom_origin()) {
-      if (ImGui::mini::gizmo::Transform(m_.selection->transform, *m_.camera, mode, operation,
-                                        [&]() { m_.selection->update_transforms(m_.scene, *m_.cursor); })) {
+    if (m_.scene_obj_selection->is_multi_selection() || m_.scene_obj_selection->is_using_custom_origin()) {
+      if (ImGui::mini::gizmo::Transform(m_.scene_obj_selection->transform, *m_.camera, mode, operation,
+                                        [&]() { m_.scene_obj_selection->update_transforms(m_.scene, *m_.cursor); })) {
         m_.select_tool.end_box_select();
       }
-    } else if (m_.selection->is_single_selection()) {
-      if (auto o = m_.scene.arena<SceneObject>().get_obj(m_.selection->first())) {
+    } else if (m_.scene_obj_selection->is_single_selection()) {
+      if (auto o = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
         if (ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
                                           [&]() { o.value()->update(); })) {
           m_.select_tool.end_box_select();
@@ -766,8 +750,8 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   m_.scene.renderer().show_grid(m_.grid_on);
   m_.scene.renderer().billboard("cursor").position   = m_.cursor->transform.pos();
-  m_.scene.renderer().billboard("centroid").show     = m_.selection->is_multi_selection();
-  m_.scene.renderer().billboard("centroid").position = m_.selection->centroid();
+  m_.scene.renderer().billboard("centroid").show     = m_.scene_obj_selection->is_multi_selection();
+  m_.scene.renderer().billboard("centroid").position = m_.scene_obj_selection->centroid();
   m_.scene.renderer().render(*m_.camera);
 }
 
@@ -820,26 +804,26 @@ bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
   return false;
 }
 
-bool MiniCadApp::on_scene_object_deleted(const SceneObjectHandle& handle) {
-  if (auto o = m_.scene.arena<SceneObject>().get_obj(handle)) {
-    if (!o.value()->can_be_deleted()) {
-      return false;
+bool MiniCadApp::on_obj_deleted(const ObjectHandle& handle) {
+  auto obj_deleted = [&](const auto& h) {
+    using T = ERAY_HANDLE_OBJ(h);
+    if (auto opt = m_.scene.arena<T>().get_obj(h)) {
+      const auto& obj = **opt;
+      if (!obj.can_be_deleted()) {
+        return false;
+      }
     }
-    auto name = o.value()->name;
-    m_.scene.delete_obj(handle);
-    util::Logger::info("Deleted scene object \"{}\"", name);
-    m_.scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(
-        o.value()->handle(), SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
-  } else {
-    util::Logger::warn("Tried to delete a non existing element");
-  }
 
-  return true;
+    m_.scene.delete_obj<T>(h);
+    return true;
+  };
+
+  return std::visit(util::match{obj_deleted}, handle);
 }
 
 bool MiniCadApp::on_curve_added(CurveVariant variant) {
   if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
-    m_.point_lists_selection->add(*handle);
+    m_.non_scene_obj_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
 
@@ -858,12 +842,12 @@ bool MiniCadApp::on_curve_added(CurveVariant variant) {
 
 bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
   if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
-    m_.point_lists_selection->add(*handle);
+    m_.non_scene_obj_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
 
-      if (m_.selection->is_points_only()) {
-        for (const auto& h : *m_.selection) {
+      if (m_.scene_obj_selection->is_points_only()) {
+        for (const auto& h : *m_.scene_obj_selection) {
           if (!o.value()->push_back(h)) {
             Logger::warn("Could not add scene object with id to curve\"{}\"", h.obj_id);
           }
@@ -878,15 +862,15 @@ bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
 }
 
 bool MiniCadApp::on_selection_merge() {
-  if (!m_.selection->is_points_only()) {
+  if (!m_.scene_obj_selection->is_points_only()) {
     return false;
   }
 
-  if (!m_.scene.merge_points(m_.selection->begin(), m_.selection->end())) {
+  if (!m_.scene.merge_points(m_.scene_obj_selection->begin(), m_.scene_obj_selection->end())) {
     Logger::warn("Could not merge points");
     return false;
   }
-  m_.selection->clear(m_.scene);
+  m_.scene_obj_selection->clear(m_.scene);
   return true;
 }
 
@@ -903,7 +887,7 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
 
 bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info) {
   if (auto handle = m_.scene.create_obj<PatchSurface>(std::move(variant))) {
-    m_.point_lists_selection->add(*handle);
+    m_.non_scene_obj_selection->add(*handle);
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       Logger::info("Created patch surface \"{}\"", o.value()->name);
       if (!info.cylinder) {
@@ -960,104 +944,79 @@ bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optiona
   return false;
 }
 
-bool MiniCadApp::on_selection_add(const SceneObjectHandle& handle) {
-  m_.selection->add(m_.scene, handle);
-  m_.scene.renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
+  auto scene_obj = [&](const SceneObjectHandle& h) {
+    m_.scene_obj_selection->add(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+  };
+
+  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
+
+  auto point_list_obj = [&](const auto& h) {
+    using T = ERAY_HANDLE_OBJ(h);
+    if (auto o = m_.scene.arena<T>().get_obj(h)) {
+      auto handles = o.value()->point_handles();
+      on_selection_add_many(handles.begin(), handles.end());
+    }
+
+    m_.non_scene_obj_selection->add(h);
+  };
+
+  std::visit(util::match{scene_obj, fill_in_surface_obj, point_list_obj}, handle);
 
   return true;
 }
 
-bool MiniCadApp::on_selection_remove(const SceneObjectHandle& handle) {
-  m_.selection->remove(m_.scene, handle);
-  m_.scene.renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
+  auto scene_obj = [&](const SceneObjectHandle& h) {
+    m_.scene_obj_selection->remove(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+  };
+
+  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
+
+  auto point_list_obj = [&](const auto& h) {
+    using T = ERAY_HANDLE_OBJ(h);
+    if (auto o = m_.scene.arena<T>().get_obj(h)) {
+      auto handles = o.value()->point_handles();
+      on_selection_remove_many(handles.begin(), handles.end());
+    }
+
+    m_.non_scene_obj_selection->remove(h);
+  };
+
+  std::visit(util::match{scene_obj, fill_in_surface_obj, point_list_obj}, handle);
+
   return true;
 }
 
-bool MiniCadApp::on_selection_set_single(const SceneObjectHandle& handle) {
-  on_point_lists_selection_clear();
+bool MiniCadApp::on_selection_set_single(const ObjectHandle& handle) {
   on_selection_clear();
   on_selection_add(handle);
   return true;
 }
 
 bool MiniCadApp::on_selection_clear() {
-  for (const auto& handle : *m_.selection) {
+  for (const auto& handle : *m_.scene_obj_selection) {
     m_.scene.renderer().push_object_rs_cmd(
         SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   }
-  m_.selection->clear(m_.scene);
+  m_.scene_obj_selection->clear(m_.scene);
   m_.helper_point_selection.clear();
-  return true;
-}
-
-bool MiniCadApp::on_point_lists_selection_add(const PointListObjectHandle& handle) {
-  std::visit(util::match{[&](auto& h) {
-               using T = std::decay_t<decltype(h)>::Object;
-               if (auto o = m_.scene.arena<T>().get_obj(h)) {
-                 auto handles = o.value()->point_handles();
-                 on_selection_add_many(handles.begin(), handles.end());
-               }
-             }},
-             handle);
-
-  m_.point_lists_selection->add(handle);
-  return true;
-}
-
-bool MiniCadApp::on_point_lists_selection_set_single(const PointListObjectHandle& handle) {
-  on_point_lists_selection_clear();
-  on_selection_clear();
-  m_.point_lists_selection->add(handle);
-  return true;
-}
-
-bool MiniCadApp::on_point_lists_selection_remove(const PointListObjectHandle& handle) {
-  std::visit(util::match{[&](auto& h) {
-               using T = ERAY_HANDLE_OBJ(h);
-
-               if (auto o = m_.scene.arena<T>().get_obj(h)) {
-                 auto handles = o.value()->point_handles();
-                 on_selection_remove_many(handles.begin(), handles.end());
-               }
-             }},
-             handle);
-  m_.point_lists_selection->remove(handle);
-  return true;
-}
-
-bool MiniCadApp::on_point_lists_selection_clear() {
-  for (const auto& c : *m_.point_lists_selection) {
-    std::visit(util::match{[&](auto& h) {
-                 using T = ERAY_HANDLE_OBJ(h);
-
-                 if (auto o = m_.scene.arena<T>().get_obj(h)) {
-                   auto handles = o.value()->point_handles();
-                   on_selection_remove_many(handles.begin(), handles.end());
-                 }
-               }},
-               c);
-  }
-  m_.point_lists_selection->clear();
   return true;
 }
 
 bool MiniCadApp::on_selection_deleted() {
   auto result = false;
-  for (const auto& o : *m_.selection) {
-    result = on_scene_object_deleted(o) || result;
+  for (const auto& handle : *m_.scene_obj_selection) {
+    result = on_obj_deleted(handle) || result;
   }
-  for (const auto& o : *m_.point_lists_selection) {
-    result = std::visit(util::match{
-                            [&](const CurveHandle& h) { return on_curve_deleted(h) || result; },
-                            [&](const PatchSurfaceHandle& h) { return on_patch_surface_deleted(h) || result; },
-                        },
-                        o);
+  for (const auto& handle : *m_.non_scene_obj_selection) {
+    std::visit(util::match{[&](const auto& h) { result = on_obj_deleted(h) || result; }}, handle);
   }
   on_selection_clear();
-  on_point_lists_selection_clear();
-
   return result;
 }
 
@@ -1130,7 +1089,6 @@ bool MiniCadApp::on_tool_action_end() {
     auto box = m_.select_tool.box(math::Vec2f(window_->mouse_pos()));
 
     on_selection_clear();
-    on_point_lists_selection_clear();
     auto sampling_result = m_.scene.renderer().sample_mouse_pick_box(
         m_.scene, static_cast<size_t>(box.pos.x), static_cast<size_t>(box.pos.y), static_cast<size_t>(box.size.x),
         static_cast<size_t>(box.size.y));

@@ -4,6 +4,7 @@
 #include <expected>
 #include <iterator>
 #include <liberay/util/iterator.hpp>
+#include <liberay/util/logger.hpp>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/ruleof.hpp>
@@ -13,8 +14,6 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <vector>
-
-#include "liberay/util/logger.hpp"
 
 namespace mini {
 
@@ -132,8 +131,9 @@ class Scene {
   template <CObject TObject>
   bool delete_obj(const eray::util::Handle<TObject>& handle) {
     if (auto o = arena<TObject>().get_obj(handle)) {
-      remove_from_order(o.value()->order_idx_);
-      arena<TObject>().delete_obj(handle);
+      if (arena<TObject>().delete_obj(handle)) {
+        remove_from_order(o.value()->order_idx_);
+      }
       return true;
     }
     return false;
@@ -169,7 +169,7 @@ class Scene {
   static std::uint32_t next_signature_;
   std::uint32_t signature_;
 
-  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>> arenas_;
+  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>> arenas_;
 
   std::vector<ObjectHandle> objects_order_;
 };

@@ -67,8 +67,8 @@ class MiniCadApp final : public eray::os::Application {
     // TODO(migoox): state machine
     ToolState tool_state;
 
-    std::unique_ptr<SceneObjectsSelection> selection;
-    std::unique_ptr<PointListObjectsSelection> point_lists_selection;
+    std::unique_ptr<SceneObjectsSelection> scene_obj_selection;
+    std::unique_ptr<NonSceneObjectSelection> non_scene_obj_selection;
     HelperPointSelection helper_point_selection;
   };
 
@@ -77,20 +77,19 @@ class MiniCadApp final : public eray::os::Application {
   // GUI
   void gui_objects_list_window();
   void gui_selection_window();
-  void gui_point_list_window();
+  void gui_object_window();
 
   // GUI Events
   bool on_scene_object_added(SceneObjectVariant variant);
-  bool on_point_created_in_point_list(const CurveHandle& handle);
-  bool on_scene_object_deleted(const SceneObjectHandle& handle);
-
   bool on_curve_added(CurveVariant variant);
   bool on_curve_added_from_points_selection(CurveVariant variant);
-  bool on_curve_deleted(const CurveHandle& handle);
-
   bool on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info);
-  bool on_patch_surface_deleted(const PatchSurfaceHandle& handle);
+  bool on_point_created_in_point_list(const CurveHandle& handle);
 
+  bool on_obj_deleted(const ObjectHandle& handle);
+
+  bool on_curve_deleted(const CurveHandle& handle);
+  bool on_patch_surface_deleted(const PatchSurfaceHandle& handle);
   bool on_selection_deleted();
 
   bool on_points_reorder(const CurveHandle& handle, const std::optional<size_t>& source,
@@ -103,15 +102,13 @@ class MiniCadApp final : public eray::os::Application {
   bool on_tool_action_start();
   bool on_tool_action_end();
 
-  bool on_selection_add(const SceneObjectHandle& handle);
-
   template <eray::util::Iterator<SceneObjectHandle> It>
   bool on_selection_add_many(It begin, It end) {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
     }
-    m_.selection->add_many(m_.scene, begin, end);
+    m_.scene_obj_selection->add_many(m_.scene, begin, end);
     return true;
   }
 
@@ -121,18 +118,14 @@ class MiniCadApp final : public eray::os::Application {
       m_.scene.renderer().push_object_rs_cmd(
           SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
     }
-    m_.selection->remove_many(m_.scene, begin, end);
+    m_.scene_obj_selection->remove_many(m_.scene, begin, end);
     return true;
   }
 
-  bool on_selection_remove(const SceneObjectHandle& handle);
-  bool on_selection_set_single(const SceneObjectHandle& handle);
+  bool on_selection_add(const ObjectHandle& handle);
+  bool on_selection_remove(const ObjectHandle& handle);
+  bool on_selection_set_single(const ObjectHandle& handle);
   bool on_selection_clear();
-
-  bool on_point_lists_selection_add(const PointListObjectHandle& handle);
-  bool on_point_lists_selection_set_single(const PointListObjectHandle& handle);
-  bool on_point_lists_selection_remove(const PointListObjectHandle& handle);
-  bool on_point_lists_selection_clear();
 
   bool on_project_open(const std::filesystem::path& path);
   bool on_project_save(const std::filesystem::path& path) const;

@@ -20,6 +20,7 @@
 #include <variant>
 
 #include "liberay/math/vec_fwd.hpp"
+#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini::gl {
 
@@ -149,13 +150,14 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   };
 
   auto global_rs = GlobalRS{
-      .billboards       = {},                                //
-      .point_txt        = create_texture(point_img),         //
-      .helper_point_txt = create_texture(helper_point_img),  //
-      .show_grid        = true,                              //
-      .show_polylines   = true,                              //
-      .show_points      = true,                              //
-      .anaglyph_enabled = false,
+      .billboards             = {},                                //
+      .point_txt              = create_texture(point_img),         //
+      .helper_point_txt       = create_texture(helper_point_img),  //
+      .show_grid              = true,                              //
+      .show_polylines         = true,                              //
+      .show_points            = true,                              //
+      .anaglyph_enabled       = false,                             //
+      .anaglyph_output_coeffs = eray::math::Vec3f::filled(0.F),
   };
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
@@ -192,6 +194,7 @@ std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handl
           [this](const PatchSurfaceHandle& handle) -> std::optional<ObjectRS> {
             return patch_surface_renderer_.object_rs(handle);
           },
+          [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> { return std::nullopt; },
       },
       handle);
 }

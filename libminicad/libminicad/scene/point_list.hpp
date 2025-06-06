@@ -46,7 +46,7 @@ class PointList {
 
   void unsafe_set(Scene& scene, const std::vector<SceneObjectHandle>& handles);
 
-  bool contains(const SceneObjectHandle& handle) { return points_map_.contains(handle); }
+  bool contains(const SceneObjectHandle& handle) const { return points_map_.contains(handle); }
 
   void clear();
 
