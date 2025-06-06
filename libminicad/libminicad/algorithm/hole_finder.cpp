@@ -11,6 +11,7 @@ namespace mini {
 
 std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::FinderError> BezierHole3Finder::find_holes(
     const Scene& scene, const std::vector<PatchSurfaceHandle>& bezier_surface_handles) {
+  using EdgeIterator   = std::unordered_map<Edge, std::vector<PatchEdgeInternalInfo>>::iterator;
   auto edges           = std::unordered_map<Edge, std::vector<PatchEdgeInternalInfo>>();
   auto adjacency_lists = std::unordered_map<uint32_t, std::unordered_set<uint32_t>>();
   auto add_edge        = [&edges, &adjacency_lists](const Edge& edge, const PatchEdgeInternalInfo& pinfo) {
@@ -22,6 +23,11 @@ std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::Fin
 
     auto [e_it, _3] = edges.try_emplace(edge);
     e_it->second.push_back(pinfo);
+  };
+  auto remove_edge_and_go_next = [&edges, &adjacency_lists](EdgeIterator& edge_it) {
+    adjacency_lists.at(edge_it->first.v).erase(edge_it->first.u);
+    adjacency_lists.at(edge_it->first.u).erase(edge_it->first.v);
+    edge_it = edges.erase(edge_it);
   };
 
   // Create a graph from all patches
@@ -75,7 +81,9 @@ std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::Fin
   }
 
   auto holes = std::vector<BezierHole>();
-  for (const auto& [uv, patches_uv] : edges) {
+  for (auto uv_it = edges.begin(); uv_it != edges.end();) {
+    const auto& [uv, patches_uv] = *uv_it;
+
     const auto& u_neighbors = adjacency_lists.at(uv.u);
     const auto& v_neighbors = adjacency_lists.at(uv.v);
 
@@ -105,6 +113,8 @@ std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::Fin
         }
       }
     }
+
+    remove_edge_and_go_next(uv_it);  // all possible triangles for that edge are already tested
   }
 
   return holes;
@@ -124,28 +134,28 @@ BezierHole3Finder::PatchEdgeInfo::create(const Scene& scene, const PatchEdgeInte
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Up) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[j][i] = patch[i][j].first;
+            boundary[i][j] = patch[i][j].first;
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Right) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[j][i] = patch[PatchSurface::kPatchSize - j][PatchSurface::kPatchSize - i].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][PatchSurface::kPatchSize - i - 1].first;
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Down) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[j][i] = patch[PatchSurface::kPatchSize - i][j].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - i - 1][j].first;
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Left) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[j][i] = patch[PatchSurface::kPatchSize - j][i].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][i].first;
           }
         }
       }
