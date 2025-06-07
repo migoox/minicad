@@ -95,6 +95,17 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                            "bezier_shader", std::move(bezier_surf_vert), std::move(bezier_surf_frag),
                                            std::move(bezier_surf_tesc), std::move(bezier_surf_tese)));
 
+  TRY_UNWRAP_ASSET(rational_bezier_surf_vert, manager.load_shader(shaders_path / "patch_surfaces" / "surface.vert"));
+  TRY_UNWRAP_ASSET(rational_bezier_surf_tesc,
+                   manager.load_shader(shaders_path / "patch_surfaces" / "rational_bezier.tesc"));
+  TRY_UNWRAP_ASSET(rational_bezier_surf_tese,
+                   manager.load_shader(shaders_path / "patch_surfaces" / "rational_bezier.tese"));
+  TRY_UNWRAP_ASSET(rational_bezier_surf_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
+  TRY_UNWRAP_PROGRAM(rational_bezier_surf_prog,
+                     gl::RenderingShaderProgram::create(
+                         "bezier_shader", std::move(rational_bezier_surf_vert), std::move(rational_bezier_surf_frag),
+                         std::move(rational_bezier_surf_tesc), std::move(rational_bezier_surf_tese)));
+
   TRY_UNWRAP_ASSET(sprite_vert, manager.load_shader(shaders_path / "sprites" / "sprite.vert"));
   TRY_UNWRAP_ASSET(sprite_frag, manager.load_shader(shaders_path / "sprites" / "sprite.frag"));
   TRY_UNWRAP_PROGRAM(
@@ -136,16 +147,17 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                                                         std::move(anaglyph_merger_frag)));
 
   auto shaders = Shaders{
-      .param            = std::move(param_prog),                      //
-      .grid             = std::move(grid_prog),                       //
-      .polyline         = std::move(polyline_prog),                   //
-      .bezier           = std::move(bezier_prog),                     //
-      .bezier_surf      = std::move(bezier_surf_prog),                //
-      .sprite           = std::move(sprite_prog),                     //
-      .instanced_sprite = std::move(instanced_sprite_prog),           //
-      .helper_points    = std::move(instanced_no_state_sprite_prog),  //
-      .screen_quad      = std::move(screen_quad_prog),                //
-      .anaglyph_merger  = std::move(anaglyph_merger_prog)             //
+      .param                = std::move(param_prog),                      //
+      .grid                 = std::move(grid_prog),                       //
+      .polyline             = std::move(polyline_prog),                   //
+      .bezier               = std::move(bezier_prog),                     //
+      .bezier_surf          = std::move(bezier_surf_prog),                //
+      .rational_bezier_surf = std::move(rational_bezier_surf_prog),       //
+      .sprite               = std::move(sprite_prog),                     //
+      .instanced_sprite     = std::move(instanced_sprite_prog),           //
+      .helper_points        = std::move(instanced_no_state_sprite_prog),  //
+      .screen_quad          = std::move(screen_quad_prog),                //
+      .anaglyph_merger      = std::move(anaglyph_merger_prog)             //
   };
 
   auto global_rs = GlobalRS{
@@ -363,8 +375,6 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   // Render Patch Surface
   shaders_.bezier_surf->bind();
   shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
-  shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
   shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
   shaders_.bezier_surf->set_uniform("u_horizontal", true);
   patch_surface_renderer_.render_surfaces();
@@ -372,14 +382,12 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   patch_surface_renderer_.render_surfaces();
 
   // Render Fill In Surface
-  shaders_.bezier_surf->bind();
-  shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
-  shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
-  shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
-  shaders_.bezier_surf->set_uniform("u_horizontal", true);
+  shaders_.rational_bezier_surf->bind();
+  shaders_.rational_bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
+  shaders_.rational_bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.rational_bezier_surf->set_uniform("u_horizontal", true);
   fill_in_surface_renderer_.render_fill_in_surfaces();
-  shaders_.bezier_surf->set_uniform("u_horizontal", false);
+  shaders_.rational_bezier_surf->set_uniform("u_horizontal", false);
   fill_in_surface_renderer_.render_fill_in_surfaces();
 
   // Render grid

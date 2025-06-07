@@ -19,10 +19,10 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
 
 void FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
   neighbors_ = std::move(neighbors);
-  //   std::ranges::reverse(neighbors_[0].boundaries[0]);
-  //   std::ranges::reverse(neighbors_[0].boundaries[1]);
-  //   std::ranges::reverse(neighbors_[1].boundaries[0]);
-  //   std::ranges::reverse(neighbors_[1].boundaries[1]);
+  std::ranges::reverse(neighbors_[0].boundaries[0]);
+  std::ranges::reverse(neighbors_[0].boundaries[1]);
+  std::ranges::reverse(neighbors_[1].boundaries[0]);
+  std::ranges::reverse(neighbors_[1].boundaries[1]);
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
   update();
@@ -90,6 +90,8 @@ std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() const {
     co_yield rational_bezier_points_[20 * i + 17];
   }
 }
+
+std::vector<eray::math::Vec3f> FillInSurface::rational_bezier_points() const { return rational_bezier_points_; }
 
 void FillInSurface::update() {
   using BoundaryPoints4 = std::array<eray::math::Vec3f, 4>;

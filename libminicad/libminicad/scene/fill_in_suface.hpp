@@ -1,6 +1,8 @@
 #pragma once
 #include <libminicad/scene/scene_object.hpp>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -32,6 +34,8 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   ERAY_DEFAULT_MOVE(FillInSurface)
   ERAY_DELETE_COPY(FillInSurface)
 
+  std::vector<eray::math::Vec3f> rational_bezier_points() const;
+
   std::generator<eray::math::Vec3f> control_grid_points() const;
   size_t control_grid_points_count() { return kNeighbors * 2 * 20; }
 
@@ -51,7 +55,6 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
  private:
   std::array<SurfaceNeighbor, kNeighbors> neighbors_;
   std::vector<eray::math::Vec3f> rational_bezier_points_;
-  std::vector<eray::math::Vec3f> debug_;
 };
 
 }  // namespace mini

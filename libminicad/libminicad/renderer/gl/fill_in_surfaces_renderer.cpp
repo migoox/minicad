@@ -12,7 +12,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
 
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    // renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points());
+    renderer.m_.surfaces.update_chunk(handle, obj.rational_bezier_points());
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   }
 }
@@ -28,7 +28,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
   const auto& handle = cmd_ctx.handle;
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    // renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points());
+    renderer.m_.surfaces.update_chunk(handle, obj.rational_bezier_points());
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   } else {
     renderer.push_cmd(FillInSurfaceRSCommand(handle, FillInSurfaceRSCommand::Internal::DeleteObject{}));
@@ -70,7 +70,9 @@ void FillInSurfaceRenderer::render_control_grids() const {
 }
 
 void FillInSurfaceRenderer::render_fill_in_surfaces() const {
-  // TODO(migoox)
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 20));
+  m_.surfaces_vao.bind();
+  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.surfaces.chunks_count())));
 }
 
 }  // namespace mini::gl
