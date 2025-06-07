@@ -28,7 +28,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
     renderer.m_.surfaces.update_chunk(handle, rational_bezier_patch_generator(obj), rational_bezier_patch_count(obj));
-    renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
+    renderer.m_.control_grids.update_chunk(handle, obj.tangent_grid_points(), obj.tangent_grid_points_count());
   }
 }
 
@@ -44,7 +44,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
     renderer.m_.surfaces.update_chunk(handle, rational_bezier_patch_generator(obj), rational_bezier_patch_count(obj));
-    renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
+    renderer.m_.control_grids.update_chunk(handle, obj.tangent_grid_points(), obj.tangent_grid_points_count());
   } else {
     renderer.push_cmd(FillInSurfaceRSCommand(handle, FillInSurfaceRSCommand::Internal::DeleteObject{}));
   }

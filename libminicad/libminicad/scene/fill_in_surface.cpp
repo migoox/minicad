@@ -73,6 +73,49 @@ std::expected<void, FillInSurface::InitError> FillInSurface::init(std::array<Sur
   return {};
 }
 
+std::generator<eray::math::Vec3f> FillInSurface::tangent_grid_points() {
+  update();
+
+  // Patch 0
+  co_yield rational_bezier_points_[2];
+  co_yield rational_bezier_points_[17];
+
+  co_yield rational_bezier_points_[1];
+  co_yield rational_bezier_points_[16];
+
+  co_yield rational_bezier_points_[4];
+  co_yield rational_bezier_points_[5];
+
+  co_yield rational_bezier_points_[8];
+  co_yield rational_bezier_points_[9];
+
+  // Patch 1
+  co_yield rational_bezier_points_[20 + 4];
+  co_yield rational_bezier_points_[20 + 5];
+
+  co_yield rational_bezier_points_[20 + 8];
+  co_yield rational_bezier_points_[20 + 9];
+
+  co_yield rational_bezier_points_[20 + 13];
+  co_yield rational_bezier_points_[20 + 18];
+
+  co_yield rational_bezier_points_[20 + 14];
+  co_yield rational_bezier_points_[20 + 19];
+
+  // Patch 2
+  co_yield rational_bezier_points_[2 * 20 + 7];
+  co_yield rational_bezier_points_[2 * 20 + 6];
+
+  co_yield rational_bezier_points_[2 * 20 + 11];
+  co_yield rational_bezier_points_[2 * 20 + 10];
+
+  co_yield rational_bezier_points_[2 * 20 + 14];
+  co_yield rational_bezier_points_[2 * 20 + 19];
+
+  co_yield rational_bezier_points_[2 * 20 + 13];
+  co_yield rational_bezier_points_[2 * 20 + 18];
+}
+
 std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() {
   update();
   for (auto i = 0U; i < kNeighbors; ++i) {

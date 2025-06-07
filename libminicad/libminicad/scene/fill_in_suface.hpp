@@ -41,6 +41,9 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   std::generator<eray::math::Vec3f> control_grid_points();
   size_t control_grid_points_count() { return kNeighbors * 2 * kPatchPointsCount; }
 
+  std::generator<eray::math::Vec3f> tangent_grid_points();
+  size_t tangent_grid_points_count() { return kNeighbors * 2 * 4; }
+
   static constexpr size_t kNeighbors        = 3U;
   static constexpr size_t kPatchPointsCount = 20U;
   static constexpr int kDefaultTessLevel    = 4;
