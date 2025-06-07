@@ -11,6 +11,7 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/arena.hpp>
+#include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <memory>
 #include <vector>

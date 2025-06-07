@@ -1018,19 +1018,4 @@ PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords)
                std::make_pair(points_.unsafe_by_idx(offset + size_x * 3 + 3).handle(), offset + size_x * 3 + 3),
            }}}};
 }
-
-FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
-    : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighbors_([] {
-        SurfaceNeighbor default_neighbor{
-            .boundaries = eray::util::make_filled_array<std::array<SceneObjectHandle, 4>, 2>(
-                eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
-            .handle = PatchSurfaceHandle(0, 0, 0)};
-
-        return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
-      }()) {}
-
-void FillInSurface::update() {}
-
-void FillInSurface::on_delete() {}
-
 }  // namespace mini

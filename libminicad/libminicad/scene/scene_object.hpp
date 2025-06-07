@@ -547,49 +547,4 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   std::unordered_set<FillInSurfaceHandle> dependent_fill_in_surfaces_;
 };
 
-// ---------------------------------------------------------------------------------------------------------------------
-// - FillInSurfaceType -------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-
-struct GregoryPatches {
- public:
-  [[nodiscard]] static zstring_view type_name() noexcept { return "Gregory patches"; }
-};
-
-template <typename T>
-concept CFillInSurfaceType = requires(T t) {
-  { T::type_name() } -> std::same_as<zstring_view>;
-};
-
-using FillInSurfaceVariant = std::variant<GregoryPatches>;
-MINI_VALIDATE_VARIANT_TYPES(FillInSurfaceVariant, CFillInSurfaceType);
-
-// ---------------------------------------------------------------------------------------------------------------------
-// - FillInSurface -----------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-
-class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
- public:
-  FillInSurface() = delete;
-  FillInSurface(const FillInSurfaceHandle& handle, Scene& scene);
-
-  ERAY_DEFAULT_MOVE(FillInSurface)
-  ERAY_DELETE_COPY(FillInSurface)
-
-  static constexpr size_t kNeighbors = 3U;
-
-  struct SurfaceNeighbor {
-    std::array<std::array<SceneObjectHandle, 4>, 2> boundaries;  // row-major, rows = 4, columns = 2
-    PatchSurfaceHandle handle;
-  };
-
-  void init();
-  void update();
-  void on_delete();
-  bool can_be_deleted() const { return true; }
-
- private:
-  std::array<SurfaceNeighbor, kNeighbors> neighbors_;
-};
-
 }  // namespace mini

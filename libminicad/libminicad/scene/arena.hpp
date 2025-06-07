@@ -5,6 +5,7 @@
 #include <generator>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/ruleof.hpp>
+#include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <optional>
 #include <stack>

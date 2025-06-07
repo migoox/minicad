@@ -17,6 +17,7 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
+#include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>

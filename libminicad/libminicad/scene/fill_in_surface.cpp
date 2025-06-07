@@ -1,0 +1,234 @@
+#include <liberay/util/container_extensions.hpp>
+#include <liberay/util/logger.hpp>
+#include <libminicad/scene/fill_in_suface.hpp>
+#include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
+
+namespace mini {
+
+FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
+    : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighbors_([] {
+        SurfaceNeighbor default_neighbor{
+            .boundaries = eray::util::make_filled_array<std::array<SceneObjectHandle, 4>, 2>(
+                eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
+            .handle = PatchSurfaceHandle(0, 0, 0)};
+
+        return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
+      }()) {}
+
+void FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
+  neighbors_ = std::move(neighbors);
+  update();
+}
+
+void FillInSurface::update() {
+  using BoundaryPoints4 = std::array<eray::math::Vec3f, 4>;
+  using BoundaryPoints7 = std::array<eray::math::Vec3f, 7>;
+
+  auto get_boundary_points = [&](const std::array<Boundary, 2>& handles) {
+    std::array<BoundaryPoints4, 2> points;
+
+    for (auto b = 0U; const auto& boundary : handles) {
+      for (auto i = 0U; const auto& p_h : boundary) {
+        if (auto opt = scene().arena<SceneObject>().get_obj(p_h)) {
+          const auto& obj = **opt;
+          points[b][i++]  = obj.transform.pos();
+        } else {
+          eray::util::Logger::warn("Could not update the bezier points in fill in surface. ");
+          return points;
+        }
+      }
+      ++b;
+    }
+
+    return points;
+  };
+
+  auto subdivide_bezier = [&](BoundaryPoints4& points4) {
+    BoundaryPoints7 points7;
+    auto t = 0.5F;
+
+    points7[0]                  = points4[0];
+    points7[points7.size() - 1] = points4[points4.size() - 1];
+
+    // De Casteljau
+    for (auto i = 0U; i < points4.size() - 1; ++i) {
+      for (auto j = 1U; j < points4.size() - i; ++j) {
+        points4[j - 1] = (1.F - t) * points4[j - 1] + t * points4[j];
+
+        points7[i + 1]                  = points4[j - 1];
+        points7[points7.size() - i - 1] = points4[points4.size() - i - 1];
+      }
+    }
+
+    return points7;
+  };
+
+  //
+  // The hole:
+  //
+  //                 0=6
+  //                1/ \5
+  //   Surface 0   2/ 0 \4    Surface 2
+  //              3/\   /\3
+  //             4/ 1\ / 2\2
+  //            5/____|____\1
+  //          6=0 1 2 3 4 5 6=0
+  //
+  //              Surface 1
+  //
+  // Gregory patches:
+  //
+  //            | Surface 2 |
+  //         ___|___________|___
+  //            |  ___      |
+  //            | | 0 |     |
+  //  Surface 0 | |___|___  | Surface 2
+  //            | | 1 | 2 | |
+  //            | |___|___| |
+  //         ___|___________|___
+  //            | Surface 1 |
+  //            |           |
+  //
+  // Gregory patch:
+  //
+  //          0----1----2----3
+  //          |    |    |    |
+  //          |    16  17    |
+  //          |              |
+  //          4----5    6----7
+  //          |              |
+  //          8----9   10---11
+  //          |              |
+  //          |    18  19    |
+  //          |    |    |    |
+  //          12---13--14---15
+  //
+
+  // Boundary bezier subdivided bezier points
+  std::array<std::array<BoundaryPoints7, 2>, 3> bezier_points7;  // [surface][row][bezier_point]
+  for (auto i = 0U; const auto& neighbor : neighbors_) {
+    auto points          = get_boundary_points(neighbor.boundaries);
+    bezier_points7[i][0] = subdivide_bezier(points[0]);
+    bezier_points7[i][1] = subdivide_bezier(points[1]);
+  }
+
+  // Inner points
+  std::array<std::array<eray::math::Vec3f, 4>, 3> inner_points;  // [surface][point]
+  {
+    std::array<eray::math::Vec3f, 3> q;
+    for (auto i = 0U; i < q.size(); ++i) {
+      q[i] = bezier_points7[i][0][3] - 3.F / 2.F * bezier_points7[i][1][3];
+    }
+    auto mid = (q[0] + q[1] + q[2]) / 3.F;
+    for (auto i = 0U; i < inner_points.size(); ++i) {
+      inner_points[i][3] = bezier_points7[i][0][3];
+      inner_points[i][2] = 2.F * bezier_points7[i][0][3] - bezier_points7[i][1][3];
+      inner_points[i][1] = (2.F * q[i] + mid) / 3.F;
+      inner_points[i][0] = mid;
+    }
+  }
+
+  rational_bezier_points_.resize(kNeighbors * 20);
+  auto& p = rational_bezier_points_;
+
+  // Surface 0
+  for (auto i = 0U, j = 13U; i < 2; ++i) {
+    p[20 * i + 0]  = bezier_points7[0][0][3 * i + 0];
+    p[20 * i + 4]  = bezier_points7[0][0][3 * i + 1];
+    p[20 * i + 8]  = bezier_points7[0][0][3 * i + 2];
+    p[20 * i + 12] = bezier_points7[0][0][3 * i + 3];
+
+    p[20 * i + 5] = 2.F * bezier_points7[0][0][3 * i + 1] - bezier_points7[0][1][3 * i + 1];
+    p[20 * i + 9] = 2.F * bezier_points7[0][0][3 * i + 2] - bezier_points7[0][1][3 * i + 2];
+
+    p[20 * i + j++] = inner_points[0][2];
+    p[20 * i + j]   = inner_points[0][1];
+
+    j = 1U;
+  }
+
+  // Surface 1
+  for (auto i = 1U, j = 7U; i < 3; ++i) {
+    p[20 * i + 12] = bezier_points7[1][0][3 * (i - 1) + 0];
+    p[20 * i + 13] = bezier_points7[1][0][3 * (i - 1) + 1];
+    p[20 * i + 14] = bezier_points7[1][0][3 * (i - 1) + 2];
+    p[20 * i + 15] = bezier_points7[1][0][3 * (i - 1) + 3];
+
+    p[20 * i + 18] = 2.F * bezier_points7[1][0][3 * (i - 1) + 1] - bezier_points7[1][1][3 * (i - 1) + 1];
+    p[20 * i + 19] = 2.F * bezier_points7[1][0][3 * (i - 1) + 2] - bezier_points7[1][1][3 * (i - 1) + 2];
+
+    p[20 * i + j] = inner_points[1][1];
+    j += 4;
+    p[20 * i + j] = inner_points[1][2];
+
+    j = 4U;
+  }
+
+  // Surface 2
+  p[0] = bezier_points7[2][0][6];
+  p[1] = bezier_points7[2][0][5];
+  p[2] = bezier_points7[2][0][4];
+  p[3] = bezier_points7[2][0][3];
+
+  p[16] = 2.F * bezier_points7[2][0][5] - bezier_points7[2][1][5];
+  p[17] = 2.F * bezier_points7[2][0][4] - bezier_points7[2][1][4];
+
+  p[7]  = inner_points[2][2];
+  p[11] = inner_points[2][1];
+  p[15] = inner_points[2][0];
+
+  p[2 * 20 + 3]  = bezier_points7[2][0][3];
+  p[2 * 20 + 7]  = bezier_points7[2][0][2];
+  p[2 * 20 + 11] = bezier_points7[2][0][1];
+  p[2 * 20 + 15] = bezier_points7[2][0][0];
+
+  p[2 * 20 + 6]  = 2.F * bezier_points7[2][0][7] - bezier_points7[2][1][7];
+  p[2 * 20 + 10] = 2.F * bezier_points7[2][0][11] - bezier_points7[2][1][11];
+
+  p[2 * 20 + 0] = inner_points[2][0];
+  p[2 * 20 + 1] = inner_points[2][1];
+  p[2 * 20 + 2] = inner_points[2][2];
+
+  // Add inner tangents to patches
+  auto mix_dir = [&](const eray::math::Vec3f& v1, const eray::math::Vec3f& v2) {
+    return 2.F / 3.F * v1 + 1.F / 3.F * v2;
+  };
+
+  // Patch 0
+  auto v1 = p[8] - p[12];
+  auto v2 = p[11] - p[15];
+  p[18]   = p[13] + mix_dir(v1, v2);
+  p[19]   = p[14] + mix_dir(v2, v1);
+
+  v1    = p[14] - p[15];
+  v2    = p[2] - p[3];
+  p[10] = p[11] + mix_dir(v1, v2);
+  p[6]  = p[7] + mix_dir(v2, v1);
+
+  // Patch 1
+  v1         = p[20 + 4] - p[20 + 0];
+  v2         = p[20 + 7] - p[20 + 3];
+  p[20 + 16] = p[20 + 1] + mix_dir(v1, v2);
+  p[20 + 17] = p[20 + 2] + mix_dir(v2, v1);
+
+  v1         = p[20 + 2] - p[20 + 3];
+  v2         = p[20 + 14] - p[20 + 15];
+  p[20 + 6]  = p[20 + 7] + mix_dir(v1, v2);
+  p[20 + 10] = p[20 + 11] + mix_dir(v2, v1);
+
+  // Patch 2
+  v1            = p[2 * 20 + 13] - p[2 * 20 + 12];
+  v2            = p[2 * 20 + 1] - p[2 * 20 + 0];
+  p[2 * 20 + 9] = p[2 * 20 + 8] + mix_dir(v1, v2);
+  p[2 * 20 + 5] = p[2 * 20 + 4] + mix_dir(v2, v1);
+
+  v1             = p[2 * 20 + 4] - p[2 * 20 + 0];
+  v2             = p[2 * 20 + 7] - p[2 * 20 + 3];
+  p[2 * 20 + 16] = p[2 * 20 + 1] + mix_dir(v1, v2);
+  p[2 * 20 + 17] = p[2 * 20 + 2] + mix_dir(v2, v1);
+}
+
+void FillInSurface::on_delete() {}
+
+}  // namespace mini
