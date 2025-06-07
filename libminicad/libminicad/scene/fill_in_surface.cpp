@@ -53,11 +53,20 @@ std::expected<void, FillInSurface::InitError> FillInSurface::init(std::array<Sur
 
   neighbors_ = std::move(neighbors);
 
-  // TODO(migoox): fix the winding order
-  std::ranges::reverse(neighbors_[0].boundaries[0]);
-  std::ranges::reverse(neighbors_[0].boundaries[1]);
-  std::ranges::reverse(neighbors_[1].boundaries[0]);
-  std::ranges::reverse(neighbors_[1].boundaries[1]);
+  // Fix winding order
+  auto first_end = neighbors_[0].boundaries[0][3].obj_id;
+  if (first_end != neighbors_[1].boundaries[0][0].obj_id && first_end != neighbors_[1].boundaries[0][3].obj_id) {
+    std::swap(neighbors_[1], neighbors_[2]);
+  }
+  if (first_end != neighbors_[1].boundaries[0][0].obj_id) {
+    std::ranges::reverse(neighbors_[1].boundaries[0]);
+    std::ranges::reverse(neighbors_[1].boundaries[1]);
+  }
+  if (neighbors_[1].boundaries[0][3].obj_id != neighbors_[2].boundaries[0][0].obj_id) {
+    std::ranges::reverse(neighbors_[2].boundaries[0]);
+    std::ranges::reverse(neighbors_[2].boundaries[1]);
+  }
+
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
   mark_points_dirty();
