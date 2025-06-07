@@ -25,7 +25,7 @@ using SamplingResult = std::optional<std::variant<SampledSceneObjects, SampledHe
 
 /**
  * @brief Rendering API agnostic minicad scene renderer. The implementation of this interface is injected into the
- * Scene on Scene creation.
+ * Scene upon Scene creation.
  *
  */
 class ISceneRenderer {

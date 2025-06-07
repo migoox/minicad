@@ -194,9 +194,60 @@ struct RSCommandPriority<PatchSurfaceRSCommand::Internal::DeleteObject> {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
+// - FillInSurfaceRSCommand --------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct FillInSurfaceRSCommand {
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+    struct UpdateControlPoints {};
+  };
+
+  struct UpdateObjectVisibility {
+    explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
+
+    VisibilityState new_visibility_state;
+  };
+
+  /**
+   * @brief Applies to any point list, hides/shows the polyline between the scene points.
+   *
+   */
+  struct ShowPolyline {
+    explicit ShowPolyline(bool _show) : show(_show) {}
+    bool show;
+  };
+
+  using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints,
+                                      UpdateObjectVisibility, ShowPolyline>;
+
+  explicit FillInSurfaceRSCommand(FillInSurfaceHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
+  FillInSurfaceRSCommand() = delete;
+
+  FillInSurfaceHandle handle;
+  CommandVariant variant;
+};
+
+template <>
+struct RSCommandPriority<FillInSurfaceRSCommand::Internal::AddObject> {
+  static constexpr int kValue = ImmediatePriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<FillInSurfaceRSCommand::Internal::UpdateControlPoints> {
+  static constexpr int kValue = HighPriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<FillInSurfaceRSCommand::Internal::DeleteObject> {
+  static constexpr int kValue = DeferredPriority::kValue;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
 // - Generic RSCommand -------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand>;
+using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand>;
 
 }  // namespace mini

@@ -7,6 +7,7 @@
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
+#include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
@@ -101,6 +102,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   CurvesRenderer curve_renderer_;
   SceneObjectsRenderer scene_objs_renderer_;
   PatchSurfaceRenderer patch_surface_renderer_;
+  FillInSurfaceRenderer fill_in_surface_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> right_eye_framebuffer_;
@@ -108,6 +110,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
  private:
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
+                               FillInSurfaceRenderer&& fill_in_surface_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer);
 };

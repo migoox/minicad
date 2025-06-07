@@ -56,9 +56,21 @@ struct PatchSurfaceRS {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
+// - FillInSurface -----------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct FillInSurfaceRS {
+  explicit FillInSurfaceRS(VisibilityState visibility_state = VisibilityState::Visible, bool _show_polyline = true)
+      : visibility(visibility_state), show_polyline(_show_polyline) {}
+
+  VisibilityState visibility;
+  bool show_polyline{true};
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
 // - Generic ObjectRS --------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-using ObjectRS = std::variant<SceneObjectRS, CurveRS, PatchSurfaceRS>;
+using ObjectRS = std::variant<SceneObjectRS, CurveRS, PatchSurfaceRS, FillInSurfaceRS>;
 
 }  // namespace mini

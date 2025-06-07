@@ -7,6 +7,7 @@
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
+#include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
@@ -16,11 +17,9 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 #include <variant>
-
-#include "liberay/math/vec_fwd.hpp"
-#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini::gl {
 
@@ -160,14 +159,16 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .anaglyph_output_coeffs = eray::math::Vec3f::filled(0.F),
   };
 
-  return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
-      std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), CurvesRenderer::create(),
-      PatchSurfaceRenderer::create(), std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
-      std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
+  return std::unique_ptr<ISceneRenderer>(
+      new OpenGLSceneRenderer(std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(),
+                              CurvesRenderer::create(), PatchSurfaceRenderer::create(), FillInSurfaceRenderer::create(),
+                              std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
+                              std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
 
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                          CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
+                                         FillInSurfaceRenderer&& fill_in_surface_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer)
     : shaders_(std::move(shaders)),
@@ -175,13 +176,17 @@ OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs
       curve_renderer_(std::move(curve_objs_rs)),
       scene_objs_renderer_(std::move(objs_rs)),
       patch_surface_renderer_(std::move(patch_surface_rs)),
+      fill_in_surface_renderer_(std::move(fill_in_surface_rs)),
       framebuffer_(std::move(framebuffer)),
       right_eye_framebuffer_(std::move(right_framebuffer)) {}
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const RSCommand& cmd) {
-  std::visit(eray::util::match{[this](const SceneObjectRSCommand& v) { scene_objs_renderer_.push_cmd(v); },
-                               [this](const CurveRSCommand& v) { curve_renderer_.push_cmd(v); },
-                               [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); }},
+  std::visit(eray::util::match{
+                 [this](const SceneObjectRSCommand& v) { scene_objs_renderer_.push_cmd(v); },
+                 [this](const CurveRSCommand& v) { curve_renderer_.push_cmd(v); },
+                 [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); },
+                 [this](const FillInSurfaceRSCommand& v) { fill_in_surface_renderer_.push_cmd(v); },
+             },
              cmd);
 }
 std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handle) {
@@ -194,7 +199,9 @@ std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handl
           [this](const PatchSurfaceHandle& handle) -> std::optional<ObjectRS> {
             return patch_surface_renderer_.object_rs(handle);
           },
-          [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> { return std::nullopt; },
+          [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> {
+            return fill_in_surface_renderer_.object_rs(handle);
+          },
       },
       handle);
 }
@@ -205,6 +212,9 @@ void OpenGLSceneRenderer::set_object_rs(const ObjectHandle& handle, const Object
           [&](const SceneObjectHandle& h, const SceneObjectRS& s) { scene_objs_renderer_.set_object_rs(h, s); },
           [&](const CurveHandle& h, const CurveRS& s) { curve_renderer_.set_object_rs(h, s); },
           [&](const PatchSurfaceHandle& h, const PatchSurfaceRS& s) { patch_surface_renderer_.set_object_rs(h, s); },
+          [&](const FillInSurfaceHandle& h, const FillInSurfaceRS& s) {
+            fill_in_surface_renderer_.set_object_rs(h, s);
+          },
           [&](auto&&, auto&&) { util::Logger::warn("Detected handle and rendering state mismatch."); }},
       handle, state);
 }
@@ -228,6 +238,7 @@ void OpenGLSceneRenderer::update(Scene& scene) {
   scene_objs_renderer_.update(scene);
   curve_renderer_.update(scene);
   patch_surface_renderer_.update(scene);
+  fill_in_surface_renderer_.update(scene);
 }
 
 SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width,
@@ -337,7 +348,8 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     shaders_.polyline->bind();
     shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
     curve_renderer_.render_polylines();
-    patch_surface_renderer_.render_control_grids();
+    // patch_surface_renderer_.render_control_grids();
+    fill_in_surface_renderer_.render_control_grids();
   }
 
   // Render Curves
@@ -358,6 +370,17 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   patch_surface_renderer_.render_surfaces();
   shaders_.bezier_surf->set_uniform("u_horizontal", false);
   patch_surface_renderer_.render_surfaces();
+
+  // Render Fill In Surface
+  shaders_.bezier_surf->bind();
+  shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
+  shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
+  shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
+  shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.bezier_surf->set_uniform("u_horizontal", true);
+  fill_in_surface_renderer_.render_fill_in_surfaces();
+  shaders_.bezier_surf->set_uniform("u_horizontal", false);
+  fill_in_surface_renderer_.render_fill_in_surfaces();
 
   // Render grid
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));

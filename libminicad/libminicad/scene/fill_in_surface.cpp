@@ -18,7 +18,72 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
 
 void FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
   neighbors_ = std::move(neighbors);
+  scene().renderer().push_object_rs_cmd(
+      FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
   update();
+}
+
+std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() const {
+  for (auto i = 0U; i < kNeighbors; ++i) {
+    // vertical
+    for (auto j = 0U, k = 0U; j < 2U; ++j) {
+      co_yield rational_bezier_points_[20 * i + k];
+      ++k;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      co_yield rational_bezier_points_[20 * i + k];
+      ++k;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      co_yield rational_bezier_points_[20 * i + k];
+      ++k;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      k = 12;
+    }
+
+    // horizontal
+    for (auto j = 0U, k = 0U; j < 2U; ++j) {
+      co_yield rational_bezier_points_[20 * i + k];
+      k += 4;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      co_yield rational_bezier_points_[20 * i + k];
+      k += 4;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      co_yield rational_bezier_points_[20 * i + k];
+      k += 4;
+      co_yield rational_bezier_points_[20 * i + k];
+
+      k = 3;
+    }
+
+    // inner
+    co_yield rational_bezier_points_[20 * i + 4];
+    co_yield rational_bezier_points_[20 * i + 5];
+
+    co_yield rational_bezier_points_[20 * i + 6];
+    co_yield rational_bezier_points_[20 * i + 7];
+
+    co_yield rational_bezier_points_[20 * i + 8];
+    co_yield rational_bezier_points_[20 * i + 9];
+
+    co_yield rational_bezier_points_[20 * i + 10];
+    co_yield rational_bezier_points_[20 * i + 11];
+
+    co_yield rational_bezier_points_[20 * i + 13];
+    co_yield rational_bezier_points_[20 * i + 18];
+
+    co_yield rational_bezier_points_[20 * i + 14];
+    co_yield rational_bezier_points_[20 * i + 19];
+
+    co_yield rational_bezier_points_[20 * i + 1];
+    co_yield rational_bezier_points_[20 * i + 16];
+
+    co_yield rational_bezier_points_[20 * i + 2];
+    co_yield rational_bezier_points_[20 * i + 17];
+  }
 }
 
 void FillInSurface::update() {
@@ -183,8 +248,8 @@ void FillInSurface::update() {
   p[2 * 20 + 11] = bezier_points7[2][0][1];
   p[2 * 20 + 15] = bezier_points7[2][0][0];
 
-  p[2 * 20 + 6]  = 2.F * bezier_points7[2][0][7] - bezier_points7[2][1][7];
-  p[2 * 20 + 10] = 2.F * bezier_points7[2][0][11] - bezier_points7[2][1][11];
+  p[2 * 20 + 6]  = 2.F * bezier_points7[2][0][2] - bezier_points7[2][1][2];
+  p[2 * 20 + 10] = 2.F * bezier_points7[2][0][1] - bezier_points7[2][1][1];
 
   p[2 * 20 + 0] = inner_points[2][0];
   p[2 * 20 + 1] = inner_points[2][1];
@@ -227,8 +292,14 @@ void FillInSurface::update() {
   v2             = p[2 * 20 + 7] - p[2 * 20 + 3];
   p[2 * 20 + 16] = p[2 * 20 + 1] + mix_dir(v1, v2);
   p[2 * 20 + 17] = p[2 * 20 + 2] + mix_dir(v2, v1);
+
+  scene().renderer().push_object_rs_cmd(
+      FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::UpdateControlPoints()));
 }
 
-void FillInSurface::on_delete() {}
+void FillInSurface::on_delete() {
+  scene().renderer().push_object_rs_cmd(
+      FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::DeleteObject()));
+}
 
 }  // namespace mini

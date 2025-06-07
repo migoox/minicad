@@ -28,6 +28,8 @@
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
 
+#include "libminicad/algorithm/hole_finder.hpp"
+
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -86,7 +88,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_curve_added(CurveVariant variant);
   bool on_curve_added_from_points_selection(CurveVariant variant);
   bool on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info);
-  bool on_fill_in_surface_added(FillInSurfaceVariant variant);
+  bool on_fill_in_surface_added(FillInSurfaceVariant variant, const BezierHole3Finder::BezierHole& hole);
 
   bool on_obj_deleted(const ObjectHandle& handle);
 

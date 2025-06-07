@@ -909,11 +909,23 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
   return false;
 }
 
-bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant) {
+bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant, const BezierHole3Finder::BezierHole& hole) {
   if (auto opt = m_.scene.create_obj_and_get<FillInSurface>(std::move(variant))) {
     auto& obj = **opt;
     m_.non_scene_obj_selection->add(obj.handle());
     Logger::info("Created fill in surface \"{}\"", obj.name);
+    obj.init({FillInSurface::SurfaceNeighbor{
+                  .boundaries = hole[0].boundary_,
+                  .handle     = hole[0].patch_surface_handle_,
+              },
+              FillInSurface::SurfaceNeighbor{
+                  .boundaries = hole[1].boundary_,
+                  .handle     = hole[1].patch_surface_handle_,
+              },
+              FillInSurface::SurfaceNeighbor{
+                  .boundaries = hole[2].boundary_,
+                  .handle     = hole[2].patch_surface_handle_,
+              }});
     return true;
   }
 
@@ -1232,12 +1244,7 @@ bool MiniCadApp::on_fill_in_surface_from_selection() {
   if (auto opt = BezierHole3Finder::find_holes(m_.scene, handles)) {
     const auto& holes = *opt;
     for (const auto& hole : holes) {
-      for (const auto& pinfo : hole) {
-        for (const auto& row : pinfo.boundary_) {
-          on_selection_add_many(row.begin(), row.end());
-          return true;
-        }
-      }
+      on_fill_in_surface_added(GregoryPatches{}, hole);
     }
   }
 
