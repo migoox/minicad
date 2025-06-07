@@ -33,7 +33,7 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   ERAY_DELETE_COPY(FillInSurface)
 
   std::generator<eray::math::Vec3f> control_grid_points() const;
-  static constexpr size_t control_grid_points_count() { return kNeighbors * 2 * 20; }
+  size_t control_grid_points_count() { return kNeighbors * 2 * 20; }
 
   static constexpr size_t kNeighbors = 3U;
 
@@ -51,6 +51,7 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
  private:
   std::array<SurfaceNeighbor, kNeighbors> neighbors_;
   std::vector<eray::math::Vec3f> rational_bezier_points_;
+  std::vector<eray::math::Vec3f> debug_;
 };
 
 }  // namespace mini

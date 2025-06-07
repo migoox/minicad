@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <liberay/util/container_extensions.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
@@ -18,6 +19,10 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
 
 void FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
   neighbors_ = std::move(neighbors);
+  //   std::ranges::reverse(neighbors_[0].boundaries[0]);
+  //   std::ranges::reverse(neighbors_[0].boundaries[1]);
+  //   std::ranges::reverse(neighbors_[1].boundaries[0]);
+  //   std::ranges::reverse(neighbors_[1].boundaries[1]);
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
   update();
@@ -109,22 +114,25 @@ void FillInSurface::update() {
     return points;
   };
 
-  auto subdivide_bezier = [&](BoundaryPoints4& points4) {
+  auto subdivide_bezier = [&](const BoundaryPoints4& points4) {
     BoundaryPoints7 points7;
     auto t = 0.5F;
 
-    points7[0]                  = points4[0];
-    points7[points7.size() - 1] = points4[points4.size() - 1];
-
     // De Casteljau
-    for (auto i = 0U; i < points4.size() - 1; ++i) {
-      for (auto j = 1U; j < points4.size() - i; ++j) {
-        points4[j - 1] = (1.F - t) * points4[j - 1] + t * points4[j];
+    points7[0] = points4[0];
+    points7[6] = points4[3];
 
-        points7[i + 1]                  = points4[j - 1];
-        points7[points7.size() - i - 1] = points4[points4.size() - i - 1];
-      }
-    }
+    points7[1] = (1 - t) * points4[0] + t * points4[1];
+    points7[5] = (1 - t) * points4[2] + t * points4[3];
+
+    auto p1 = points7[1];
+    auto p2 = (1 - t) * points4[1] + t * points4[2];
+    auto p3 = points7[5];
+
+    points7[2] = (1 - t) * p1 + t * p2;
+    points7[4] = (1 - t) * p2 + t * p3;
+
+    points7[3] = (1 - t) * points7[2] + t * points7[4];
 
     return points7;
   };
@@ -176,19 +184,22 @@ void FillInSurface::update() {
     auto points          = get_boundary_points(neighbor.boundaries);
     bezier_points7[i][0] = subdivide_bezier(points[0]);
     bezier_points7[i][1] = subdivide_bezier(points[1]);
+    ++i;
   }
 
   // Inner points
   std::array<std::array<eray::math::Vec3f, 4>, 3> inner_points;  // [surface][point]
   {
     std::array<eray::math::Vec3f, 3> q;
-    for (auto i = 0U; i < q.size(); ++i) {
-      q[i] = bezier_points7[i][0][3] - 3.F / 2.F * bezier_points7[i][1][3];
+    for (auto i = 0U; i < kNeighbors; ++i) {
+      inner_points[i][3] = bezier_points7[i][0][3];
+      inner_points[i][2] = (3.F * bezier_points7[i][0][3] - bezier_points7[i][1][3]) / 2.F;
+
+      q[i] = (3.F * inner_points[i][2] - inner_points[i][3]) / 2.F;
     }
     auto mid = (q[0] + q[1] + q[2]) / 3.F;
-    for (auto i = 0U; i < inner_points.size(); ++i) {
-      inner_points[i][3] = bezier_points7[i][0][3];
-      inner_points[i][2] = 2.F * bezier_points7[i][0][3] - bezier_points7[i][1][3];
+
+    for (auto i = 0U; i < kNeighbors; ++i) {
       inner_points[i][1] = (2.F * q[i] + mid) / 3.F;
       inner_points[i][0] = mid;
     }
@@ -204,8 +215,10 @@ void FillInSurface::update() {
     p[20 * i + 8]  = bezier_points7[0][0][3 * i + 2];
     p[20 * i + 12] = bezier_points7[0][0][3 * i + 3];
 
-    p[20 * i + 5] = 2.F * bezier_points7[0][0][3 * i + 1] - bezier_points7[0][1][3 * i + 1];
-    p[20 * i + 9] = 2.F * bezier_points7[0][0][3 * i + 2] - bezier_points7[0][1][3 * i + 2];
+    p[20 * i + 5] =
+        bezier_points7[0][0][3 * i + 1] + (bezier_points7[0][0][3 * i + 1] - bezier_points7[0][1][3 * i + 1]) / 2.F;
+    p[20 * i + 9] =
+        bezier_points7[0][0][3 * i + 2] + (bezier_points7[0][0][3 * i + 2] - bezier_points7[0][1][3 * i + 2]) / 2.F;
 
     p[20 * i + j++] = inner_points[0][2];
     p[20 * i + j]   = inner_points[0][1];
@@ -220,8 +233,10 @@ void FillInSurface::update() {
     p[20 * i + 14] = bezier_points7[1][0][3 * (i - 1) + 2];
     p[20 * i + 15] = bezier_points7[1][0][3 * (i - 1) + 3];
 
-    p[20 * i + 18] = 2.F * bezier_points7[1][0][3 * (i - 1) + 1] - bezier_points7[1][1][3 * (i - 1) + 1];
-    p[20 * i + 19] = 2.F * bezier_points7[1][0][3 * (i - 1) + 2] - bezier_points7[1][1][3 * (i - 1) + 2];
+    p[20 * i + 18] = bezier_points7[1][0][3 * (i - 1) + 1] +
+                     (bezier_points7[1][0][3 * (i - 1) + 1] - bezier_points7[1][1][3 * (i - 1) + 1]) / 2.F;
+    p[20 * i + 19] = bezier_points7[1][0][3 * (i - 1) + 2] +
+                     (bezier_points7[1][0][3 * (i - 1) + 2] - bezier_points7[1][1][3 * (i - 1) + 2]) / 2.F;
 
     p[20 * i + j] = inner_points[1][1];
     j += 4;
@@ -229,6 +244,7 @@ void FillInSurface::update() {
 
     j = 4U;
   }
+  p[20 + 3] = inner_points[1][0];
 
   // Surface 2
   p[0] = bezier_points7[2][0][6];
@@ -236,8 +252,8 @@ void FillInSurface::update() {
   p[2] = bezier_points7[2][0][4];
   p[3] = bezier_points7[2][0][3];
 
-  p[16] = 2.F * bezier_points7[2][0][5] - bezier_points7[2][1][5];
-  p[17] = 2.F * bezier_points7[2][0][4] - bezier_points7[2][1][4];
+  p[16] = bezier_points7[2][0][5] + (bezier_points7[2][0][5] - bezier_points7[2][1][5]) / 2.F;
+  p[17] = bezier_points7[2][0][4] + (bezier_points7[2][0][4] - bezier_points7[2][1][4]) / 2.F;
 
   p[7]  = inner_points[2][2];
   p[11] = inner_points[2][1];
@@ -248,8 +264,8 @@ void FillInSurface::update() {
   p[2 * 20 + 11] = bezier_points7[2][0][1];
   p[2 * 20 + 15] = bezier_points7[2][0][0];
 
-  p[2 * 20 + 6]  = 2.F * bezier_points7[2][0][2] - bezier_points7[2][1][2];
-  p[2 * 20 + 10] = 2.F * bezier_points7[2][0][1] - bezier_points7[2][1][1];
+  p[2 * 20 + 6]  = bezier_points7[2][0][2] + (bezier_points7[2][0][2] - bezier_points7[2][1][2]) / 2.F;
+  p[2 * 20 + 10] = bezier_points7[2][0][1] + (bezier_points7[2][0][1] - bezier_points7[2][1][1]) / 2.F;
 
   p[2 * 20 + 0] = inner_points[2][0];
   p[2 * 20 + 1] = inner_points[2][1];
