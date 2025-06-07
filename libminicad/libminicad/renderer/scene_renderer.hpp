@@ -21,6 +21,12 @@ struct SampledSceneObjects {
   std::vector<SceneObjectHandle> handles;
 };
 
+struct RendererColors {
+  static constexpr auto kNetColor       = eray::math::Vec4f(1.F, 0.59F, 0.4F, 1.F);
+  static constexpr auto kPolylinesColor = eray::math::Vec4f(0.843F, 0.894F, 0.949F, 1.F);
+  static constexpr auto kVectors        = eray::math::Vec4f(0.62F, 0.867F, 1.F, 1.F);
+};
+
 using SamplingResult = std::optional<std::variant<SampledSceneObjects, SampledHelperPoint>>;
 
 /**

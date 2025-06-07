@@ -359,8 +359,11 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   if (are_polylines_shown()) {
     shaders_.polyline->bind();
     shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
+    shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
     curve_renderer_.render_polylines();
     patch_surface_renderer_.render_control_grids();
+
+    shaders_.polyline->set_uniform("u_color", RendererColors::kVectors);
     fill_in_surface_renderer_.render_control_grids();
   }
 
@@ -369,13 +372,13 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   shaders_.bezier->set_uniform("u_pvMat", proj_mat * view_mat);
   shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
   shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
-  shaders_.bezier->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.bezier->set_uniform("u_color", RendererColors::kNetColor);
   curve_renderer_.render_curves();
 
   // Render Patch Surface
   shaders_.bezier_surf->bind();
   shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.bezier_surf->set_uniform("u_color", RendererColors::kNetColor);
   shaders_.bezier_surf->set_uniform("u_horizontal", true);
   patch_surface_renderer_.render_surfaces();
   shaders_.bezier_surf->set_uniform("u_horizontal", false);
@@ -384,7 +387,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   // Render Fill In Surface
   shaders_.rational_bezier_surf->bind();
   shaders_.rational_bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.rational_bezier_surf->set_uniform("u_color", math::Vec4f(1.F, 0.59F, 0.4F, 1.F));
+  shaders_.rational_bezier_surf->set_uniform("u_color", RendererColors::kNetColor);
   shaders_.rational_bezier_surf->set_uniform("u_horizontal", true);
   fill_in_surface_renderer_.render_fill_in_surfaces();
   shaders_.rational_bezier_surf->set_uniform("u_horizontal", false);
