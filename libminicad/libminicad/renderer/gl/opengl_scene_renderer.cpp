@@ -360,7 +360,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     shaders_.polyline->bind();
     shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
     curve_renderer_.render_polylines();
-    // patch_surface_renderer_.render_control_grids();
+    patch_surface_renderer_.render_control_grids();
     fill_in_surface_renderer_.render_control_grids();
   }
 
