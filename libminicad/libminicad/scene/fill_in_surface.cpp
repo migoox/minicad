@@ -17,18 +17,55 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
         return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
       }()) {}
 
-void FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
+std::expected<void, FillInSurface::InitError> FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
+  for (auto& n : neighbors) {
+    for (const auto& b : n.boundaries) {
+      for (const auto h : b) {
+        if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+          auto& obj = **opt;
+          if (!obj.has_type<Point>()) {
+            eray::util::Logger::err("Could not create a fill in surface. One of the scene objects is not a point.");
+            return std::unexpected(FillInSurface::InitError::NotAPoint);
+          }
+
+          obj.fill_in_surfaces_.insert(handle());
+        } else {
+          eray::util::Logger::err("Could not create a fill in surface. One of the points does not exist.");
+          return std::unexpected(FillInSurface::InitError::PointDoesNotExist);
+        }
+      }
+    }
+
+    if (auto opt = scene().arena<PatchSurface>().get_obj(n.handle)) {
+      auto& obj = **opt;
+      if (!obj.has_type<BezierPatches>()) {
+        eray::util::Logger::err(
+            "Could not create a fill in surface. One of the surfaces is not a bezier patches surface.");
+        return std::unexpected(FillInSurface::InitError::NotABezierPatch);
+      }
+
+      obj.fill_in_surfaces_.insert(handle());
+    } else {
+      eray::util::Logger::err("Could not create a fill in surface. One of the surfaces does not exist.");
+      return std::unexpected(FillInSurface::InitError::PatchDoesNotExist);
+    }
+  }
+
   neighbors_ = std::move(neighbors);
+
+  // TODO(migoox): fix the winding order
   std::ranges::reverse(neighbors_[0].boundaries[0]);
   std::ranges::reverse(neighbors_[0].boundaries[1]);
   std::ranges::reverse(neighbors_[1].boundaries[0]);
   std::ranges::reverse(neighbors_[1].boundaries[1]);
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
-  update();
+  mark_points_dirty();
+  return {};
 }
 
-std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() const {
+std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() {
+  update();
   for (auto i = 0U; i < kNeighbors; ++i) {
     // vertical
     for (auto j = 0U, k = 0U; j < 2U; ++j) {
@@ -91,9 +128,17 @@ std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() const {
   }
 }
 
-std::vector<eray::math::Vec3f> FillInSurface::rational_bezier_points() const { return rational_bezier_points_; }
+std::vector<eray::math::Vec3f> FillInSurface::rational_bezier_points() {
+  update();
+  return rational_bezier_points_;
+}
 
 void FillInSurface::update() {
+  if (!points_dirty_) {
+    return;
+  }
+  points_dirty_ = false;
+
   using BoundaryPoints4 = std::array<eray::math::Vec3f, 4>;
   using BoundaryPoints7 = std::array<eray::math::Vec3f, 7>;
 
@@ -310,12 +355,25 @@ void FillInSurface::update() {
   v2             = p[2 * 20 + 7] - p[2 * 20 + 3];
   p[2 * 20 + 16] = p[2 * 20 + 1] + mix_dir(v1, v2);
   p[2 * 20 + 17] = p[2 * 20 + 2] + mix_dir(v2, v1);
-
-  scene().renderer().push_object_rs_cmd(
-      FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::UpdateControlPoints()));
 }
 
 void FillInSurface::on_delete() {
+  for (auto& n : neighbors_) {
+    if (auto opt = scene().arena<PatchSurface>().get_obj(n.handle)) {
+      auto& obj = **opt;
+      obj.fill_in_surfaces_.erase(handle());
+    }
+
+    for (const auto& b : n.boundaries) {
+      for (const auto h : b) {
+        if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+          auto& obj = **opt;
+          obj.fill_in_surfaces_.erase(handle());
+        }
+      }
+    }
+  }
+
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::DeleteObject()));
 }

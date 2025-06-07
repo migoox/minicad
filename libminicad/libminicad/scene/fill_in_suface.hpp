@@ -34,9 +34,11 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   ERAY_DEFAULT_MOVE(FillInSurface)
   ERAY_DELETE_COPY(FillInSurface)
 
-  std::vector<eray::math::Vec3f> rational_bezier_points() const;
+  void mark_points_dirty() { points_dirty_ = true; }
 
-  std::generator<eray::math::Vec3f> control_grid_points() const;
+  std::vector<eray::math::Vec3f> rational_bezier_points();
+
+  std::generator<eray::math::Vec3f> control_grid_points();
   size_t control_grid_points_count() { return kNeighbors * 2 * 20; }
 
   static constexpr size_t kNeighbors = 3U;
@@ -47,12 +49,21 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
     PatchSurfaceHandle handle;
   };
 
-  void init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors);
+  enum class InitError : uint8_t {
+    PointDoesNotExist = 0,
+    NotAPoint         = 1,
+    PatchDoesNotExist = 2,
+    NotABezierPatch   = 3,
+  };
+
+  std::expected<void, InitError> init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors);
   void update();
   void on_delete();
   bool can_be_deleted() const { return true; }
 
  private:
+  bool points_dirty_ = false;
+
   std::array<SurfaceNeighbor, kNeighbors> neighbors_;
   std::vector<eray::math::Vec3f> rational_bezier_points_;
 };

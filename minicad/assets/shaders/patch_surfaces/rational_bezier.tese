@@ -24,11 +24,11 @@ vec3 find_rational_bezier_surface_degree_3(float u, float v)
     b[0][0] = gl_in[1].gl_Position.xyz;
     b[0][1] = gl_in[2].gl_Position.xyz;
 
-    b[1][0] = (u*gl_in[5].gl_Position.xyz + v*gl_in[16].gl_Position.xyz) / ((u + v) + 0.0001);
-    b[1][1] = ((1-u)*gl_in[6].gl_Position.xyz + v*gl_in[17].gl_Position.xyz)/((1-u)+v + 0.0001);
+    b[1][0] = (u*gl_in[5].gl_Position.xyz + v*gl_in[16].gl_Position.xyz) / ((u + v) + 0.00001);
+    b[1][1] = ((1-u)*gl_in[6].gl_Position.xyz + v*gl_in[17].gl_Position.xyz)/((1-u)+v + 0.00001);
 
-    b[2][0] = (u*gl_in[9].gl_Position.xyz + (1-v)*gl_in[18].gl_Position.xyz)/(u+(1-v) + 0.0001);
-    b[2][1] = ((1-u)*gl_in[10].gl_Position.xyz + (1-v)*gl_in[19].gl_Position.xyz)/((1-u)+(1-v) + 0.0001);
+    b[2][0] = (u*gl_in[9].gl_Position.xyz + (1-v)*gl_in[18].gl_Position.xyz)/(u+(1-v) + 0.00001);
+    b[2][1] = ((1-u)*gl_in[10].gl_Position.xyz + (1-v)*gl_in[19].gl_Position.xyz)/((1-u)+(1-v) + 0.00001);
 
     b[3][0] = gl_in[13].gl_Position.xyz;
     b[3][1] = gl_in[14].gl_Position.xyz;

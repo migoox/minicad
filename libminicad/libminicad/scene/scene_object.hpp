@@ -198,12 +198,14 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
   friend Scene;
   friend Curve;
   friend PatchSurface;
+  friend FillInSurface;
 
   void move_refs_to(SceneObject& obj);
 
  private:
   std::unordered_set<CurveHandle> curves_;
   std::unordered_set<PatchSurfaceHandle> patch_surfaces_;
+  std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -538,13 +540,14 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   friend Point;
   friend BezierPatches;
   friend BPatches;
+  friend FillInSurface;
 
   eray::math::Vec2u dim_;
   int tess_level_ = kDefaultTessLevel;
   std::vector<eray::math::Vec3f> bezier_points_;
   bool bezier_dirty_ = true;
 
-  std::unordered_set<FillInSurfaceHandle> dependent_fill_in_surfaces_;
+  std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
 };
 
 }  // namespace mini

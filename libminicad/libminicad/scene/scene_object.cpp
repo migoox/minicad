@@ -74,6 +74,15 @@ void SceneObject::update() {
             PatchSurfaceRSCommand(ps_h, PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
       }
     }
+
+    for (const auto& fs_h : this->fill_in_surfaces_) {
+      if (auto opt = scene().arena<FillInSurface>().get_obj(fs_h)) {
+        auto& obj = **opt;
+        obj.mark_points_dirty();
+        scene().renderer().push_object_rs_cmd(
+            FillInSurfaceRSCommand(fs_h, FillInSurfaceRSCommand::Internal::UpdateControlPoints{}));
+      }
+    }
   }
 }
 
@@ -797,6 +806,12 @@ void PatchSurface::on_delete() {
       PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::DeleteObject{}));
   for (auto& p : points_.point_objects()) {
     p.patch_surfaces_.erase(handle_);
+  }
+
+  for (auto it = fill_in_surfaces_.begin(); it != fill_in_surfaces_.end();) {
+    auto fs_h = *it;
+    it        = fill_in_surfaces_.erase(it);
+    scene().delete_obj(fs_h);
   }
 }
 
