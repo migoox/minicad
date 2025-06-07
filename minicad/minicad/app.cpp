@@ -921,19 +921,23 @@ bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant, const Be
   if (auto opt = m_.scene.create_obj_and_get<FillInSurface>(std::move(variant))) {
     auto& obj = **opt;
     m_.non_scene_obj_selection->add(obj.handle());
+    if (!obj.init({FillInSurface::SurfaceNeighbor{
+                       .boundaries = hole[0].boundary_,
+                       .handle     = hole[0].patch_surface_handle_,
+                   },
+                   FillInSurface::SurfaceNeighbor{
+                       .boundaries = hole[1].boundary_,
+                       .handle     = hole[1].patch_surface_handle_,
+                   },
+                   FillInSurface::SurfaceNeighbor{
+                       .boundaries = hole[2].boundary_,
+                       .handle     = hole[2].patch_surface_handle_,
+                   }})) {
+      Logger::err("Failed to create fill in surface \"{}\"", obj.name);
+      return false;
+    }
+
     Logger::info("Created fill in surface \"{}\"", obj.name);
-    obj.init({FillInSurface::SurfaceNeighbor{
-                  .boundaries = hole[0].boundary_,
-                  .handle     = hole[0].patch_surface_handle_,
-              },
-              FillInSurface::SurfaceNeighbor{
-                  .boundaries = hole[1].boundary_,
-                  .handle     = hole[1].patch_surface_handle_,
-              },
-              FillInSurface::SurfaceNeighbor{
-                  .boundaries = hole[2].boundary_,
-                  .handle     = hole[2].patch_surface_handle_,
-              }});
     return true;
   }
 
@@ -1006,7 +1010,7 @@ bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
         SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
   };
 
-  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
+  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->add(h); };
 
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
@@ -1059,6 +1063,7 @@ bool MiniCadApp::on_selection_clear() {
         SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   }
   m_.scene_obj_selection->clear(m_.scene);
+  m_.non_scene_obj_selection->clear();
   m_.helper_point_selection.clear();
   return true;
 }
