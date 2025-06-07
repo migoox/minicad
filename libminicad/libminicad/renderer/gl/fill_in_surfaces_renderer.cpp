@@ -5,6 +5,21 @@
 
 namespace mini::gl {
 
+std::generator<eray::math::Vec3f> FillInSurfaceRSCommandHandler::rational_bezier_patch_generator(
+    ref<FillInSurface> surface) {
+  const auto& rbp = surface.get().rational_bezier_points();
+  for (auto i = 0U; i < FillInSurface::kNeighbors; ++i) {
+    for (auto j = 0U; j < FillInSurface::kPatchPointsCount; ++j) {
+      co_yield rbp[FillInSurface::kPatchPointsCount * i + j];
+    }
+    co_yield eray::math::Vec3f(static_cast<float>(surface.get().tess_level()), 0.F, 0.F);
+  }
+}
+
+size_t FillInSurfaceRSCommandHandler::rational_bezier_patch_count(ref<FillInSurface> surface) {
+  return surface.get().rational_bezier_points().size() + FillInSurface::kNeighbors;
+}
+
 void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Internal::AddObject&) {
   const auto& handle = cmd_ctx.handle;
 
@@ -12,7 +27,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
 
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    renderer.m_.surfaces.update_chunk(handle, obj.rational_bezier_points());
+    renderer.m_.surfaces.update_chunk(handle, rational_bezier_patch_generator(obj), rational_bezier_patch_count(obj));
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   }
 }
@@ -28,7 +43,7 @@ void FillInSurfaceRSCommandHandler::operator()(const FillInSurfaceRSCommand::Int
   const auto& handle = cmd_ctx.handle;
   if (auto o = scene.arena<FillInSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    renderer.m_.surfaces.update_chunk(handle, obj.rational_bezier_points());
+    renderer.m_.surfaces.update_chunk(handle, rational_bezier_patch_generator(obj), rational_bezier_patch_count(obj));
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   } else {
     renderer.push_cmd(FillInSurfaceRSCommand(handle, FillInSurfaceRSCommand::Internal::DeleteObject{}));
@@ -70,7 +85,7 @@ void FillInSurfaceRenderer::render_control_grids() const {
 }
 
 void FillInSurfaceRenderer::render_fill_in_surfaces() const {
-  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 20));
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 21));
   m_.surfaces_vao.bind();
   ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.surfaces.chunks_count())));
 }

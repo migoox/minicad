@@ -137,7 +137,7 @@ std::generator<eray::math::Vec3f> FillInSurface::control_grid_points() {
   }
 }
 
-std::vector<eray::math::Vec3f> FillInSurface::rational_bezier_points() {
+const std::vector<eray::math::Vec3f>& FillInSurface::rational_bezier_points() {
   update();
   return rational_bezier_points_;
 }
@@ -385,6 +385,16 @@ void FillInSurface::on_delete() {
 
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::DeleteObject()));
+}
+
+void FillInSurface::set_tess_level(int tesselation) {
+  // fix tesselation
+  auto st     = static_cast<int>(std::sqrt(tesselation));
+  tesselation = st * st;
+
+  tess_level_ = tesselation;
+  scene().renderer().push_object_rs_cmd(
+      FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::UpdateControlPoints()));
 }
 
 }  // namespace mini

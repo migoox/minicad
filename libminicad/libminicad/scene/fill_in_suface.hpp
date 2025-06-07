@@ -36,12 +36,14 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
 
   void mark_points_dirty() { points_dirty_ = true; }
 
-  std::vector<eray::math::Vec3f> rational_bezier_points();
+  const std::vector<eray::math::Vec3f>& rational_bezier_points();
 
   std::generator<eray::math::Vec3f> control_grid_points();
-  size_t control_grid_points_count() { return kNeighbors * 2 * 20; }
+  size_t control_grid_points_count() { return kNeighbors * 2 * kPatchPointsCount; }
 
-  static constexpr size_t kNeighbors = 3U;
+  static constexpr size_t kNeighbors        = 3U;
+  static constexpr size_t kPatchPointsCount = 20U;
+  static constexpr int kDefaultTessLevel    = 4;
 
   using Boundary = std::array<SceneObjectHandle, 4>;
   struct SurfaceNeighbor {
@@ -56,6 +58,9 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
     NotABezierPatch   = 3,
   };
 
+  int tess_level() const { return tess_level_; }
+  void set_tess_level(int tesselation);
+
   std::expected<void, InitError> init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors);
   void update();
   void on_delete();
@@ -63,6 +68,7 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
 
  private:
   bool points_dirty_ = false;
+  int tess_level_    = kDefaultTessLevel;
 
   std::array<SurfaceNeighbor, kNeighbors> neighbors_;
   std::vector<eray::math::Vec3f> rational_bezier_points_;

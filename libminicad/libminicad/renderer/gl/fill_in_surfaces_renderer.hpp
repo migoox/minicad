@@ -28,6 +28,10 @@ struct FillInSurfaceRSCommandHandler {
   FillInSurfaceRenderer& renderer;
   Scene& scene;
   // NOLINTEND
+
+ protected:
+  static std::generator<eray::math::Vec3f> rational_bezier_patch_generator(ref<FillInSurface> surface);
+  static size_t rational_bezier_patch_count(ref<FillInSurface> surface);
 };
 
 class FillInSurfaceRenderer : public SubRenderer<FillInSurfaceRenderer, FillInSurfaceHandle, FillInSurfaceRS,

@@ -34,7 +34,7 @@ void main()
     if (gl_InvocationID == 0)
     {
         isolinesCount = float(IsolinesCount);
-        subdivisions = float(int(sqrt(100)));
+        subdivisions = float(int(sqrt(gl_in[CONTROL_POINTS_COUNT].gl_Position.x)));
 
         // float tess_level = clamp(find_polyline_length() / float(IsolinesCount), 4.0, 64.0);
         float tess_level = 64.0;

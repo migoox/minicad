@@ -566,6 +566,14 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
         obj.value()->name = object_name;
       }
+
+      int t     = patch.tess_level();
+      int st    = static_cast<int>(std::sqrt(t));
+      int left  = static_cast<int>(std::pow(st - 1, 2));
+      int right = static_cast<int>(std::pow(st + 1, 2));
+      if (ImGui::InputInt("Tesselation level", &t)) {
+        obj.value()->set_tess_level(t < patch.tess_level() ? left : right);
+      }
     }
   };
 
