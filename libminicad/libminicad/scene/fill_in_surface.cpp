@@ -314,10 +314,8 @@ void FillInSurface::update() {
     p[20 * i + 8]  = bezier_points7[0][0][3 * i + 2];
     p[20 * i + 12] = bezier_points7[0][0][3 * i + 3];
 
-    p[20 * i + 5] =
-        bezier_points7[0][0][3 * i + 1] + (bezier_points7[0][0][3 * i + 1] - bezier_points7[0][1][3 * i + 1]) / 2.F;
-    p[20 * i + 9] =
-        bezier_points7[0][0][3 * i + 2] + (bezier_points7[0][0][3 * i + 2] - bezier_points7[0][1][3 * i + 2]) / 2.F;
+    p[20 * i + 5] = bezier_points7[0][0][3 * i + 1] + bezier_points7[0][0][3 * i + 1] - bezier_points7[0][1][3 * i + 1];
+    p[20 * i + 9] = bezier_points7[0][0][3 * i + 2] + bezier_points7[0][0][3 * i + 2] - bezier_points7[0][1][3 * i + 2];
 
     p[20 * i + j++] = inner_points[0][2];
     p[20 * i + j]   = inner_points[0][1];
@@ -332,10 +330,10 @@ void FillInSurface::update() {
     p[20 * i + 14] = bezier_points7[1][0][3 * (i - 1) + 2];
     p[20 * i + 15] = bezier_points7[1][0][3 * (i - 1) + 3];
 
-    p[20 * i + 18] = bezier_points7[1][0][3 * (i - 1) + 1] +
-                     (bezier_points7[1][0][3 * (i - 1) + 1] - bezier_points7[1][1][3 * (i - 1) + 1]) / 2.F;
-    p[20 * i + 19] = bezier_points7[1][0][3 * (i - 1) + 2] +
-                     (bezier_points7[1][0][3 * (i - 1) + 2] - bezier_points7[1][1][3 * (i - 1) + 2]) / 2.F;
+    p[20 * i + 18] = bezier_points7[1][0][3 * (i - 1) + 1] + bezier_points7[1][0][3 * (i - 1) + 1] -
+                     bezier_points7[1][1][3 * (i - 1) + 1];
+    p[20 * i + 19] = bezier_points7[1][0][3 * (i - 1) + 2] + bezier_points7[1][0][3 * (i - 1) + 2] -
+                     bezier_points7[1][1][3 * (i - 1) + 2];
 
     p[20 * i + j] = inner_points[1][1];
     j += 4;
@@ -351,8 +349,8 @@ void FillInSurface::update() {
   p[2] = bezier_points7[2][0][4];
   p[3] = bezier_points7[2][0][3];
 
-  p[16] = bezier_points7[2][0][5] + (bezier_points7[2][0][5] - bezier_points7[2][1][5]) / 2.F;
-  p[17] = bezier_points7[2][0][4] + (bezier_points7[2][0][4] - bezier_points7[2][1][4]) / 2.F;
+  p[16] = bezier_points7[2][0][5] + bezier_points7[2][0][5] - bezier_points7[2][1][5];
+  p[17] = bezier_points7[2][0][4] + bezier_points7[2][0][4] - bezier_points7[2][1][4];
 
   p[7]  = inner_points[2][2];
   p[11] = inner_points[2][1];
@@ -363,8 +361,8 @@ void FillInSurface::update() {
   p[2 * 20 + 11] = bezier_points7[2][0][1];
   p[2 * 20 + 15] = bezier_points7[2][0][0];
 
-  p[2 * 20 + 6]  = bezier_points7[2][0][2] + (bezier_points7[2][0][2] - bezier_points7[2][1][2]) / 2.F;
-  p[2 * 20 + 10] = bezier_points7[2][0][1] + (bezier_points7[2][0][1] - bezier_points7[2][1][1]) / 2.F;
+  p[2 * 20 + 6]  = bezier_points7[2][0][2] + bezier_points7[2][0][2] - bezier_points7[2][1][2];
+  p[2 * 20 + 10] = bezier_points7[2][0][1] + bezier_points7[2][0][1] - bezier_points7[2][1][1];
 
   p[2 * 20 + 0] = inner_points[2][0];
   p[2 * 20 + 1] = inner_points[2][1];
