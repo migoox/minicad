@@ -55,11 +55,17 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   };
 
   struct SurfaceNeighborhood {
+    SurfaceNeighborhood() = delete;
+
     static SurfaceNeighborhood create(SurfaceNeighbor&& n0, SurfaceNeighbor&& n1, SurfaceNeighbor&& n2);
 
     Triangle get_triangle();
 
     std::array<SurfaceNeighbor, kNeighbors> neighbors;
+
+   private:
+    friend FillInSurface;
+    explicit SurfaceNeighborhood(std::array<SurfaceNeighbor, kNeighbors>&& neighbors);
   };
 
   enum class InitError : uint8_t {

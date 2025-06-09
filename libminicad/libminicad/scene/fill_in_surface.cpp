@@ -25,8 +25,12 @@ FillInSurface::SurfaceNeighborhood FillInSurface::SurfaceNeighborhood::create(Su
     std::ranges::reverse(n2.boundaries[1]);
   }
 
-  return FillInSurface::SurfaceNeighborhood{.neighbors = {std::move(n0), std::move(n1), std::move(n2)}};
+  return FillInSurface::SurfaceNeighborhood({std::move(n0), std::move(n1), std::move(n2)});
 }
+
+FillInSurface::SurfaceNeighborhood::SurfaceNeighborhood(
+    std::array<FillInSurface::SurfaceNeighbor, kNeighbors>&& neighbors)
+    : neighbors(std::move(neighbors)) {}
 
 Triangle FillInSurface::SurfaceNeighborhood::get_triangle() {
   return Triangle::create(neighbors[0].boundaries[0][0].obj_id, neighbors[1].boundaries[0][0].obj_id,
@@ -40,7 +44,7 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
                 eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
             .handle = PatchSurfaceHandle(0, 0, 0)};
 
-        return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
+        return SurfaceNeighborhood(eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor));
       }()) {}
 
 std::expected<void, FillInSurface::InitError> FillInSurface::init(SurfaceNeighborhood&& nighborhood) {
@@ -441,6 +445,7 @@ void FillInSurface::on_delete() {
       }
     }
   }
+  scene().fill_in_surface_triangles_.erase(neighborhood_.get_triangle());
 
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::DeleteObject()));
