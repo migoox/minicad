@@ -92,6 +92,7 @@ void SceneObject::move_refs_to(SceneObject& obj) {
       if (auto result = pl.value()->points_.replace(handle(), obj); !result) {
         util::Logger::warn("Could not replace the scene object");
       }
+
       obj.curves_.insert(c_h);
 
       scene().renderer().push_object_rs_cmd(CurveRSCommand(c_h, CurveRSCommand::Internal::UpdateControlPoints{}));
@@ -116,8 +117,24 @@ void SceneObject::move_refs_to(SceneObject& obj) {
     }
   }
 
+  for (const auto& fs_h : fill_in_surfaces_) {
+    if (auto fs = scene().arena<FillInSurface>().get_obj(fs_h)) {
+      auto& fs_obj = **fs;
+
+      if (auto result = fs_obj.replace(handle(), obj); !result) {
+        util::Logger::warn("Could not replace the scene object");
+      }
+      obj.fill_in_surfaces_.insert(fs_h);
+
+      scene().renderer().push_object_rs_cmd(
+          FillInSurfaceRSCommand(fs_h, FillInSurfaceRSCommand::Internal::UpdateControlPoints{}));
+      fs_obj.mark_points_dirty();
+    }
+  }
+
   curves_.clear();
   patch_surfaces_.clear();
+  fill_in_surfaces_.clear();
 }
 
 Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {

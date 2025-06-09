@@ -1,8 +1,6 @@
 #pragma once
 #include <libminicad/scene/scene_object.hpp>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -68,6 +66,12 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   void update();
   void on_delete();
   bool can_be_deleted() const { return true; }
+
+ private:
+  friend SceneObject;
+
+  enum class ReplaceOperationError : uint8_t { NotAPoint = 0 };
+  std::expected<void, ReplaceOperationError> replace(const SceneObjectHandle& old_point_handle, SceneObject& new_point);
 
  private:
   bool points_dirty_ = false;

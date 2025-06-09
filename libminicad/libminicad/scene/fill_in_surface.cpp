@@ -438,4 +438,24 @@ void FillInSurface::set_tess_level(int tesselation) {
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::UpdateControlPoints()));
 }
 
+std::expected<void, FillInSurface::ReplaceOperationError> FillInSurface::replace(
+    const SceneObjectHandle& old_point_handle, SceneObject& new_point) {
+  if (!new_point.has_type<Point>()) {
+    eray::util::Logger::err("Could not replace a point. New scene object is not a point.");
+    return std::unexpected(ReplaceOperationError::NotAPoint);
+  }
+
+  for (auto& n : neighbors_) {
+    for (auto& b : n.boundaries) {
+      for (auto& h : b) {
+        if (h == old_point_handle) {
+          h = new_point.handle();
+        }
+      }
+    }
+  }
+
+  return {};
+}
+
 }  // namespace mini
