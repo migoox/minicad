@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <liberay/math/vec.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 
 namespace mini {
@@ -25,20 +26,22 @@ class BezierHole3Finder {
   struct PatchEdgeInternalInfo {
     enum class BoundaryDirection : uint8_t { Up, Down, Left, Right };
 
-    static PatchEdgeInternalInfo create(uint32_t patch_surface_id, uint32_t patch_idx, BoundaryDirection boundary_dir) {
+    static PatchEdgeInternalInfo create(uint32_t patch_surface_id, eray::math::Vec2u patch_coords,
+                                        BoundaryDirection boundary_dir) {
       return PatchEdgeInternalInfo{
           .patch_surface_id = patch_surface_id,
-          .patch_idx        = patch_idx,
+          .patch_coords     = patch_coords,
           .boundary_dir     = boundary_dir,
       };
     }
 
     uint32_t patch_surface_id;
-    uint32_t patch_idx;
+    eray::math::Vec2u patch_coords;
     BoundaryDirection boundary_dir;
 
     bool is_same_patch(const PatchEdgeInternalInfo& other) const {
-      return patch_surface_id == other.patch_surface_id && patch_idx == other.patch_idx;
+      return patch_surface_id == other.patch_surface_id && patch_coords.x == other.patch_coords.x &&
+             patch_coords.y == other.patch_coords.y;
     }
   };
 
@@ -78,11 +81,13 @@ struct hash<mini::BezierHole3Finder::Edge> {
 template <>
 struct hash<mini::BezierHole3Finder::PatchEdgeInternalInfo> {
   size_t operator()(const mini::BezierHole3Finder::PatchEdgeInternalInfo& pinfo) const noexcept {
-    auto h1 = static_cast<size_t>(pinfo.patch_idx);
-    auto h2 = static_cast<size_t>(pinfo.patch_surface_id);
-    auto h3 = static_cast<size_t>(pinfo.boundary_dir);
+    auto h1 = static_cast<size_t>(pinfo.patch_coords.x);
+    auto h2 = static_cast<size_t>(pinfo.patch_coords.y);
+    auto h3 = static_cast<size_t>(pinfo.patch_surface_id);
+    auto h4 = static_cast<size_t>(pinfo.boundary_dir);
     eray::util::hash_combine(h1, h2);
     eray::util::hash_combine(h1, h3);
+    eray::util::hash_combine(h1, h4);
     return h1;
   }
 };

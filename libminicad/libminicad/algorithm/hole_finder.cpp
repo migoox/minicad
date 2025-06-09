@@ -41,38 +41,38 @@ std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::Fin
 
       auto patches_control_point_handles = obj.patches_control_point_handles();
 
-      for (auto patch_idx = 0U; const auto& patch : patches_control_point_handles) {
-        auto [ul_cp, ul_idx] = patch[0][0];
-        auto [ur_cp, ur_idx] = patch[0][3];
-        auto [br_cp, br_idx] = patch[3][3];
-        auto [bl_cp, bl_idx] = patch[3][0];
+      for (const auto& full_patch : patches_control_point_handles) {
+        auto [patch, patch_coords] = full_patch;
 
-        if (ul_cp.obj_id != ur_cp.obj_id) {
-          add_edge(Edge::create(ul_cp.obj_id, ur_cp.obj_id),  //
-                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_idx,
+        auto ul_cp = patch[0][0].obj_id;
+        auto ur_cp = patch[0][3].obj_id;
+        auto br_cp = patch[3][3].obj_id;
+        auto bl_cp = patch[3][0].obj_id;
+
+        if (ul_cp != ur_cp) {
+          add_edge(Edge::create(ul_cp, ur_cp),  //
+                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_coords,
                                                  PatchEdgeInternalInfo::BoundaryDirection::Up)  //
           );
         }
-        if (ur_cp.obj_id != br_cp.obj_id) {
-          add_edge(Edge::create(ur_cp.obj_id, br_cp.obj_id),  //
-                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_idx,
+        if (ur_cp != br_cp) {
+          add_edge(Edge::create(ur_cp, br_cp),  //
+                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_coords,
                                                  PatchEdgeInternalInfo::BoundaryDirection::Right)  //
           );
         }
-        if (br_cp.obj_id != bl_cp.obj_id) {
-          add_edge(Edge::create(br_cp.obj_id, bl_cp.obj_id),  //
-                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_idx,
+        if (br_cp != bl_cp) {
+          add_edge(Edge::create(br_cp, bl_cp),  //
+                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_coords,
                                                  PatchEdgeInternalInfo::BoundaryDirection::Down)  //
           );
         }
-        if (bl_cp.obj_id != ul_cp.obj_id) {
-          add_edge(Edge::create(bl_cp.obj_id, ul_cp.obj_id),  //
-                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_idx,
+        if (bl_cp != ul_cp) {
+          add_edge(Edge::create(bl_cp, ul_cp),  //
+                   PatchEdgeInternalInfo::create(obj.handle().obj_id, patch_coords,
                                                  PatchEdgeInternalInfo::BoundaryDirection::Left)  //
           );
         }
-
-        ++patch_idx;
       }
     } else {
       eray::util::Logger::err("Bezier Hole3 finder received a patch that does not exist");
@@ -97,7 +97,7 @@ std::expected<std::vector<BezierHole3Finder::BezierHole>, BezierHole3Finder::Fin
 
         // Note: The typical case is when there is only one patch per edge so these loops shouldn't hurt much
         // as typically the code simplifies to only one if statement in the 3rd loop. The for
-        // loops are here for the generality sake.
+        // loops are here for the generality sake (multigraphs).
         for (const auto& p_uv : patches_uv) {
           for (const auto& p_uw : patches_uw) {
             for (const auto& p_vw : patches_vw) {
@@ -124,7 +124,7 @@ std::expected<BezierHole3Finder::PatchEdgeInfo, BezierHole3Finder::PatchEdgeInfo
 BezierHole3Finder::PatchEdgeInfo::create(const Scene& scene, const PatchEdgeInternalInfo& pinfo) {
   if (auto opt = scene.arena<PatchSurface>().get_obj_by_id(pinfo.patch_surface_id)) {
     const auto& obj = **opt;
-    if (const auto& patch_opt = obj.patch_control_point_handles(pinfo.patch_idx)) {
+    if (const auto& patch_opt = obj.patch_control_point_handles(pinfo.patch_coords)) {
       const auto& patch = *patch_opt;
 
       auto boundary = eray::util::make_filled_array<std::array<SceneObjectHandle, PatchSurface::kPatchSize>, 2>(
@@ -134,28 +134,28 @@ BezierHole3Finder::PatchEdgeInfo::create(const Scene& scene, const PatchEdgeInte
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Up) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[i][j] = patch[i][j].first;
+            boundary[i][j] = patch[i][j];
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Right) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][PatchSurface::kPatchSize - i - 1].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][PatchSurface::kPatchSize - i - 1];
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Down) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[i][j] = patch[PatchSurface::kPatchSize - i - 1][j].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - i - 1][j];
           }
         }
       }
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Left) {
         for (auto i = 0U; i < 2; ++i) {
           for (auto j = 0U; j < PatchSurface::kPatchSize; ++j) {
-            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][i].first;
+            boundary[i][j] = patch[PatchSurface::kPatchSize - j - 1][i];
           }
         }
       }

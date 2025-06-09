@@ -17,6 +17,8 @@
 #include <unordered_set>
 #include <variant>
 
+#include "liberay/math/vec_fwd.hpp"
+
 #define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
   template <typename Variant>                                                \
   struct ValidateVariant_##TVariant;                                         \
@@ -486,22 +488,18 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
     OutOfBounds = 0,
   };
 
-  [[nodiscard]] std::expected<std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>,
-                              GetterError>
+  [[nodiscard]] std::expected<std::array<std::array<SceneObjectHandle, kPatchSize>, kPatchSize>, GetterError>
   patch_control_point_handles(eray::math::Vec2u patch_coords) const;
 
-  [[nodiscard]] std::expected<std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>,
-                              GetterError>
-  patch_control_point_handles(uint32_t patch_idx) const;
-
-  [[nodiscard]] std::array<std::array<std::pair<SceneObjectHandle, uint32_t>, kPatchSize>, kPatchSize>
-  unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const;
+  [[nodiscard]] std::array<std::array<SceneObjectHandle, kPatchSize>, kPatchSize> unsafe_patch_control_point_handles(
+      eray::math::Vec2u patch_coords) const;
 
   auto patches_control_point_handles() const {
-    return std::views::cartesian_product(std::views::iota(0U, dim_.x), std::views::iota(0U, dim_.y)) |
+    return std::views::cartesian_product(std::views::iota(0U, dim_.y), std::views::iota(0U, dim_.x)) |
            std::views::transform([this](auto&& pair) {
-             auto [x, y] = pair;
-             return unsafe_patch_control_point_handles(eray::math::Vec2u(x, y));
+             auto [y, x] = pair;
+             auto coords = eray::math::Vec2u(x, y);
+             return std::make_pair(unsafe_patch_control_point_handles(coords), coords);
            });
   }
 
