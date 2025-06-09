@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <expected>
 #include <liberay/util/container_extensions.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
@@ -7,8 +8,33 @@
 
 namespace mini {
 
+FillInSurface::SurfaceNeighborhood FillInSurface::SurfaceNeighborhood::create(SurfaceNeighbor&& n0,
+                                                                              SurfaceNeighbor&& n1,
+                                                                              SurfaceNeighbor&& n2) {
+  // Fix winding order
+  auto first_end = n0.boundaries[0][3].obj_id;
+  if (first_end != n1.boundaries[0][0].obj_id && first_end != n1.boundaries[0][3].obj_id) {
+    std::swap(n1, n2);
+  }
+  if (first_end != n1.boundaries[0][0].obj_id) {
+    std::ranges::reverse(n1.boundaries[0]);
+    std::ranges::reverse(n1.boundaries[1]);
+  }
+  if (n1.boundaries[0][3].obj_id != n2.boundaries[0][0].obj_id) {
+    std::ranges::reverse(n2.boundaries[0]);
+    std::ranges::reverse(n2.boundaries[1]);
+  }
+
+  return FillInSurface::SurfaceNeighborhood{.neighbors = {std::move(n0), std::move(n1), std::move(n2)}};
+}
+
+Triangle FillInSurface::SurfaceNeighborhood::get_triangle() {
+  return Triangle::create(neighbors[0].boundaries[0][0].obj_id, neighbors[1].boundaries[0][0].obj_id,
+                          neighbors[2].boundaries[0][0].obj_id);
+}
+
 FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
-    : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighbors_([] {
+    : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighborhood_([] {
         SurfaceNeighbor default_neighbor{
             .boundaries = eray::util::make_filled_array<std::array<SceneObjectHandle, 4>, 2>(
                 eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
@@ -17,8 +43,8 @@ FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
         return eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor);
       }()) {}
 
-std::expected<void, FillInSurface::InitError> FillInSurface::init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors) {
-  for (auto& n : neighbors) {
+std::expected<void, FillInSurface::InitError> FillInSurface::init(SurfaceNeighborhood&& nighborhood) {
+  for (auto& n : nighborhood.neighbors) {
     for (const auto& b : n.boundaries) {
       for (const auto h : b) {
         if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
@@ -51,21 +77,13 @@ std::expected<void, FillInSurface::InitError> FillInSurface::init(std::array<Sur
     }
   }
 
-  neighbors_ = std::move(neighbors);
+  neighborhood_ = std::move(nighborhood);
 
-  // Fix winding order
-  auto first_end = neighbors_[0].boundaries[0][3].obj_id;
-  if (first_end != neighbors_[1].boundaries[0][0].obj_id && first_end != neighbors_[1].boundaries[0][3].obj_id) {
-    std::swap(neighbors_[1], neighbors_[2]);
+  auto triangle = nighborhood.get_triangle();
+  if (scene().fill_in_surface_exists(triangle)) {
+    return std::unexpected(FillInSurface::InitError::AlreadyFilled);
   }
-  if (first_end != neighbors_[1].boundaries[0][0].obj_id) {
-    std::ranges::reverse(neighbors_[1].boundaries[0]);
-    std::ranges::reverse(neighbors_[1].boundaries[1]);
-  }
-  if (neighbors_[1].boundaries[0][3].obj_id != neighbors_[2].boundaries[0][0].obj_id) {
-    std::ranges::reverse(neighbors_[2].boundaries[0]);
-    std::ranges::reverse(neighbors_[2].boundaries[1]);
-  }
+  scene().fill_in_surface_triangles_.insert(triangle);
 
   scene().renderer().push_object_rs_cmd(
       FillInSurfaceRSCommand(handle(), FillInSurfaceRSCommand::Internal::AddObject()));
@@ -279,7 +297,7 @@ void FillInSurface::update() {
 
   // Boundary bezier subdivided bezier points
   std::array<std::array<BoundaryPoints7, 2>, 3> bezier_points7;  // [surface][row][bezier_point]
-  for (auto i = 0U; const auto& neighbor : neighbors_) {
+  for (auto i = 0U; const auto& neighbor : neighborhood_.neighbors) {
     auto points          = get_boundary_points(neighbor.boundaries);
     bezier_points7[i][0] = subdivide_bezier(points[0]);
     bezier_points7[i][1] = subdivide_bezier(points[1]);
@@ -408,7 +426,7 @@ void FillInSurface::update() {
 }
 
 void FillInSurface::on_delete() {
-  for (auto& n : neighbors_) {
+  for (auto& n : neighborhood_.neighbors) {
     if (auto opt = scene().arena<PatchSurface>().get_obj(n.handle)) {
       auto& obj = **opt;
       obj.fill_in_surfaces_.erase(handle());
@@ -445,7 +463,8 @@ std::expected<void, FillInSurface::ReplaceOperationError> FillInSurface::replace
     return std::unexpected(ReplaceOperationError::NotAPoint);
   }
 
-  for (auto& n : neighbors_) {
+  scene().fill_in_surface_triangles_.erase(neighborhood_.get_triangle());
+  for (auto& n : neighborhood_.neighbors) {
     for (auto& b : n.boundaries) {
       for (auto& h : b) {
         if (h == old_point_handle) {
@@ -454,6 +473,7 @@ std::expected<void, FillInSurface::ReplaceOperationError> FillInSurface::replace
       }
     }
   }
+  scene().fill_in_surface_triangles_.insert(neighborhood_.get_triangle());
 
   return {};
 }

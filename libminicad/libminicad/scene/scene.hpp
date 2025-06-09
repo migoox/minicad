@@ -18,6 +18,50 @@
 
 namespace mini {
 
+struct Triangle {
+  uint32_t obj_id1;
+  uint32_t obj_id2;
+  uint32_t obj_id3;
+
+  static Triangle create(uint32_t a, uint32_t b, uint32_t c) {
+    if (a > b) {
+      std::swap(a, b);
+    }
+    if (b > c) {
+      std::swap(b, c);
+    }
+    if (a > b) {
+      std::swap(a, b);
+    }
+
+    return Triangle{.obj_id1 = a, .obj_id2 = b, .obj_id3 = c};
+  }
+
+  friend bool operator==(const Triangle& lh, const Triangle& rh) {
+    return lh.obj_id1 == rh.obj_id1 && lh.obj_id2 == rh.obj_id2 && lh.obj_id3 == rh.obj_id3;
+  }
+};
+
+}  // namespace mini
+
+namespace std {
+
+template <>
+struct hash<mini::Triangle> {
+  size_t operator()(const mini::Triangle& triangle) const noexcept {
+    auto h1 = static_cast<size_t>(triangle.obj_id1);
+    auto h2 = static_cast<size_t>(triangle.obj_id2);
+    auto h3 = static_cast<size_t>(triangle.obj_id3);
+    eray::util::hash_combine(h1, h2);
+    eray::util::hash_combine(h1, h3);
+    return h1;
+  }
+};
+
+}  // namespace std
+
+namespace mini {
+
 class Scene {
  public:
   Scene() = delete;
@@ -140,6 +184,8 @@ class Scene {
     return false;
   }
 
+  bool fill_in_surface_exists(const Triangle& triangle) { return fill_in_surface_triangles_.contains(triangle); }
+
   // TODO(migoox): delete many objs
 
   const std::vector<ObjectHandle>& handles() const { return objects_order_; }
@@ -164,6 +210,7 @@ class Scene {
 
  private:
   friend Curve;
+  friend FillInSurface;
 
   std::unique_ptr<ISceneRenderer> renderer_;
 
@@ -173,6 +220,8 @@ class Scene {
   std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>> arenas_;
 
   std::vector<ObjectHandle> objects_order_;
+
+  std::unordered_set<Triangle> fill_in_surface_triangles_;
 };
 
 }  // namespace mini

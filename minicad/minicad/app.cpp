@@ -918,21 +918,29 @@ bool MiniCadApp::on_curve_deleted(const CurveHandle& handle) {
 }
 
 bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant, const BezierHole3Finder::BezierHole& hole) {
+  auto neighborhood = FillInSurface::SurfaceNeighborhood::create(
+      FillInSurface::SurfaceNeighbor{
+          .boundaries = hole[0].boundary_,
+          .handle     = hole[0].patch_surface_handle_,
+      },
+      FillInSurface::SurfaceNeighbor{
+          .boundaries = hole[1].boundary_,
+          .handle     = hole[1].patch_surface_handle_,
+      },
+      FillInSurface::SurfaceNeighbor{
+          .boundaries = hole[2].boundary_,
+          .handle     = hole[2].patch_surface_handle_,
+      });
+
+  if (m_.scene.fill_in_surface_exists(neighborhood.get_triangle())) {
+    return false;
+  }
+
   if (auto opt = m_.scene.create_obj_and_get<FillInSurface>(std::move(variant))) {
     auto& obj = **opt;
     m_.non_scene_obj_selection->add(obj.handle());
-    if (!obj.init({FillInSurface::SurfaceNeighbor{
-                       .boundaries = hole[0].boundary_,
-                       .handle     = hole[0].patch_surface_handle_,
-                   },
-                   FillInSurface::SurfaceNeighbor{
-                       .boundaries = hole[1].boundary_,
-                       .handle     = hole[1].patch_surface_handle_,
-                   },
-                   FillInSurface::SurfaceNeighbor{
-                       .boundaries = hole[2].boundary_,
-                       .handle     = hole[2].patch_surface_handle_,
-                   }})) {
+
+    if (!obj.init(std::move(neighborhood))) {
       Logger::err("Failed to create fill in surface \"{}\"", obj.name);
       return false;
     }

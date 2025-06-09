@@ -3,6 +3,8 @@
 
 namespace mini {
 
+struct Triangle;
+
 // ---------------------------------------------------------------------------------------------------------------------
 // - FillInSurfaceType -------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
@@ -52,17 +54,26 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
     PatchSurfaceHandle handle;
   };
 
+  struct SurfaceNeighborhood {
+    static SurfaceNeighborhood create(SurfaceNeighbor&& n0, SurfaceNeighbor&& n1, SurfaceNeighbor&& n2);
+
+    Triangle get_triangle();
+
+    std::array<SurfaceNeighbor, kNeighbors> neighbors;
+  };
+
   enum class InitError : uint8_t {
     PointDoesNotExist = 0,
     NotAPoint         = 1,
     PatchDoesNotExist = 2,
     NotABezierPatch   = 3,
+    AlreadyFilled     = 4,
   };
 
   int tess_level() const { return tess_level_; }
   void set_tess_level(int tesselation);
 
-  std::expected<void, InitError> init(std::array<SurfaceNeighbor, kNeighbors>&& neighbors);
+  std::expected<void, InitError> init(SurfaceNeighborhood&& nighborhood);
   void update();
   void on_delete();
   bool can_be_deleted() const { return true; }
@@ -77,7 +88,7 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   bool points_dirty_ = false;
   int tess_level_    = kDefaultTessLevel;
 
-  std::array<SurfaceNeighbor, kNeighbors> neighbors_;
+  SurfaceNeighborhood neighborhood_;
   std::vector<eray::math::Vec3f> rational_bezier_points_;
 };
 
