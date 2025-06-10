@@ -66,6 +66,8 @@ class ISceneRenderer {
   virtual void update(Scene& scene) = 0;
 
   virtual void render(const Camera& camera) = 0;
+
+  virtual void clear() = 0;
 };
 
 }  // namespace mini

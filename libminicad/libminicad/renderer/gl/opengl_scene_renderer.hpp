@@ -62,6 +62,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
 
   void update(Scene& scene) final;
   void render(const Camera& camera) final;
+  void clear() final;
 
  private:
   void render_internal(eray::driver::gl::ViewportFramebuffer& fb, const Camera& camera,

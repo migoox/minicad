@@ -60,6 +60,7 @@ void Scene::remove_from_order(size_t ind) {
 void Scene::clear() {
   std::apply([](auto&... arena) { ((arena.clear()), ...); }, arenas_);
   objects_order_.clear();
+  renderer_->clear();
 }
 
 }  // namespace mini

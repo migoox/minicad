@@ -286,6 +286,13 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
   return SampledSceneObjects{.handles = handles};
 }
 
+void OpenGLSceneRenderer::clear() {
+  scene_objs_renderer_      = SceneObjectsRenderer::create();
+  fill_in_surface_renderer_ = FillInSurfaceRenderer::create();
+  patch_surface_renderer_   = PatchSurfaceRenderer::create();
+  curve_renderer_           = CurvesRenderer::create();
+}
+
 void OpenGLSceneRenderer::render(const Camera& camera) {
   if (!is_anaglyph_rendering_enabled()) {
     render_internal(*framebuffer_, camera, camera.view_matrix(), camera.proj_matrix(),
