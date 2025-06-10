@@ -34,7 +34,8 @@ FillInSurface::SurfaceNeighborhood::SurfaceNeighborhood(
 
 Triangle FillInSurface::SurfaceNeighborhood::get_triangle() {
   return Triangle::create(neighbors[0].boundaries[0][0].obj_id, neighbors[1].boundaries[0][0].obj_id,
-                          neighbors[2].boundaries[0][0].obj_id);
+                          neighbors[2].boundaries[0][0].obj_id, neighbors[0].boundaries[1][0].obj_id,
+                          neighbors[1].boundaries[1][0].obj_id, neighbors[2].boundaries[1][0].obj_id);
 }
 
 FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
