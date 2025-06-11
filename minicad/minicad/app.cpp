@@ -75,8 +75,8 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   icons_config.MergeMode        = true;
   icons_config.PixelSnapH       = true;
   icons_config.GlyphMinAdvanceX = icon_font_size;
-  auto path                     = System::executable_dir() / "assets" / "fonts" / "fa-solid-900.ttf";
-  io.Fonts->AddFontFromFileTTF(path.c_str(), icon_font_size, &icons_config, kIconsRanges);
+  auto p = System::path_to_utf8str(System::executable_dir() / "assets" / "fonts" / "fa-solid-900.ttf");
+  io.Fonts->AddFontFromFileTTF(p.c_str(), icon_font_size, &icons_config, kIconsRanges);
   // use FONT_ICON_FILE_NAME_FAR if you want regular instead of solid
 
   auto camera = std::make_unique<Camera>(false, math::radians(60.F),
