@@ -84,6 +84,8 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   void on_delete();
   bool can_be_deleted() const { return true; }
 
+  void clone_to(FillInSurface& obj) const;
+
  private:
   friend SceneObject;
 

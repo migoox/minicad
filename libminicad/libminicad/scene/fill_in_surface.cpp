@@ -484,4 +484,6 @@ std::expected<void, FillInSurface::ReplaceOperationError> FillInSurface::replace
   return {};
 }
 
+void FillInSurface::clone_to(FillInSurface& /*obj*/) const {}
+
 }  // namespace mini

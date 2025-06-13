@@ -70,6 +70,8 @@ class PointList {
            std::views::transform([](const auto& obj) -> const SceneObjectHandle& { return obj.get().handle(); });
   }
 
+  auto unique_point_handles() const { return points_map_ | std::views::keys; }
+
   std::optional<size_t> point_first_idx(const SceneObjectHandle& handle) const {
     auto it = points_map_.find(handle);
     if (it == points_map_.end()) {
@@ -82,6 +84,7 @@ class PointList {
   [[nodiscard]] const SceneObject& unsafe_by_idx(size_t idx) const;
 
   size_t size() const { return points_.size(); }
+  size_t size_unique() const { return points_map_.size(); }
 
   std::vector<ref<SceneObject>>& unsafe_points() { return points_; }
   std::unordered_map<SceneObjectHandle, std::unordered_set<size_t>>& unsafe_points_map() { return points_map_; }

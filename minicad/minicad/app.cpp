@@ -360,10 +360,16 @@ void MiniCadApp::gui_objects_list_window() {
     if (disabled) {
       ImGui::BeginDisabled();
     }
-    if (ImGui::Selectable(ICON_FA_TEXT_SLASH " Rename")) {
+    if (ImGui::Selectable(ICON_FA_TEXT_WIDTH " Rename")) {
       if (selected_single_handle) {
         rename_handle     = selected_single_handle;
         open_rename_modal = true;
+      }
+    }
+
+    if (ImGui::Selectable(ICON_FA_COPY " Copy")) {
+      if (selected_single_handle) {
+        std::visit(match{[this](const CObjectHandle auto& h) { m_.scene.clone_obj(h); }}, *selected_single_handle);
       }
     }
     if (disabled) {
@@ -1366,7 +1372,7 @@ bool MiniCadApp::on_fill_in_surface_from_selection() {
   return false;
 }
 
-std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() {
+std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() const {
   if (m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_empty()) {
     return std::visit(match{[](const CObjectHandle auto& h) -> ObjectHandle { return h; }},
                       m_.non_scene_obj_selection->first());

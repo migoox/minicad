@@ -92,7 +92,10 @@ class Scene {
   Scene(const Scene&) noexcept = delete;
   ERAY_DELETE_MOVE_AND_COPY_ASSIGN(Scene)
 
-  enum class ObjectCreationError : uint8_t { ReachedMaxObjects = 0 };
+  enum class ObjectCreationError : uint8_t {
+    ReachedMaxObjects = 0,
+    CopyFailure       = 1,
+  };
   enum class PointsMergeError : uint8_t { NotEnoughPoints = 0, NewPointCreationError = 1 };
 
   template <typename TObject>
@@ -192,6 +195,19 @@ class Scene {
     }
 
     return *h;
+  }
+
+  template <CObject TObject>
+  std::expected<eray::util::Handle<TObject>, ObjectCreationError> clone_obj(const eray::util::Handle<TObject>& handle) {
+    if (auto o = arena<TObject>().get_obj(handle)) {
+      if (auto o2 = create_obj_and_get<TObject>(decltype(o.value()->object){})) {
+        auto& obj = **o2;
+        o.value()->clone_to(obj);
+        return obj.handle_;
+      }
+    }
+    eray::util::Logger::err("Object copy failure");
+    return std::unexpected(Scene::ObjectCreationError::CopyFailure);
   }
 
   template <CObject TObject>

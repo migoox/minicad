@@ -13,6 +13,7 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 #include <ranges>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -135,6 +136,91 @@ void SceneObject::move_refs_to(SceneObject& obj) {
   curves_.clear();
   patch_surfaces_.clear();
   fill_in_surfaces_.clear();
+}
+
+void SceneObject::clone_to(SceneObject& obj) const {
+  obj.transform = this->transform.clone_detached();
+  obj.name      = this->name + " Copy";
+  obj.object    = this->object;
+
+  scene_.get().renderer().push_object_rs_cmd(
+      SceneObjectRSCommand(obj.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+}
+
+void Curve::clone_to(Curve& obj) const {
+  obj.name   = this->name + " Copy";
+  obj.object = this->object;
+
+  auto handles = scene_.get().create_many_objs<SceneObject>(Point{}, this->points_.size_unique());
+  if (!handles) {
+    util::Logger::err("Could not copy curve. Points could not be created.");
+    return;
+  }
+
+  for (const auto& h : *handles) {
+    if (auto opt = scene_.get().arena<SceneObject>().get_obj(h)) {
+      auto& p_obj = **opt;
+      p_obj.curves_.insert(obj.handle());
+    }
+  }
+
+  obj.points_      = this->points_;
+  auto old_handles = this->points_.unique_point_handles();
+  for (const auto& h : old_handles) {
+    if (auto opt1 = scene().arena<SceneObject>().get_obj(h)) {
+      if (auto opt2 = scene_.get().arena<SceneObject>().get_obj(handles->back())) {
+        const auto& obj1 = **opt1;
+        auto& obj2       = **opt2;
+
+        obj1.clone_to(obj2);
+        if (!obj.points_.replace(h, obj2)) {
+          util::Logger::err("Could not replace handle.");
+        }
+      }
+    }
+    handles->pop_back();
+  }
+
+  obj.update();
+}
+
+void PatchSurface::clone_to(PatchSurface& obj) const {
+  obj.name        = this->name + " Copy";
+  obj.object      = this->object;
+  obj.dim_        = this->dim_;
+  obj.tess_level_ = this->tess_level_;
+
+  auto handles = scene_.get().create_many_objs<SceneObject>(Point{}, this->points_.size_unique());
+  if (!handles) {
+    util::Logger::err("Could not copy curve. Points could not be created.");
+    return;
+  }
+
+  for (const auto& h : *handles) {
+    if (auto opt = scene_.get().arena<SceneObject>().get_obj(h)) {
+      auto& p_obj = **opt;
+      p_obj.patch_surfaces_.insert(obj.handle());
+    }
+  }
+
+  obj.points_      = this->points_;
+  auto old_handles = this->points_.unique_point_handles();
+  for (const auto& h : old_handles) {
+    if (auto opt1 = scene().arena<SceneObject>().get_obj(h)) {
+      if (auto opt2 = scene_.get().arena<SceneObject>().get_obj(handles->back())) {
+        const auto& obj1 = **opt1;
+        auto& obj2       = **opt2;
+
+        obj1.clone_to(obj2);
+        if (!obj.points_.replace(h, obj2)) {
+          util::Logger::err("Could not replace handle.");
+        }
+      }
+    }
+    handles->pop_back();
+  }
+
+  obj.update();
 }
 
 Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {

@@ -17,8 +17,6 @@
 #include <unordered_set>
 #include <variant>
 
-#include "liberay/math/vec_fwd.hpp"
-
 #define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
   template <typename Variant>                                                \
   struct ValidateVariant_##TVariant;                                         \
@@ -39,7 +37,7 @@ namespace mini {
 
 template <typename T>
 concept CObject =
-    requires(T t, const eray::util::Handle<T>& handle, Scene& scene, std::string&& name, std::size_t idx) {
+    requires(T t, T obj, const eray::util::Handle<T>& handle, Scene& scene, std::string&& name, std::size_t idx) {
       typename T::Variant;
 
       T{handle, scene};
@@ -52,6 +50,7 @@ concept CObject =
       { t.on_delete() } -> std::same_as<void>;  // TODO(migoox): find better solution
       { t.type_name() } -> std::same_as<zstring_view>;
       { t.set_name(std::move(name)) } -> std::same_as<void>;
+      { std::as_const(t).clone_to(obj) } -> std::same_as<void>;
     };
 
 template <typename T>
@@ -110,7 +109,7 @@ class ObjectBase {
   eray::util::Handle<TObject> handle_;
   std::size_t order_idx_{0};
 
-  ref<Scene> scene_;  // IMPORTANT: lifetime of the scene always exceeds the lifetime of the scene object
+  mutable ref<Scene> scene_;  // IMPORTANT: lifetime of the scene always exceeds the lifetime of the scene object
  private:
   friend TObject;
 
@@ -192,6 +191,8 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
   void update();
   void on_delete();
   bool can_be_deleted() const;
+
+  void clone_to(SceneObject& obj) const;
 
  public:
   eray::math::Transform3f transform;
@@ -386,6 +387,8 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
   void on_delete();
   bool can_be_deleted() const { return true; }
 
+  void clone_to(Curve& obj) const;
+
  private:
   void update_indices_from(size_t start_idx);
 
@@ -522,6 +525,8 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   void update();
   void on_delete();
   bool can_be_deleted() const { return true; }
+
+  void clone_to(PatchSurface& obj) const;
 
   const eray::math::Vec2u& dimensions() const { return dim_; }
   eray::math::Vec2u control_points_dim() const;
