@@ -10,6 +10,9 @@ layout(location = 1) out int id;
 uniform sampler2D u_textureSampler;
 
 void main() {
+    if (gstate == 2) {
+        discard;
+    }
     fragColor = texture(u_textureSampler, texCoord);
     if (gstate != 0) {
         fragColor = vec4(vec3(fragColor) * vec3(0.5, 0.5, 1.0), fragColor.w);

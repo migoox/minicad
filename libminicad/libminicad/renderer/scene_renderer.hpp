@@ -1,6 +1,5 @@
 #pragma once
 
-#include <expected>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/zstring_view.hpp>
@@ -40,6 +39,7 @@ class ISceneRenderer {
 
   virtual void push_object_rs_cmd(const RSCommand& cmd) = 0;
 
+  virtual VisibilityState object_visibility(const ObjectHandle& handle)         = 0;
   virtual std::optional<ObjectRS> object_rs(const ObjectHandle& handle)         = 0;
   virtual void set_object_rs(const ObjectHandle& handle, const ObjectRS& state) = 0;
 

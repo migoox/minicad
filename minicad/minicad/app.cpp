@@ -278,20 +278,22 @@ void MiniCadApp::gui_objects_list_window() {
       ImGui::OpenPopup("SelectionPopup");
     };
 
+    auto s = ImGui::GetContentRegionAvail().x + 20;
+
     auto draw_item_scene_obj = [&](const SceneObjectHandle& h) {
       bool is_selected = m_.scene_obj_selection->contains(h);
 
       using T = ERAY_HANDLE_OBJ(h);
-      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
-                                     on_popup);
+      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, ImVec2(s, 0), on_activate, on_deactivate,
+                                     on_activate_single, on_popup);
     };
 
     auto draw_item_non_scene_obj = [&](const auto& h) {
       bool is_selected = m_.non_scene_obj_selection->contains(h);
 
       using T = ERAY_HANDLE_OBJ(h);
-      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
-                                     on_popup);
+      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, ImVec2(s, 0), on_activate, on_deactivate,
+                                     on_activate_single, on_popup);
     };
 
     auto skip_point = [&](const SceneObjectHandle& h) {
@@ -307,16 +309,49 @@ void MiniCadApp::gui_objects_list_window() {
       return false;
     };
 
-    for (const auto& handle : m_.scene.handles()) {
-      if (std::visit(util::match{skip_point, [](const auto&) { return false; }}, handle)) {
-        continue;
-      }
+    auto idx = 0;
+    if (ImGui::BeginTable("Objects list", 2, ImGuiTableFlags_ScrollY)) {
+      ImGui::TableSetupColumn("##Name", ImGuiTableColumnFlags_WidthFixed, ImGui::GetContentRegionAvail().x - 60.F);
+      ImGui::TableSetupColumn("##Visibility", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableHeadersRow();
+      for (const auto& handle : m_.scene.handles()) {
+        ImGui::TableNextColumn();
+        ImGui::PushID(idx);
+        if (std::visit(util::match{skip_point, [](const auto&) { return false; }}, handle)) {
+          continue;
+        }
 
-      std::visit(util::match{draw_item_scene_obj, draw_item_non_scene_obj}, handle);
-      std::visit(util::match{drop_target, [](const auto&) {}}, handle);
-      std::visit(util::match{drop_source, [](const auto&) {}}, handle);
+        std::visit(util::match{draw_item_scene_obj, draw_item_non_scene_obj}, handle);
+        std::visit(util::match{drop_target, [](const auto&) {}}, handle);
+        std::visit(util::match{drop_source, [](const auto&) {}}, handle);
+
+        ImGui::TableNextColumn();
+        auto is_visible = m_.scene.renderer().object_visibility(handle) != VisibilityState::Invisible;
+        if (ImGui::Checkbox(ICON_FA_EYE " ", &is_visible)) {
+          auto vis_state = is_visible ? VisibilityState::Visible : VisibilityState::Invisible;
+          std::visit(util::match{[&](const SceneObjectHandle& h) {
+                                   m_.scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(
+                                       h, SceneObjectRSCommand::UpdateObjectVisibility(vis_state)));
+                                 },
+                                 [&](const CurveHandle& h) {
+                                   m_.scene.renderer().push_object_rs_cmd(
+                                       CurveRSCommand(h, CurveRSCommand::UpdateObjectVisibility(vis_state)));
+                                 },
+                                 [&](const PatchSurfaceHandle& h) {
+                                   m_.scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(
+                                       h, PatchSurfaceRSCommand::UpdateObjectVisibility(vis_state)));
+                                 },
+                                 [&](const FillInSurfaceHandle& h) {
+                                   m_.scene.renderer().push_object_rs_cmd(FillInSurfaceRSCommand(
+                                       h, FillInSurfaceRSCommand::UpdateObjectVisibility(vis_state)));
+                                 }},
+                     handle);
+        }
+        ImGui::PopID();
+      }
+      ImGui::EndTable();
     }
-  }
+  }  // namespace mini
 
   static std::optional<ObjectHandle> rename_handle = std::nullopt;
   bool open_rename_modal                           = false;

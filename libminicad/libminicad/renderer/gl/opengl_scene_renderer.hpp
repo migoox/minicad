@@ -17,6 +17,8 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "libminicad/renderer/visibility_state.hpp"
+
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
@@ -35,6 +37,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
       const std::filesystem::path& assets_path, eray::math::Vec2i win_size);
 
   void push_object_rs_cmd(const RSCommand& cmd) final;
+  VisibilityState object_visibility(const ObjectHandle& handle) final;
   std::optional<ObjectRS> object_rs(const ObjectHandle& handle) final;
   void set_object_rs(const ObjectHandle& handle, const ObjectRS& state) final;
 

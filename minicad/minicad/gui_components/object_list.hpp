@@ -9,7 +9,7 @@ namespace ImGui::mini {  // NOLINT
 
 template <::mini::CObject TObject>
 void ObjectListItem(
-    const ::mini::Scene& scene, const eray::util::Handle<TObject>& handle, bool is_selected,
+    const ::mini::Scene& scene, const eray::util::Handle<TObject>& handle, bool is_selected, ImVec2 size = ImVec2(0, 0),
     const std::function<void(const eray::util::Handle<TObject>& handle)>& on_activate =
         [](const eray::util::Handle<TObject>&) {},
     const std::function<void(const eray::util::Handle<TObject>& handle)>& on_deactivate =
@@ -20,7 +20,7 @@ void ObjectListItem(
         [](const eray::util::Handle<TObject>&) {}) {
   if (auto opt = scene.arena<TObject>().get_obj(handle)) {
     const auto& obj = **opt;
-    ImGui::Selectable(obj.name.c_str(), is_selected);
+    ImGui::Selectable(obj.name.c_str(), is_selected, ImGuiSelectableFlags_None, size);
 
     if (ImGui::IsItemHovered()) {
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {

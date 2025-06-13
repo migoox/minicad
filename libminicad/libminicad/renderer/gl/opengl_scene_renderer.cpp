@@ -21,6 +21,8 @@
 #include <optional>
 #include <variant>
 
+#include "libminicad/renderer/visibility_state.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -216,6 +218,14 @@ std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handl
           },
       },
       handle);
+}
+
+VisibilityState OpenGLSceneRenderer::object_visibility(const ObjectHandle& handle) {
+  auto result = object_rs(handle);
+  if (result) {
+    return std::visit(util::match{[](const auto& rs) { return rs.visibility; }}, *result);
+  }
+  return VisibilityState::Invisible;
 }
 
 void OpenGLSceneRenderer::set_object_rs(const ObjectHandle& handle, const ObjectRS& state) {
