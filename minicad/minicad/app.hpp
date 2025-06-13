@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <liberay/driver/gl/buffer.hpp>
 #include <liberay/driver/gl/framebuffer.hpp>
 #include <liberay/driver/gl/shader_program.hpp>
@@ -50,6 +51,8 @@ class MiniCadApp final : public eray::os::Application {
   };
 
   struct Members {
+    std::optional<std::filesystem::path> proj_path;
+
     mini::OrbitingCameraOperator orbiting_camera_operator;
 
     std::unique_ptr<mini::Cursor> cursor;
@@ -63,6 +66,8 @@ class MiniCadApp final : public eray::os::Application {
     bool use_ortho;
 
     bool is_gizmo_used;
+
+    bool ctrl_pressed;
 
     SelectTool select_tool;
     Scene scene;
@@ -134,7 +139,8 @@ class MiniCadApp final : public eray::os::Application {
   bool on_fill_in_surface_from_selection();
 
   bool on_project_open(const std::filesystem::path& path);
-  bool on_project_save(const std::filesystem::path& path) const;
+  bool on_project_save_as(const std::filesystem::path& path);
+  bool on_project_save();
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
@@ -142,6 +148,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_resize(const eray::os::WindowResizedEvent& ev);
   bool on_scrolled(const eray::os::MouseScrolledEvent& ev);
   bool on_key_pressed(const eray::os::KeyPressedEvent& ev);
+  bool on_key_released(const eray::os::KeyReleasedEvent& ev);
 
  private:
   static constexpr int kMinTessLevel = 3;

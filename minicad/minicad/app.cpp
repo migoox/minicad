@@ -99,6 +99,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   sr->add_billboard("centroid", centroid_img);
 
   return MiniCadApp(std::move(window), {
+                                           .proj_path                = std::nullopt,
                                            .orbiting_camera_operator = OrbitingCameraOperator(),    //
                                            .cursor                   = std::make_unique<Cursor>(),  //
                                            .camera                   = std::move(camera),           //
@@ -107,6 +108,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
                                            .grid_on                  = true,                        //
                                            .use_ortho                = false,                       //
                                            .is_gizmo_used            = false,                       //
+                                           .ctrl_pressed             = false,                       //
                                            .select_tool              = SelectTool(),                //
                                            .scene                    = Scene(std::move(sr)),        //
                                            .tool_state               = ToolState::Cursor,
@@ -127,6 +129,7 @@ MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
       class_method_as_event_callback(this, &MiniCadApp::on_mouse_released));
   window_->set_event_callback<os::MouseScrolledEvent>(class_method_as_event_callback(this, &MiniCadApp::on_scrolled));
   window_->set_event_callback<os::KeyPressedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_pressed));
+  window_->set_event_callback<os::KeyReleasedEvent>(class_method_as_event_callback(this, &MiniCadApp::on_key_released));
 }
 
 void MiniCadApp::gui_objects_list_window() {
@@ -603,8 +606,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save as...")) {
-      if (auto result =
-              System::file_dialog().save_file([this](const auto& p) { this->on_project_save(p); }, kFileDialogFilters);
+      if (auto result = System::file_dialog().save_file([this](const auto& p) { this->on_project_save_as(p); },
+                                                        kFileDialogFilters);
           !result) {
         util::Logger::err("Failed to open file dialog");
       }
@@ -1154,6 +1157,7 @@ bool MiniCadApp::on_project_open(const std::filesystem::path& path) {
     if (auto result = deserializer.deserialize(m_.scene, json); !result) {
       util::Logger::err("Could deserialize file with path {}.", path.string());
     } else {
+      m_.proj_path = path;
       util::Logger::succ("Loaded project from file: {}", path.string());
     }
 
@@ -1164,17 +1168,28 @@ bool MiniCadApp::on_project_open(const std::filesystem::path& path) {
   return true;
 }
 
-bool MiniCadApp::on_project_save(const std::filesystem::path& path) const {
+bool MiniCadApp::on_project_save_as(const std::filesystem::path& path) {
   util::Logger::info("Received file path: {}", path.string());
   auto serializer = JsonSerializer::create();
   auto str        = serializer.serialize(m_.scene);
   if (auto file = std::ofstream(path); file) {
     file << str;
+    m_.proj_path = path;
     util::Logger::succ("Saved project to file: {}", path.string());
   } else {
     util::Logger::err("Could save to file {}. Output stream could not be opened.", path.string());
   }
   return true;
+}
+
+bool MiniCadApp::on_project_save() {
+  if (m_.proj_path) {
+    on_project_save_as(*m_.proj_path);
+    return true;
+  }
+
+  util::Logger::warn("Could not save the project. No project path is known.");
+  return false;
 }
 
 bool MiniCadApp::on_tool_action_end() {
@@ -1264,7 +1279,28 @@ bool MiniCadApp::on_key_pressed(const eray::os::KeyPressedEvent& ev) {
   }
   if (ev.key_code() == os::KeyCode::G) {
     m_.grid_on = !m_.grid_on;
+    return true;
   }
+  if (ev.key_code() == os::KeyCode::LeftControl) {
+    m_.ctrl_pressed = true;
+    return true;
+  }
+  if (m_.ctrl_pressed) {
+    if (ev.key_code() == os::KeyCode::S) {
+      on_project_save();
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_key_released(const eray::os::KeyReleasedEvent& ev) {
+  if (ev.key_code() == os::KeyCode::LeftControl) {
+    m_.ctrl_pressed = false;
+    return true;
+  }
+
   return false;
 }
 
