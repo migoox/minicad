@@ -622,13 +622,39 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::Checkbox(ICON_FA_DRAW_POLYGON " Polylines", &polylines)) {
       m_.scene.renderer().show_polylines(polylines);
     }
+  }
+  ImGui::End();
 
-    if (ImGui::Button("Look at cursor")) {
-      m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
-    }
-    if (ImGui::Button("Look at origin")) {
-      m_.camera_gimbal->set_local_pos(m_.scene_obj_selection->centroid());
-    }
+  ImGui::Begin(ICON_FA_CAMERA_RETRO " Camera");
+  if (ImGui::Checkbox("Orthographic", &m_.use_ortho)) {
+  }
+
+  if (ImGui::Button("XZ")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::XZ);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("-XZ")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::MXZ);
+  }
+  if (ImGui::Button("XY")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::XY);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("-XY")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::MXY);
+  }
+  if (ImGui::Button("YZ")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::YZ);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("-YZ")) {
+    m_.orbiting_camera_operator.look_at_plane(*m_.camera, OrbitingCameraOperator::Plane::MYZ);
+  }
+  if (ImGui::Button("Look at cursor")) {
+    m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
+  }
+  if (ImGui::Button("Look at origin")) {
+    m_.camera_gimbal->set_local_pos(m_.scene_obj_selection->centroid());
   }
   ImGui::End();
 

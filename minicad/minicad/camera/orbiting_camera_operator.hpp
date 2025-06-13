@@ -10,6 +10,8 @@ class OrbitingCameraOperator {
  public:
   OrbitingCameraOperator();
 
+  enum class Plane : uint8_t { XZ = 0, MXZ = 1, YZ = 2, MYZ = 3, XY = 4, MXY = 5, _Count = 6 };  // NOLINT
+
   void start_rot(eray::math::Vec2f mouse_pos);
   void stop_rot();
   bool is_rotating() const { return is_rot_active_; }
@@ -24,6 +26,8 @@ class OrbitingCameraOperator {
 
   bool zoom(Camera& camera, float offset);
   bool update(Camera& camera, eray::math::Transform3f& camera_gimbal, eray::math::Vec2f mouse_pos, float dt);
+
+  void look_at_plane(Camera& camera, Plane plane);
 
   void set_sensitivity(float sensitivity) { looking_around_sensitivity_ = sensitivity; }
 

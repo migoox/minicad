@@ -3,6 +3,9 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/logger.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
+#include <numbers>
+
+#include "liberay/math/vec.hpp"
 
 namespace mini {
 
@@ -99,6 +102,29 @@ bool OrbitingCameraOperator::update(Camera& camera, eray::math::Transform3f& cam
   }
 
   return false;
+}
+
+void OrbitingCameraOperator::look_at_plane(Camera& camera, Plane plane) {
+  namespace math = eray::math;
+
+  auto new_rot = math::Quatf::one();
+  if (plane == Plane::XY) {
+    new_rot = math::Quatf::one();
+  } else if (plane == Plane::MXY) {
+    new_rot = math::Quatf::rotation_y(std::numbers::pi_v<float>);
+  } else if (plane == Plane::YZ) {
+    new_rot = math::Quatf::rotation_y(std::numbers::pi_v<float> / 2.F);
+  } else if (plane == Plane::MYZ) {
+    new_rot = math::Quatf::rotation_y(-std::numbers::pi_v<float> / 2.F);
+  } else if (plane == Plane::XZ) {
+    new_rot = math::Quatf::rotation_x(-std::numbers::pi_v<float> / 2.F);
+  } else {
+    new_rot = math::Quatf::rotation_x(std::numbers::pi_v<float> / 2.F);
+  }
+
+  float camera_distance = camera.transform.local_pos().length();
+  camera.transform.set_local_rot(new_rot);
+  camera.transform.set_local_pos(-camera.transform.front() * camera_distance);
 }
 
 }  // namespace mini
