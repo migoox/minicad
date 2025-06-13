@@ -60,6 +60,9 @@ namespace os   = eray::os;
 using System = eray::os::System;
 using Logger = eray::util::Logger;
 
+template <typename T>
+using match = eray::util::match<T>;
+
 MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   // Setup fonts
   ImGuiIO& io = ImGui::GetIO();
@@ -240,6 +243,7 @@ void MiniCadApp::gui_objects_list_window() {
   ImGui::Checkbox("Hide points", &hide_points);
   ImGui::Separator();
 
+  static std::optional<ObjectHandle> selected_single_handle  = std::nullopt;
   static constexpr zstring_view kPointDragAndDropPayloadType = "PointDragAndDropPayload";
   {
     auto drop_target = [&](const CurveHandle& h) {
@@ -269,7 +273,10 @@ void MiniCadApp::gui_objects_list_window() {
     auto on_activate        = [&](const auto& h) { on_selection_add(h); };
     auto on_deactivate      = [&](const auto& h) { on_selection_remove(h); };
     auto on_activate_single = [&](const auto& h) { on_selection_set_single(h); };
-    auto on_popup           = [&](const auto&) { ImGui::OpenPopup("SelectionPopup"); };
+    auto on_popup           = [&](const auto&) {
+      selected_single_handle = get_single_handle_selection();
+      ImGui::OpenPopup("SelectionPopup");
+    };
 
     auto draw_item_scene_obj = [&](const SceneObjectHandle& h) {
       bool is_selected = m_.scene_obj_selection->contains(h);
@@ -311,6 +318,8 @@ void MiniCadApp::gui_objects_list_window() {
     }
   }
 
+  static std::optional<ObjectHandle> rename_handle = std::nullopt;
+  bool open_rename_modal                           = false;
   if (ImGui::BeginPopup("SelectionPopup")) {
     bool disabled = !m_.scene_obj_selection->is_points_only() || !m_.non_scene_obj_selection->is_empty();
     if (disabled) {
@@ -347,6 +356,19 @@ void MiniCadApp::gui_objects_list_window() {
     if (disabled) {
       ImGui::EndDisabled();
     }
+    disabled = !selected_single_handle.has_value();
+    if (disabled) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Selectable(ICON_FA_TEXT_SLASH " Rename")) {
+      if (selected_single_handle) {
+        rename_handle     = selected_single_handle;
+        open_rename_modal = true;
+      }
+    }
+    if (disabled) {
+      ImGui::EndDisabled();
+    }
 
     if (ImGui::Selectable(ICON_FA_FILL " Fill in surface")) {
       on_fill_in_surface_from_selection();
@@ -359,6 +381,27 @@ void MiniCadApp::gui_objects_list_window() {
 
     ImGui::EndPopup();
   }
+  if (rename_handle) {
+    if (open_rename_modal) {
+      ImGui::mini::OpenModal("Rename object");
+      open_rename_modal = false;
+    }
+    static std::string object_name;
+    auto on_rename = [&](const CObjectHandle auto& h) {
+      using T = ERAY_HANDLE_OBJ(h);
+      if (auto opt = m_.scene.arena<T>().get_obj(h)) {
+        auto& obj = **opt;
+
+        object_name = obj.name;
+        if (ImGui::mini::RenameModal("Rename object", object_name)) {
+          obj.set_name(std::string(object_name));
+          rename_handle = std::nullopt;
+        }
+      }
+    };
+
+    std::visit(match{on_rename}, *rename_handle);
+  }
 
   ImGui::End();
 }
@@ -368,17 +411,6 @@ void MiniCadApp::gui_transform_window() {
   if (m_.scene_obj_selection->is_single_selection()) {
     if (auto opt = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
       auto& obj = **opt;
-
-      ImGui::Text("Name: %s", obj.name.c_str());
-      ImGui::SameLine();
-      static std::string object_name;
-      if (ImGui::Button("Rename")) {
-        ImGui::mini::OpenModal("Rename object");
-        object_name = obj.name;
-      }
-      if (ImGui::mini::RenameModal("Rename object", object_name)) {
-        obj.name = object_name;
-      }
 
       std::visit(util::match{[&](auto& o) {
                    ImGui::Text("Type: %s", o.type_name().c_str());
@@ -1332,6 +1364,17 @@ bool MiniCadApp::on_fill_in_surface_from_selection() {
   }
 
   return false;
+}
+
+std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() {
+  if (m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_empty()) {
+    return std::visit(match{[](const CObjectHandle auto& h) -> ObjectHandle { return h; }},
+                      m_.non_scene_obj_selection->first());
+  }
+  if (m_.non_scene_obj_selection->is_empty() && m_.scene_obj_selection->is_single_selection()) {
+    return m_.scene_obj_selection->first();
+  }
+  return std::nullopt;
 }
 
 MiniCadApp::~MiniCadApp() {}

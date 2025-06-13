@@ -82,6 +82,9 @@ class MiniCadApp final : public eray::os::Application {
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
 
+  // HELPERS
+  std::optional<ObjectHandle> get_single_handle_selection();
+
   // GUI
   void gui_objects_list_window();
   void gui_transform_window();
