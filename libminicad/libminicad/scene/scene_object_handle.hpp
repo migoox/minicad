@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
+#include <liberay/util/zstring_view.hpp>
 #include <optional>
 #include <type_traits>
 #include <variant>
@@ -41,5 +42,24 @@ using ObserverPtr = eray::util::ObserverPtr<T>;
 
 template <typename T>
 using OptionalObserverPtr = std::optional<eray::util::ObserverPtr<T>>;
+
+template <typename T>
+concept CObjectVariant = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
+};
+
+// NOLINTBEGIN
+#define MINI_VALIDATE_VARIANT_TYPES(TVariant, CVariant)                      \
+  template <typename Variant>                                                \
+  struct ValidateVariant_##TVariant;                                         \
+                                                                             \
+  template <typename... Types>                                               \
+  struct ValidateVariant_##TVariant<std::variant<Types...>> {                \
+    static constexpr bool kAreVariantTypesValid = (CVariant<Types> && ...);  \
+  };                                                                         \
+                                                                             \
+  static_assert(ValidateVariant_##TVariant<TVariant>::kAreVariantTypesValid, \
+                "Not all variant types satisfy the required constraint")
+// NOLINTEND
 
 }  // namespace mini

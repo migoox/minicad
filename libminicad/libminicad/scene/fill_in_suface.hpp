@@ -1,4 +1,5 @@
 #pragma once
+#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
 namespace mini {
