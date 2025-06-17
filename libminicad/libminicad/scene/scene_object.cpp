@@ -842,6 +842,52 @@ eray::math::Vec2u BezierPatches::control_points_dim(eray::math::Vec2u dim) {
 eray::math::Vec2u BezierPatches::patches_dim(eray::math::Vec2u points_dim) {
   return eray::math::Vec2u(points_dim.x / 3, points_dim.y / 3);
 }
+void PatchSurface::insert_row_top() { util::Logger::err("Not implemented"); }
+
+void PatchSurface::insert_row_bottom() {
+  auto insert_bpatches = [&](const BPatches&) {
+    const auto points_x = dim_.x + 3;
+    const auto points_y = dim_.y + 3;
+
+    auto opt_points = scene().create_many_objs<SceneObject>(Point{}, points_x);
+    if (!opt_points) {
+      util::Logger::err("Failed to insert row");
+      return;
+    }
+
+    auto all_handles        = points_.point_handles() | std::ranges::to<std::vector>();
+    const auto& new_handles = *opt_points;
+    for (auto i = 0U; i < points_x; ++i) {
+      if (auto opt_up = scene().arena<SceneObject>().get_obj(all_handles[points_x * (points_y - 2) + i])) {
+        if (auto opt = scene().arena<SceneObject>().get_obj(all_handles[points_x * (points_y - 1) + i])) {
+          auto& old_obj_up = **opt_up;
+          auto& old_obj    = **opt;
+
+          auto p0 = old_obj_up.transform.pos();
+          auto p1 = old_obj.transform.pos();
+
+          auto& new_obj = **scene().arena<SceneObject>().get_obj(new_handles[i]);
+          new_obj.patch_surfaces_.insert(handle_);
+          new_obj.transform.set_local_pos(2.F * p1 - p0);
+          new_obj.update();
+        }
+      }
+    }
+
+    all_handles.insert(all_handles.end(), new_handles.begin(), new_handles.end());
+    points_.unsafe_set(scene_.get(), all_handles);
+    ++dim_.y;
+    update();
+  };
+
+  auto insert_bezier_patches = [&](const BezierPatches&) { util::Logger::err("Not implemented"); };
+
+  std::visit(eray::util::match{insert_bpatches, insert_bezier_patches}, object);
+}
+
+void PatchSurface::insert_column_left() { util::Logger::err("Not implemented"); }
+
+void PatchSurface::insert_column_right() { util::Logger::err("Not implemented"); }
 
 eray::math::Vec2u BezierPatches::unique_control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
   return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {

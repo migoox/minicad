@@ -544,6 +544,10 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::InputInt("Tesselation level", &t)) {
         obj.value()->set_tess_level(t < patch.tess_level() ? left : right);
       }
+
+      if (ImGui::Button(ICON_FA_DOWN_LONG " Insert row")) {
+        obj.value()->insert_row_bottom();
+      }
     }
   };
 
