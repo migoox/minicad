@@ -1,5 +1,6 @@
 #pragma once
 
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
@@ -133,16 +134,16 @@ class NaturalSplineCurve {
 };
 
 template <typename T>
-concept CCurveType =
-    requires(T t, Curve& base, ref<const Curve> base_ref, const SceneObject& point_obj, const Point& point) {
-      { T::type_name() } -> std::same_as<zstring_view>;
-      { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
-      { t.on_curve_reorder(base) } -> std::same_as<void>;
-      { t.bezier3_points(base_ref) } -> std::same_as<std::generator<eray::math::Vec3f>>;
-      { t.bezier3_points_count(base_ref) } -> std::same_as<size_t>;
-    };
+concept CCurveType = requires(T t, Curve& base, ref<const Curve> base_ref, const SceneObject& point_obj,
+                              const Point& point, float tparam) {
+  { T::type_name() } -> std::same_as<zstring_view>;
+  { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_point_add(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_point_remove(base, point_obj, point) } -> std::same_as<void>;
+  { t.on_curve_reorder(base) } -> std::same_as<void>;
+  { t.bezier3_points(base_ref) } -> std::same_as<std::generator<eray::math::Vec3f>>;
+  { t.bezier3_points_count(base_ref) } -> std::same_as<size_t>;
+};
 
 using CurveVariant = std::variant<Polyline, MultisegmentBezierCurve, BSplineCurve, NaturalSplineCurve>;
 MINI_VALIDATE_VARIANT_TYPES(CurveVariant, CCurveType);
@@ -162,8 +163,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
   std::generator<eray::math::Vec3f> polyline_points() const;
   size_t polyline_points_count() const;
 
-  std::generator<eray::math::Vec3f> bezier3_points() const;
-  size_t bezier3_points_count() const;
+  const std::vector<eray::math::Vec3f>& bezier3_points();
 
   enum class SceneObjectError : uint8_t {
     NotAPoint     = static_cast<uint8_t>(PointList::OperationError::NotAPoint),
@@ -182,11 +182,24 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
 
   void clone_to(Curve& obj) const;
 
+  /**
+   * @brief Returns a matrix representing a frame (Frenet basis).
+   *
+   * @param t
+   * @return eray::math::Mat4f
+   */
+  eray::math::Mat4f evaluate(float t);
+
  private:
   void update_indices_from(size_t start_idx);
+  void mark_bezier3_dirty() { bezier_dirty_ = true; }
+  void refresh_bezier3_if_dirty();
 
  private:
   friend Scene;
   friend SceneObject;
+
+  std::vector<eray::math::Vec3f> bezier3_points_;
+  bool bezier_dirty_;
 };
 }  // namespace mini

@@ -1,13 +1,18 @@
+#include <liberay/math/mat.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/scene.hpp>
+
+#include "liberay/math/mat_fwd.hpp"
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
 namespace math = eray::math;
 namespace util = eray::util;
 
-Curve::Curve(const CurveHandle& handle, Scene& scene) : ObjectBase<Curve, CurveVariant>(handle, scene) {
+Curve::Curve(const CurveHandle& handle, Scene& scene)
+    : ObjectBase<Curve, CurveVariant>(handle, scene), bezier_dirty_(true) {
   scene.renderer().push_object_rs_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::AddObject{}));
 }
 
@@ -19,6 +24,7 @@ void Curve::on_delete() {
 }
 
 void Curve::update() {
+  mark_bezier3_dirty();
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 }
 
@@ -146,12 +152,21 @@ std::expected<void, Curve::SceneObjectError> Curve::move_after(size_t dest_idx, 
   return {};
 }
 
-std::generator<eray::math::Vec3f> Curve::bezier3_points() const {
-  return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points(*this); }}, this->object);
+void Curve::refresh_bezier3_if_dirty() {
+  if (bezier_dirty_) {
+    bezier3_points_.clear();
+    auto bezier3_points =
+        std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points(*this); }}, this->object);
+    for (const auto& p : bezier3_points) {
+      bezier3_points_.push_back(p);
+    }
+    bezier_dirty_ = false;
+  }
 }
 
-size_t Curve::bezier3_points_count() const {
-  return std::visit(eray::util::match{[&](const auto& o) { return o.bezier3_points_count(*this); }}, this->object);
+const std::vector<eray::math::Vec3f>& Curve::bezier3_points() {
+  refresh_bezier3_if_dirty();
+  return bezier3_points_;
 }
 
 std::generator<eray::math::Vec3f> Curve::polyline_points() const {
@@ -498,4 +513,63 @@ std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const C
 }
 
 size_t NaturalSplineCurve::bezier3_points_count(ref<const Curve> /*base*/) const { return segments_.size() * 4; }
+
+eray::math::Mat4f Curve::evaluate(float t) {
+  refresh_bezier3_if_dirty();
+  if (bezier3_points_.empty() || t > 1.F) {
+    return math::Mat4f::identity();
+  }
+
+  auto bezier3 = [](const math::Vec3f& p0, const math::Vec3f& p1, const math::Vec3f& p2, const math::Vec3f& p3,
+                    float t) -> math::Vec3f {
+    float u  = 1.0F - t;
+    float b3 = t * t * t;
+    float b2 = 3.0F * t * t * u;
+    float b1 = 3.0F * t * u * u;
+    float b0 = u * u * u;
+    return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
+  };
+
+  auto bezier3_dt = [](const eray::math::Vec3f& p0, const eray::math::Vec3f& p1, const eray::math::Vec3f& p2,
+                       const eray::math::Vec3f& p3, float t) -> eray::math::Vec3f {
+    float u = 1.0F - t;
+    return 3.0F * u * u * (p1 - p0) + 6.0F * u * t * (p2 - p1) + 3.0F * t * t * (p3 - p2);
+  };
+
+  auto bezier3_dtt = [](const eray::math::Vec3f& p0, const eray::math::Vec3f& p1, const eray::math::Vec3f& p2,
+                        const eray::math::Vec3f& p3, float t) -> eray::math::Vec3f {
+    float u = 1.0F - t;
+    return 6.0F * u * (p2 - 2.0F * p1 + p0) + 6.0F * t * (p3 - 2.0F * p2 + p1);
+  };
+
+  auto segments_count = bezier3_points_.size() / 4;
+  auto segment_len    = 1.F / static_cast<float>(segments_count);
+  auto segment_ind    = static_cast<size_t>(t / segment_len);
+
+  // Map to to the segment
+  t = (t - static_cast<float>(segment_ind) * segment_len) / segment_len;
+
+  auto i         = segment_ind * 4U;
+  const auto& p0 = bezier3_points_[i];
+  ++i;
+  const auto& p1 = i >= bezier3_points_.size() ? p0 : bezier3_points_[i];
+  ++i;
+  const auto& p2 = i >= bezier3_points_.size() ? p1 : bezier3_points_[i];
+  ++i;
+  const auto& p3 = i >= bezier3_points_.size() ? p2 : bezier3_points_[i];
+  ++i;
+
+  auto val     = bezier3(p0, p1, p2, p3, t);
+  auto val_dt  = bezier3_dt(p0, p1, p2, p3, t);
+  auto val_dtt = bezier3_dtt(p0, p1, p2, p3, t);
+
+  // Frenet basis evaluation for regular curve parameterisation
+  auto tangent  = math::normalize(val_dt);
+  auto binormal = math::normalize(math::cross(val_dt, val_dtt));
+  auto normal   = math::normalize(math::cross(binormal, tangent));
+
+  return math::Mat4f{math::Vec4f(tangent, 1.F), math::Vec4f(normal, 1.F), math::Vec4f(binormal, 1.F),
+                     math::Vec4f(val, 1.F)};
+}
+
 }  // namespace mini

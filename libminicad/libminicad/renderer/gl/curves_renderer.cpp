@@ -25,7 +25,7 @@ void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::AddObject
   if (auto o = scene.arena<Curve>().get_obj(handle)) {
     auto& obj = *o.value();
 
-    renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.curves.update_chunk(handle, obj.bezier3_points());
     renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
   }
 }
@@ -43,7 +43,7 @@ void CurveRSCommandHandler::operator()(const CurveRSCommand::Internal::UpdateCon
   if (auto o = scene.arena<Curve>().get_obj(handle)) {
     auto& obj = *o.value();
 
-    renderer.m_.curves.update_chunk(handle, obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.curves.update_chunk(handle, obj.bezier3_points());
     if (renderer.rs_.at(handle).show_polyline) {
       renderer.m_.polylines.update_chunk(handle, obj.polyline_points(), obj.polyline_points_count());
     }
@@ -105,7 +105,7 @@ void CurveRSCommandHandler::operator()(const CurveRSCommand::UpdateHelperPoints&
                    [](const auto&) {},
                },
                obj.object);
-    renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points(), obj.bezier3_points_count());
+    renderer.m_.curves.update_chunk(obj.handle(), obj.bezier3_points());
     renderer.m_.polylines.update_chunk(obj.handle(), obj.polyline_points(), obj.polyline_points_count());
   } else {
     renderer.push_cmd(CurveRSCommand(handle, CurveRSCommand::Internal::DeleteObject{}));
