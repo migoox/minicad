@@ -85,6 +85,7 @@ std::expected<void, Curve::SceneObjectError> Curve::push_back(const SceneObjectH
                  this->object);
       scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
+      mark_bezier3_dirty();
       return {};
     }
     auto obj_type_name = std::visit(util::match{[&](auto& p) { return p.type_name(); }}, obj.object);
@@ -107,6 +108,7 @@ std::expected<void, Curve::SceneObjectError> Curve::move_before(size_t dest_idx,
   std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
+  mark_bezier3_dirty();
   return {};
 }
 
@@ -131,6 +133,7 @@ std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHand
                  this->object);
       scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
+      mark_bezier3_dirty();
       return {};
     }
 
@@ -149,6 +152,7 @@ std::expected<void, Curve::SceneObjectError> Curve::move_after(size_t dest_idx, 
   std::visit(eray::util::match{[&](auto& o) { o.on_curve_reorder(*this); }}, this->object);
   scene().renderer().push_object_rs_cmd(CurveRSCommand(handle_, CurveRSCommand::Internal::UpdateControlPoints{}));
 
+  mark_bezier3_dirty();
   return {};
 }
 
@@ -557,7 +561,6 @@ eray::math::Mat4f Curve::evaluate(float t) {
   const auto& p2 = i >= bezier3_points_.size() ? p1 : bezier3_points_[i];
   ++i;
   const auto& p3 = i >= bezier3_points_.size() ? p2 : bezier3_points_[i];
-  ++i;
 
   auto val     = bezier3(p0, p1, p2, p3, t);
   auto val_dt  = bezier3_dt(p0, p1, p2, p3, t);

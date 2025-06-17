@@ -125,10 +125,9 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
     SceneObjectIsNotAPoint      = 1,
     SceneObjectDoesNotExist     = 2,
     NonPositiveDimensions       = 3,
-    NotABSpline                 = 4,
   };
 
-  std::expected<void, InitError> init_cylinder_from_bspline(const CurveHandle& handle, eray::math::Vec2u dim);
+  void init_cylinder_from_curve(const CurveHandle& handle, CylinderPatchSurfaceStarter starter, eray::math::Vec2u dim);
   void init_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   std::expected<void, InitError> init_from_points(eray::math::Vec2u points_dim,
                                                   const std::vector<SceneObjectHandle>& points);

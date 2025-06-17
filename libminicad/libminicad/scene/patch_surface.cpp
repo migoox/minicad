@@ -1,23 +1,88 @@
+#include <liberay/util/logger.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
 namespace util = eray::util;
 namespace math = eray::math;
 
-std::expected<void, PatchSurface::InitError> PatchSurface::init_cylinder_from_bspline(const CurveHandle& handle,
-                                                                                      eray::math::Vec2u /*dim*/) {
-  if (auto opt = scene().arena<Curve>().get_obj(handle)) {
-    auto& obj = **opt;
-    if (!obj.has_type<BSplineCurve>()) {
-      return std::unexpected(PatchSurface::InitError::NotABSpline);
+void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderPatchSurfaceStarter starter,
+                                            eray::math::Vec2u dim) {
+  if (!has_type<BPatches>()) {
+    util::Logger::err("Not implemented.");
+    return;
+  }
+  // TODO(migoox): DRY
+
+  dim.x = std::max(dim.x, 1U);
+  dim.y = std::max(dim.y, 1U);
+
+  clear();
+  dim_        = dim;
+  tess_level_ = kDefaultTessLevel;
+
+  auto points_dim = std::visit(eray::util::match{[&](auto& obj) { return obj.control_points_dim(dim); }}, this->object);
+  auto unique_points_dim = std::visit(
+      eray::util::match{[&](auto& obj) { return obj.unique_control_points_dim(starter, dim); }}, this->object);
+
+  auto unique_point_handles = scene().create_many_objs<SceneObject>(Point{}, unique_points_dim.x * unique_points_dim.y);
+  if (!unique_point_handles) {
+    util::Logger::err("Could not create new point objects");
+    return;
+  }
+
+  auto handles = std::vector<SceneObjectHandle>(points_dim.y * points_dim.x, SceneObjectHandle(0, 0, 0));
+  for (auto i = 0U; i < points_dim.y; ++i) {
+    for (auto j = 0U; j < points_dim.x; ++j) {
+      auto idx        = points_dim.x * i + j;
+      auto unique_idx = unique_points_dim.x * (i % unique_points_dim.y) + (j % unique_points_dim.x);
+      handles[idx]    = unique_point_handles->at(unique_idx);
     }
   }
-  // TODO(migoox)
 
-  return {};
+  points_.unsafe_set(scene(), handles);
+
+  if (auto opt = scene().arena<Curve>().get_obj(handle)) {
+    auto& curve = **opt;
+    auto n      = dim_.x * 2;
+    auto nf     = static_cast<float>(n);
+
+    auto alpha      = std::numbers::pi_v<float> * 2.F / nf;
+    auto alpha_half = alpha / 2.F;
+    auto beta       = std::numbers::pi_v<float> * (nf - 2.F) / (2.F * nf);
+    auto gamma      = std::numbers::pi_v<float> - 2.F * beta;
+    auto r          = starter.radius * (1.F + std::tan(alpha_half) * std::tan(gamma));
+
+    for (auto y = 0U; y < points_dim.y; ++y) {
+      auto x_idx = 0U;
+
+      auto t         = static_cast<float>(y) / static_cast<float>(points_dim.y);
+      auto frame_mat = curve.evaluate(t);
+
+      auto p = eray::math::Vec3f::filled(0.F);
+      for (auto x = 0U; x < points_dim.x; ++x) {
+        auto curr_alpha = static_cast<float>(x) * 2.F * alpha;
+        p.x             = 0.F;
+        p.y             = std::cos(curr_alpha) * r;
+        p.z             = std::sin(curr_alpha) * r;
+
+        p = math::Vec3f(frame_mat * eray::math::Vec4f(p, 1.F));
+
+        auto idx = points_dim.x * y + x_idx;
+        points_.unsafe_by_idx(idx).transform.set_local_pos(p);
+        x_idx++;
+      }
+    }
+  }
+
+  for (auto& p : points_.point_objects()) {
+    p.patch_surfaces_.insert(handle_);
+    p.update();
+  }
 }
 
 PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)

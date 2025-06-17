@@ -31,7 +31,9 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
+#include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
+#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/serialization/json/json.hpp>
@@ -455,6 +457,24 @@ void MiniCadApp::gui_object_window() {
       }
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
         obj.value()->name = object_name;
+      }
+
+      if (ImGui::Button("Create BPatches")) {
+        ImGui::mini::OpenModal("Add Patch Surface");
+      }
+
+      {
+        static auto info = ImGui::mini::PatchSurfaceInfo{
+            .r        = 3.F,
+            .h        = 10.F,
+            .size_x   = 10.F,
+            .size_y   = 10.F,
+            .cylinder = true,
+        };
+
+        if (ImGui::mini::AddPatchSurfaceModal("Add Patch Surface", info, true)) {
+          on_patch_surface_added_from_curve(h, info);
+        }
       }
 
       if (!std::holds_alternative<Polyline>(curve.object)) {
@@ -898,8 +918,7 @@ bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
     m_.scene.push_back_point_to_curve(*obj_handle, handle);
     o.value()->transform.set_local_pos(m_.cursor->transform.pos());
     o.value()->update();
-    on_selection_clear();
-    on_selection_add(*obj_handle);
+    on_selection_add(handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
     return true;
   }
@@ -1385,6 +1404,27 @@ std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() const {
     return m_.scene_obj_selection->first();
   }
   return std::nullopt;
+}
+
+bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_handle,
+                                                   const ImGui::mini::PatchSurfaceInfo& info) {
+  if (auto handle = m_.scene.create_obj<PatchSurface>(BPatches{})) {
+    m_.non_scene_obj_selection->add(*handle);
+    if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
+      auto starter = CylinderPatchSurfaceStarter{
+          .radius = info.r,
+          .height = info.h,
+      };
+      o.value()->init_cylinder_from_curve(
+          curve_handle, starter, eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
+
+      Logger::info("Created patch surface \"{}\"", o.value()->name);
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
 MiniCadApp::~MiniCadApp() {}

@@ -15,7 +15,6 @@
 #include <optional>
 #include <unordered_set>
 #include <variant>
-#include <vector>
 
 namespace mini {
 
@@ -60,6 +59,7 @@ void SceneObject::update() {
   if (has_type<Point>()) {
     for (const auto& c_h : this->curves_) {
       if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
+        pl.value()->mark_bezier3_dirty();
         scene().renderer().push_object_rs_cmd(CurveRSCommand(c_h, CurveRSCommand::Internal::UpdateControlPoints{}));
         std::visit(
             eray::util::match{[&](auto& obj) { obj.on_point_update(*pl.value(), *this, unsafe_get_variant<Point>()); }},

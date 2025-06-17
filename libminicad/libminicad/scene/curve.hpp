@@ -188,7 +188,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
    * @param t
    * @return eray::math::Mat4f
    */
-  eray::math::Mat4f evaluate(float t);
+  [[nodiscard]] eray::math::Mat4f evaluate(float t);
 
  private:
   void update_indices_from(size_t start_idx);

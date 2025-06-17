@@ -99,25 +99,29 @@ bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_vie
   return result;
 }
 
-bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info) {
+bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info, bool cylinder_from_curve) {
   bool result = false;
   info.x      = std::max(info.x, 1);
   info.y      = std::max(info.y, 1);
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
   if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    if (info.cylinder) {
+    if (info.cylinder || cylinder_from_curve) {
       info.x = std::max(info.x, 3);
     }
     ImGui::InputInt("X", &info.x);
     ImGui::InputInt("Y", &info.y);
-    ImGui::Checkbox("Cylinder", &info.cylinder);
-    if (!info.cylinder) {
+    if (!cylinder_from_curve) {
+      ImGui::Checkbox("Cylinder", &info.cylinder);
+    }
+    if (!info.cylinder && !cylinder_from_curve) {
       ImGui::DragFloat("Size X", &info.size_x, 0.1F, 1.F, 50.F);
       ImGui::DragFloat("Size Y", &info.size_y, 0.1F, 1.F, 50.F);
     } else {
       ImGui::DragFloat("Radius", &info.r);
-      ImGui::DragFloat("Height", &info.h);
+      if (!cylinder_from_curve) {
+        ImGui::DragFloat("Height", &info.h);
+      }
     }
     if (ImGui::Button("Add", ImVec2(120, 0))) {
       result = true;

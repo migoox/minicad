@@ -41,7 +41,7 @@ struct PatchSurfaceInfo {
   bool cylinder = false;
 };
 
-bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info);
+bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info, bool cylinder_from_curve = false);
 
 }  // namespace mini
 
