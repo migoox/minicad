@@ -119,6 +119,7 @@ bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info, bool 
       ImGui::DragFloat("Size Y", &info.size_y, 0.1F, 1.F, 50.F);
     } else {
       ImGui::DragFloat("Radius", &info.r);
+      ImGui::DragFloat("Phase (degrees)", &info.phase);
       if (!cylinder_from_curve) {
         ImGui::DragFloat("Height", &info.h);
       }

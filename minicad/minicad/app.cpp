@@ -1055,6 +1055,7 @@ bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui
         auto starter = CylinderPatchSurfaceStarter{
             .radius = info.r,
             .height = info.h,
+            .phase  = 0.F,
         };
         o.value()->init_from_starter(starter,
                                      eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
@@ -1414,6 +1415,7 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
       auto starter = CylinderPatchSurfaceStarter{
           .radius = info.r,
           .height = info.h,
+          .phase  = math::radians(info.phase),
       };
       o.value()->init_cylinder_from_curve(
           curve_handle, starter, eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));

@@ -3,8 +3,6 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 namespace util = eray::util;
@@ -67,8 +65,8 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
       for (auto x = 0U; x < points_dim.x; ++x) {
         auto curr_alpha = static_cast<float>(x) * 2.F * alpha;
         p.x             = 0.F;
-        p.y             = std::cos(curr_alpha) * r;
-        p.z             = std::sin(curr_alpha) * r;
+        p.y             = std::cos(curr_alpha + starter.phase) * r;
+        p.z             = std::sin(curr_alpha + starter.phase) * r;
 
         p = math::Vec3f(frame_mat * eray::math::Vec4f(p, 1.F));
 

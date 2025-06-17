@@ -17,6 +17,7 @@ struct PlanePatchSurfaceStarter {
 struct CylinderPatchSurfaceStarter {
   float radius;
   float height;
+  float phase;
 };
 
 using PatchSurfaceStarter = std::variant<PlanePatchSurfaceStarter, CylinderPatchSurfaceStarter>;

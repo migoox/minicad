@@ -39,6 +39,7 @@ struct PatchSurfaceInfo {
   float size_x  = 1.F;
   float size_y  = 1.F;
   bool cylinder = false;
+  float phase   = 0.F;
 };
 
 bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info, bool cylinder_from_curve = false);
