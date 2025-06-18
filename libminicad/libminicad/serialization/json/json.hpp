@@ -3,11 +3,10 @@
 #include <cstdint>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/serialization/json/schema.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <unordered_map>
-
-#include "libminicad/serialization/json/schema.hpp"
 
 namespace mini {
 
@@ -36,8 +35,9 @@ class JsonDeserializer {
   JsonDeserializer() = delete;
   static JsonDeserializer create();
 
-  enum JsonDeserializationError : uint8_t {
-    InvalidJson = 0,
+  enum class JsonDeserializationError : uint8_t {
+    InvalidJson        = 0,
+    DoesNotMatchSchema = 1,
   };
 
   /**

@@ -1,5 +1,5 @@
-#include "nlohmann/json.hpp"
-
+#include <exception>
+#include <expected>
 #include <liberay/math/quat.hpp>
 #include <liberay/util/enum_mapper.hpp>
 #include <liberay/util/logger.hpp>
@@ -9,6 +9,7 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/serialization/json/json.hpp>
 #include <libminicad/serialization/json/schema.hpp>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -158,11 +159,16 @@ std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer
                                                                                               const std::string& json) {
   if (!nlohmann::json::accept(json)) {
     eray::util::Logger::err("Deserialization failed due to invalid JSON input.");
-    return std::unexpected(InvalidJson);
+    return std::unexpected(JsonDeserializationError::InvalidJson);
   }
   auto j       = nlohmann::json::parse(json);
   auto project = json_schema::JsonProject();
-  json_schema::from_json(j, project);
+  try {
+    json_schema::from_json(j, project);
+  } catch (const std::exception& e) {
+    eray::util::Logger::err("Deserialization failed. The file is incompatible with the json schema. {}", e.what());
+    return std::unexpected(JsonDeserializationError::DoesNotMatchSchema);
+  }
 
   scene.clear();
 

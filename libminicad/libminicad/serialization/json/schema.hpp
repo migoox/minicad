@@ -502,9 +502,9 @@ inline void to_json(json& j, const ControlPointElement& x) {
 }
 
 inline void from_json(const json& j, Float3& x) {
-  x.set_x(j.at("x").get<double>());
-  x.set_y(j.at("y").get<double>());
-  x.set_z(j.at("z").get<double>());
+  x.set_x(!j.contains("x") || j["x"].is_null() ? 0.0 : j["x"].get<double>());
+  x.set_y(!j.contains("y") || j["y"].is_null() ? 0.0 : j["y"].get<double>());
+  x.set_z(!j.contains("z") || j["z"].is_null() ? 0.0 : j["z"].get<double>());
 }
 
 inline void to_json(json& j, const Float3& x) {

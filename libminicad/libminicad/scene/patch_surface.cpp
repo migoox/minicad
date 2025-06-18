@@ -296,7 +296,26 @@ void PatchSurface::insert_column_left() { util::Logger::err("Not implemented"); 
 
 void PatchSurface::insert_column_right() { util::Logger::err("Not implemented"); }
 
-void PatchSurface::delete_row_top() { util::Logger::err("Not implemented"); }
+void PatchSurface::delete_row_top() {
+  auto delete_bpatches = [&](const BPatches&) {
+    const auto points_x = dim_.x + 3;
+
+    auto handles_to_remove = std::vector<SceneObjectHandle>();
+    handles_to_remove.reserve(points_x);
+    for (auto i = 0U; i < points_x; ++i) {
+      auto& obj = points_.unsafe_by_idx(i);
+      obj.patch_surfaces_.erase(handle());
+      handles_to_remove.push_back(obj.handle());
+    }
+    points_.remove_many(handles_to_remove);
+    --dim_.y;
+    update();
+  };
+
+  auto delete_bezier_patches = [&](const BezierPatches&) { util::Logger::err("Not implemented"); };
+
+  std::visit(eray::util::match{delete_bpatches, delete_bezier_patches}, object);
+}
 
 void PatchSurface::delete_row_bottom() {
   auto delete_bpatches = [&](const BPatches&) {
