@@ -2,6 +2,9 @@
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <vector>
+
+#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini {
 
@@ -292,6 +295,34 @@ void PatchSurface::insert_row_bottom() {
 void PatchSurface::insert_column_left() { util::Logger::err("Not implemented"); }
 
 void PatchSurface::insert_column_right() { util::Logger::err("Not implemented"); }
+
+void PatchSurface::delete_row_top() { util::Logger::err("Not implemented"); }
+
+void PatchSurface::delete_row_bottom() {
+  auto delete_bpatches = [&](const BPatches&) {
+    const auto points_x = dim_.x + 3;
+    const auto points_y = dim_.y + 3;
+
+    auto handles_to_remove = std::vector<SceneObjectHandle>();
+    handles_to_remove.reserve(points_x);
+    for (auto i = 0U; i < points_x; ++i) {
+      auto& obj = points_.unsafe_by_idx(points_x * (points_y - 1) + i);
+      obj.patch_surfaces_.erase(handle());
+      handles_to_remove.push_back(obj.handle());
+    }
+    points_.remove_many(handles_to_remove);
+    --dim_.y;
+    update();
+  };
+
+  auto delete_bezier_patches = [&](const BezierPatches&) { util::Logger::err("Not implemented"); };
+
+  std::visit(eray::util::match{delete_bpatches, delete_bezier_patches}, object);
+}
+
+void PatchSurface::delete_column_left() { util::Logger::err("Not implemented"); }
+
+void PatchSurface::delete_column_right() { util::Logger::err("Not implemented"); }
 
 eray::math::Vec2u BezierPatches::unique_control_points_dim(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
   return std::visit(eray::util::match{[&](const PlanePatchSurfaceStarter&) {

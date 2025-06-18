@@ -142,6 +142,11 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   void insert_column_left();
   void insert_column_right();
 
+  void delete_row_top();
+  void delete_row_bottom();
+  void delete_column_left();
+  void delete_column_right();
+
   void clone_to(PatchSurface& obj) const;
 
   const eray::math::Vec2u& dimensions() const { return dim_; }
