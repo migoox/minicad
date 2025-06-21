@@ -699,6 +699,30 @@ eray::math::Vec3f PatchSurface::evaluate(float u, float v) {
   return bezier3(pu[0], pu[1], pu[2], pu[3], param.y);
 }
 
+std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::evaluate_derivatives(float u, float v) {
+  auto points = bezier3_points();
+  if (points.empty()) {
+    return std::make_pair(math::Vec3f::zeros(), math::Vec3f::zeros());
+  }
+
+  auto [param, patch_coords] = find_bezier3_patch_and_param(u, v);
+
+  auto pu  = std::array<math::Vec3f, kPatchSize>();
+  auto pv  = std::array<math::Vec3f, kPatchSize>();
+  auto idx = kPatchSize * kPatchSize * dim_.x * patch_coords.y + kPatchSize * kPatchSize * patch_coords.x;
+  for (auto i = 0U; i < kPatchSize; ++i) {
+    auto pu_idx = idx + kPatchSize * i;
+    pu[i]       = bezier3(points[pu_idx], points[pu_idx + 1], points[pu_idx + 2], points[pu_idx + 3], param.x);
+
+    auto pv_idx = idx + i;
+    pv[i]       = bezier3(points[pv_idx], points[pv_idx + kPatchSize], points[pv_idx + 2 * kPatchSize],
+                          points[pv_idx + 3 * kPatchSize], param.y);
+  }
+
+  return std::make_pair(bezier3_dt(pu[0], pu[1], pu[2], pu[3], param.y),
+                        bezier3_dt(pv[0], pv[1], pv[2], pv[3], param.x));
+}
+
 std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() {
   static constexpr auto kFltMin = std::numeric_limits<float>::min();
   static constexpr auto kFltMax = std::numeric_limits<float>::max();

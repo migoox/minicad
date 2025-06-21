@@ -166,6 +166,8 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   [[nodiscard]] eray::math::Vec3f evaluate(float u, float v);
 
+  [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(float u, float v);
+
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box();
 
  private:
