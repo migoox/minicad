@@ -1,10 +1,12 @@
 #include <liberay/util/logger.hpp>
+#include <libminicad/math/bezier3.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <vector>
 
-#include "libminicad/scene/scene_object_handle.hpp"
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
@@ -62,7 +64,7 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
       auto x_idx = 0U;
 
       auto t         = static_cast<float>(y) / static_cast<float>(points_dim.y);
-      auto frame_mat = curve.evaluate(t);
+      auto frame_mat = curve.frenet_frame(t);
 
       auto p = eray::math::Vec3f::filled(0.F);
       for (auto x = 0U; x < points_dim.x; ++x) {
@@ -249,6 +251,7 @@ eray::math::Vec2u BezierPatches::control_points_dim(eray::math::Vec2u dim) {
 eray::math::Vec2u BezierPatches::patches_dim(eray::math::Vec2u points_dim) {
   return eray::math::Vec2u(points_dim.x / 3, points_dim.y / 3);
 }
+
 void PatchSurface::insert_row_top() { util::Logger::err("Not implemented"); }
 
 void PatchSurface::insert_row_bottom() {
@@ -362,7 +365,7 @@ const std::vector<eray::math::Vec3f>& PatchSurface::bezier3_points() {
     bezier_dirty_ = false;
   }
 
-  return bezier_points_;
+  return bezier3_points_;
 }
 
 std::generator<eray::math::Vec3f> PatchSurface::control_grid_points() const {
@@ -420,23 +423,20 @@ void PatchSurface::on_delete() {
 
 void BezierPatches::update_bezier3_points(PatchSurface& base) {
   if (base.dim_.x == 0 || base.dim_.y == 0) {
-    base.bezier_points_.resize(0);
+    base.bezier3_points_.resize(0);
     return;
   }
 
-  base.bezier_points_.resize(base.dim_.x * base.dim_.y * (PatchSurface::kPatchSize * PatchSurface::kPatchSize + 1));
+  base.bezier3_points_.resize(base.dim_.x * base.dim_.y * PatchSurface::kPatchSize * PatchSurface::kPatchSize);
   auto idx = 0U;
   for (auto row = 0U; row < base.dim_.y; ++row) {
     for (auto col = 0U; col < base.dim_.x; ++col) {
       for (auto in_row = 0U; in_row < PatchSurface::kPatchSize; ++in_row) {
         for (auto in_col = 0U; in_col < PatchSurface::kPatchSize; ++in_col) {
-          base.bezier_points_[idx++] =
+          base.bezier3_points_[idx++] =
               base.points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, base.dim_.x)).transform.pos();
         }
       }
-
-      // pass the tesselation info
-      base.bezier_points_[idx++] = eray::math::Vec3f(static_cast<float>(base.tess_level_), 0.F, 0.F);
     }
   }
 }
@@ -523,11 +523,11 @@ eray::math::Vec2u BPatches::unique_control_points_dim(const PatchSurfaceStarter&
 void BPatches::update_bezier3_points(PatchSurface& base) {
   auto dim = base.dimensions();
   if (base.dim_.x == 0 || base.dim_.y == 0) {
-    base.bezier_points_.resize(0);
+    base.bezier3_points_.resize(0);
     return;
   }
 
-  base.bezier_points_.resize(base.dim_.x * base.dim_.y * (PatchSurface::kPatchSize * PatchSurface::kPatchSize + 1));
+  base.bezier3_points_.resize(base.dim_.x * base.dim_.y * PatchSurface::kPatchSize * PatchSurface::kPatchSize);
 
   math::Vec3f bezier_patch[4][4];
   auto idx = 0U;
@@ -550,12 +550,11 @@ void BPatches::update_bezier3_points(PatchSurface& base) {
         auto c2 = bezier_patch[2][ix];
         auto c3 = bezier_patch[3][ix];
 
-        base.bezier_points_[idx++] = (c0 + 4.0 * c1 + c2) / 6.0;
-        base.bezier_points_[idx++] = (4.0 * c1 + 2.0 * c2) / 6.0;
-        base.bezier_points_[idx++] = (2.0 * c1 + 4.0 * c2) / 6.0;
-        base.bezier_points_[idx++] = (c1 + 4.0 * c2 + c3) / 6.0;
+        base.bezier3_points_[idx++] = (c0 + 4.0 * c1 + c2) / 6.0;
+        base.bezier3_points_[idx++] = (4.0 * c1 + 2.0 * c2) / 6.0;
+        base.bezier3_points_[idx++] = (2.0 * c1 + 4.0 * c2) / 6.0;
+        base.bezier3_points_[idx++] = (c1 + 4.0 * c2 + c3) / 6.0;
       }
-      base.bezier_points_[idx++] = eray::math::Vec3f(static_cast<float>(base.tess_level_), 0.F, 0.F);
     }
   }
 }
@@ -661,6 +660,58 @@ void PatchSurface::clone_to(PatchSurface& obj) const {
   }
 
   obj.update();
+}
+
+std::pair<eray::math::Vec2f, eray::math::Vec2u> PatchSurface::find_bezier3_patch_and_param(float u, float v) {
+  auto param = eray::math::Vec2f(u, v);
+
+  auto patch_size   = 1.F / eray::math::Vec2f(static_cast<float>(dim_.x), static_cast<float>(dim_.y));
+  auto patch_coords = param / patch_size;
+
+  const auto coord_x =
+      static_cast<uint32_t>(std::clamp(static_cast<int>(patch_coords.x), 0, static_cast<int>(dim_.x) - 1));
+  const auto coord_y =
+      static_cast<uint32_t>(std::clamp(static_cast<int>(patch_coords.y), 0, static_cast<int>(dim_.y) - 1));
+
+  patch_coords = eray::math::Vec2f(static_cast<float>(coord_x), static_cast<float>(coord_y));
+
+  // Map to to the patch
+  param = (param - patch_coords * patch_size) / patch_size;
+
+  return std::make_pair(param, math::Vec2u(coord_x, coord_y));
+}
+
+eray::math::Vec3f PatchSurface::evaluate(float u, float v) {
+  auto points = bezier3_points();
+  if (points.empty()) {
+    return math::Vec3f::zeros();
+  }
+
+  auto [param, patch_coords] = find_bezier3_patch_and_param(u, v);
+
+  auto pu  = std::array<math::Vec3f, kPatchSize>();
+  auto idx = kPatchSize * kPatchSize * dim_.x * patch_coords.y + kPatchSize * kPatchSize * patch_coords.x;
+  for (auto i = 0U; i < kPatchSize; ++i) {
+    auto curr_row_idx = idx + kPatchSize * i;
+    pu[i] = bezier3(points[curr_row_idx], points[curr_row_idx + 1], points[curr_row_idx + 2], points[curr_row_idx + 3],
+                    param.x);
+  }
+  return bezier3(pu[0], pu[1], pu[2], pu[3], param.y);
+}
+
+std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() {
+  static constexpr auto kFltMin = std::numeric_limits<float>::min();
+  static constexpr auto kFltMax = std::numeric_limits<float>::max();
+
+  auto min = eray::math::Vec3f::filled(kFltMax);
+  auto max = eray::math::Vec3f::filled(kFltMin);
+
+  for (const auto& p : bezier3_points_) {
+    min = eray::math::min(p, min);
+    max = eray::math::max(p, max);
+  }
+
+  return std::make_pair(std::move(min), std::move(max));
 }
 
 }  // namespace mini

@@ -53,6 +53,8 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
+#include "libminicad/scene/scene.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -419,14 +421,6 @@ void MiniCadApp::gui_transform_window() {
   if (m_.scene_obj_selection->is_single_selection()) {
     if (auto opt = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
       auto& obj = **opt;
-
-      std::visit(util::match{[&](auto& o) {
-                   ImGui::Text("Type: %s", o.type_name().c_str());
-                   ImGui::SameLine();
-                   ImGui::Text("ID: %d", obj.id());
-                 }},
-                 obj.object);
-
       ImGui::mini::Transform(obj.transform, [&]() { obj.update(); });
     }
   } else if (m_.scene_obj_selection->is_multi_selection()) {
@@ -1158,7 +1152,16 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
 
 bool MiniCadApp::on_selection_set_single(const ObjectHandle& handle) {
   on_selection_clear();
-  on_selection_add(handle);
+
+  auto scene_obj = [&](const SceneObjectHandle& h) {
+    m_.scene_obj_selection->add(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+  };
+  auto non_scene_obj = [&](const NonSceneObjectHandle& h) { m_.non_scene_obj_selection->add(h); };
+
+  std::visit(util::match{scene_obj, non_scene_obj}, handle);
+
   return true;
 }
 

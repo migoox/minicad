@@ -3,6 +3,7 @@
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/types.hpp>
 
 namespace mini {
 
@@ -155,9 +156,23 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   int tess_level() const { return tess_level_; }
   void set_tess_level(int tesselation);
 
+  /**
+   * @brief Returns a matrix representing a frame (Frenet basis).
+   *
+   * @param t
+   * @return eray::math::Mat4f
+   */
+  [[nodiscard]] eray::math::Mat4f frenet_frame(float u, float v);
+
+  [[nodiscard]] eray::math::Vec3f evaluate(float u, float v);
+
+  [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box();
+
  private:
   void mark_bezier3_dirty() { bezier_dirty_ = true; }
   void clear();
+
+  std::pair<eray::math::Vec2f, eray::math::Vec2u> find_bezier3_patch_and_param(float u, float v);
 
  private:
   friend SceneObject;
@@ -168,9 +183,12 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   eray::math::Vec2u dim_;
   int tess_level_ = kDefaultTessLevel;
-  std::vector<eray::math::Vec3f> bezier_points_;
+  std::vector<eray::math::Vec3f> bezier3_points_;  // row-major packed patches
   bool bezier_dirty_ = true;
 
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
 };
+
+static_assert(CParametricSurfaceObject<PatchSurface>);
+
 }  // namespace mini

@@ -1,10 +1,10 @@
 #include <liberay/math/mat.hpp>
+#include <liberay/math/vec.hpp>
+#include <libminicad/math/bezier3.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/scene.hpp>
-
-#include "liberay/math/mat_fwd.hpp"
-#include "liberay/math/vec_fwd.hpp"
+#include <limits>
 
 namespace mini {
 
@@ -518,37 +518,40 @@ std::generator<eray::math::Vec3f> NaturalSplineCurve::bezier3_points(ref<const C
 
 size_t NaturalSplineCurve::bezier3_points_count(ref<const Curve> /*base*/) const { return segments_.size() * 4; }
 
-eray::math::Mat4f Curve::evaluate(float t) {
+eray::math::Vec3f Curve::evaluate(float t) {
   refresh_bezier3_if_dirty();
   if (bezier3_points_.empty() || t > 1.F) {
-    return math::Mat4f::identity();
+    return math::Vec3f::filled(0.F);
   }
-
-  auto bezier3 = [](const math::Vec3f& p0, const math::Vec3f& p1, const math::Vec3f& p2, const math::Vec3f& p3,
-                    float t) -> math::Vec3f {
-    float u  = 1.0F - t;
-    float b3 = t * t * t;
-    float b2 = 3.0F * t * t * u;
-    float b1 = 3.0F * t * u * u;
-    float b0 = u * u * u;
-    return p0 * b0 + p1 * b1 + p2 * b2 + p3 * b3;
-  };
-
-  auto bezier3_dt = [](const eray::math::Vec3f& p0, const eray::math::Vec3f& p1, const eray::math::Vec3f& p2,
-                       const eray::math::Vec3f& p3, float t) -> eray::math::Vec3f {
-    float u = 1.0F - t;
-    return 3.0F * u * u * (p1 - p0) + 6.0F * u * t * (p2 - p1) + 3.0F * t * t * (p3 - p2);
-  };
-
-  auto bezier3_dtt = [](const eray::math::Vec3f& p0, const eray::math::Vec3f& p1, const eray::math::Vec3f& p2,
-                        const eray::math::Vec3f& p3, float t) -> eray::math::Vec3f {
-    float u = 1.0F - t;
-    return 6.0F * u * (p2 - 2.0F * p1 + p0) + 6.0F * t * (p3 - 2.0F * p2 + p1);
-  };
 
   auto segments_count = bezier3_points_.size() / 4;
   auto segment_len    = 1.F / static_cast<float>(segments_count);
   auto segment_ind    = static_cast<size_t>(t / segment_len);
+
+  // Map to to the segment
+  t = (t - static_cast<float>(segment_ind) * segment_len) / segment_len;
+
+  auto i         = segment_ind * 4U;
+  const auto& p0 = bezier3_points_[i];
+  ++i;
+  const auto& p1 = i >= bezier3_points_.size() ? p0 : bezier3_points_[i];
+  ++i;
+  const auto& p2 = i >= bezier3_points_.size() ? p1 : bezier3_points_[i];
+  ++i;
+  const auto& p3 = i >= bezier3_points_.size() ? p2 : bezier3_points_[i];
+
+  return bezier3(p0, p1, p2, p3, t);
+}
+
+eray::math::Mat4f Curve::frenet_frame(float t) {
+  refresh_bezier3_if_dirty();
+  if (bezier3_points_.empty()) {
+    return math::Mat4f::identity();
+  }
+
+  auto segments_count = static_cast<int>(bezier3_points_.size()) / 4;
+  auto segment_len    = 1.F / static_cast<float>(segments_count);
+  auto segment_ind    = static_cast<size_t>(std::clamp(static_cast<int>(t / segment_len), 0, segments_count - 1));
 
   // Map to to the segment
   t = (t - static_cast<float>(segment_ind) * segment_len) / segment_len;
@@ -573,6 +576,21 @@ eray::math::Mat4f Curve::evaluate(float t) {
 
   return math::Mat4f{math::Vec4f(tangent, 1.F), math::Vec4f(normal, 1.F), math::Vec4f(binormal, 1.F),
                      math::Vec4f(val, 1.F)};
+}
+
+std::pair<eray::math::Vec3f, eray::math::Vec3f> Curve::aabb_bounding_box() {
+  static constexpr auto kFltMin = std::numeric_limits<float>::min();
+  static constexpr auto kFltMax = std::numeric_limits<float>::max();
+
+  auto min = eray::math::Vec3f::filled(kFltMax);
+  auto max = eray::math::Vec3f::filled(kFltMin);
+
+  for (const auto& p : bezier3_points_) {
+    min = eray::math::min(p, min);
+    max = eray::math::max(p, max);
+  }
+
+  return std::make_pair(std::move(min), std::move(max));
 }
 
 }  // namespace mini

@@ -4,6 +4,8 @@
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "libminicad/scene/types.hpp"
+
 namespace mini {
 // ---------------------------------------------------------------------------------------------------------------------
 // - CurveType ---------------------------------------------------------------------------------------------------------
@@ -188,7 +190,11 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
    * @param t
    * @return eray::math::Mat4f
    */
-  [[nodiscard]] eray::math::Mat4f evaluate(float t);
+  [[nodiscard]] eray::math::Mat4f frenet_frame(float t);
+
+  [[nodiscard]] eray::math::Vec3f evaluate(float t);
+
+  [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box();
 
  private:
   void update_indices_from(size_t start_idx);
@@ -202,4 +208,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
   std::vector<eray::math::Vec3f> bezier3_points_;
   bool bezier_dirty_;
 };
+
+static_assert(CParametricCurveObject<Curve>);
+
 }  // namespace mini

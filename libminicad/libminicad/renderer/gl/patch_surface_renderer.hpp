@@ -17,6 +17,8 @@ struct PatchSurfaceRSCommandHandler {
                                         Scene& _scene)
       : cmd_ctx(_cmd_ctx), renderer(_renderer), scene(_scene) {}
 
+  std::generator<eray::math::Vec3f> bezier_patch_generator(ref<PatchSurface>);
+  size_t bezier_patch_count(ref<PatchSurface>);
   void operator()(const PatchSurfaceRSCommand::Internal::AddObject&);
   void operator()(const PatchSurfaceRSCommand::Internal::UpdateControlPoints&);
   void operator()(const PatchSurfaceRSCommand::Internal::DeleteObject&);

@@ -14,6 +14,21 @@
 
 namespace mini::gl {
 
+std::generator<eray::math::Vec3f> PatchSurfaceRSCommandHandler::bezier_patch_generator(ref<PatchSurface> surface) {
+  const auto& rbp = surface.get().bezier3_points();
+
+  for (auto i = 0U; i < rbp.size();) {
+    for (auto j = 0U; j < PatchSurface::kPatchSize * PatchSurface::kPatchSize; ++j) {
+      co_yield rbp[i++];
+    }
+    co_yield eray::math::Vec3f(static_cast<float>(surface.get().tess_level()), 0.F, 0.F);
+  }
+}
+
+size_t PatchSurfaceRSCommandHandler::bezier_patch_count(ref<PatchSurface> surface) {
+  return surface.get().bezier3_points().size() + FillInSurface::kNeighbors;
+}
+
 void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Internal::AddObject&) {
   const auto& handle = cmd_ctx.handle;
 
@@ -21,7 +36,7 @@ void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Inter
 
   if (auto o = scene.arena<PatchSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points());
+    renderer.m_.surfaces.update_chunk(handle, bezier_patch_generator(obj), bezier_patch_count(obj));
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   }
 }
@@ -37,7 +52,7 @@ void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Inter
   const auto& handle = cmd_ctx.handle;
   if (auto o = scene.arena<PatchSurface>().get_obj(handle)) {
     auto& obj = *o.value();
-    renderer.m_.surfaces.update_chunk(handle, obj.bezier3_points());
+    renderer.m_.surfaces.update_chunk(handle, bezier_patch_generator(obj), bezier_patch_count(obj));
     renderer.m_.control_grids.update_chunk(handle, obj.control_grid_points(), obj.control_grid_points_count());
   } else {
     renderer.push_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::DeleteObject{}));
