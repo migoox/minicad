@@ -168,7 +168,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(float u, float v);
 
-  [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box();
+  [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box() const;
 
  private:
   void mark_bezier3_dirty() { bezier_dirty_ = true; }

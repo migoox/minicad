@@ -54,6 +54,7 @@
 #include <variant>
 
 #include "libminicad/algorithm/intersection_finder.hpp"
+#include "libminicad/scene/intersection_curve.hpp"
 #include "libminicad/scene/scene.hpp"
 
 namespace mini {
@@ -643,9 +644,30 @@ void MiniCadApp::gui_object_window() {
     }
   };
 
+  auto draw_intersection_curve = [&](const IntersectionCurveHandle& h) {
+    if (auto obj = m_.scene.arena<IntersectionCurve>().get_obj(h)) {
+      const auto& patch = *obj.value();
+      auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, patch.object);
+
+      ImGui::Text("Type: %s", type_name.c_str());
+      ImGui::Text("Name: %s", patch.name.c_str());
+      ImGui::SameLine();
+
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = patch.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.value()->name = object_name;
+      }
+    }
+  };
+
   ImGui::Begin(ICON_FA_PEN " Object");
   if (m_.non_scene_obj_selection->is_single_selection()) {  // non scene objects have priority
-    std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface}, m_.non_scene_obj_selection->first());
+    std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface, draw_intersection_curve},
+               m_.non_scene_obj_selection->first());
   } else if (!m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_single_selection()) {
     draw_scene_object(m_.scene_obj_selection->first());
   }
@@ -674,8 +696,16 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                                  [](const auto&) {}},
                      h);
           if (count == 2) {
-            util::Logger::info("RUN");
-            IntersectionFinder::find_intersections(m_.scene, first, second);
+            auto obj1 = m_.scene.arena<PatchSurface>().get_obj(first);
+            auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
+            if (obj1 && obj2) {
+              auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
+              if (auto opt = m_.scene.create_obj_and_get<IntersectionCurve>(TrimmingIntersectionCurve{})) {
+                auto& obj = **opt;
+                obj.init(curve->points, curve->params_surface1, curve->params_surface2, curve->surface1,
+                         curve->surface2);
+              }
+            }
           }
         }
       }
@@ -1136,6 +1166,8 @@ bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
 
   auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->add(h); };
 
+  auto intersection_curve_obj = [&](const IntersectionCurveHandle& h) { m_.non_scene_obj_selection->add(h); };
+
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
     if (auto o = m_.scene.arena<T>().get_obj(h)) {
@@ -1146,7 +1178,7 @@ bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
     m_.non_scene_obj_selection->add(h);
   };
 
-  std::visit(util::match{scene_obj, fill_in_surface_obj, point_list_obj}, handle);
+  std::visit(util::match{scene_obj, fill_in_surface_obj, intersection_curve_obj, point_list_obj}, handle);
 
   return true;
 }
@@ -1160,6 +1192,8 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
 
   auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
 
+  auto intersection_curve_obj = [&](const IntersectionCurveHandle& h) { m_.non_scene_obj_selection->remove(h); };
+
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
     if (auto o = m_.scene.arena<T>().get_obj(h)) {
@@ -1170,7 +1204,7 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
     m_.non_scene_obj_selection->remove(h);
   };
 
-  std::visit(util::match{scene_obj, fill_in_surface_obj, point_list_obj}, handle);
+  std::visit(util::match{scene_obj, fill_in_surface_obj, intersection_curve_obj, point_list_obj}, handle);
 
   return true;
 }

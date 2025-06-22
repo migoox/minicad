@@ -1,4 +1,6 @@
+#include <liberay/math/mat.hpp>
 #include <liberay/math/vec.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/algorithm/intersection_finder.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
@@ -7,13 +9,15 @@
 #include <optional>
 #include <random>
 
-#include "liberay/math/mat.hpp"
-#include "liberay/math/mat_fwd.hpp"
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 namespace math = eray::math;
+
+void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, PatchSurface& surface) {
+  params_surface1.emplace_back(params.x, params.y);
+  params_surface2.emplace_back(params.z, params.w);
+  points.push_back(surface.evaluate(params.x, params.y));
+}
 
 bool IntersectionFinder::aabb_intersects(const std::pair<eray::math::Vec3f, eray::math::Vec3f>& a,
                                          const std::pair<eray::math::Vec3f, eray::math::Vec3f>& b) {
@@ -148,7 +152,7 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
     t0 = -t0;
   }
 
-  ps1.scene().renderer().debug_line(p0, p0 + t0);
+  //   ps1.scene().renderer().debug_line(p0, p0 + t0);
 
   for (auto i = 0; i < iters; ++i) {
     auto p = ps1.evaluate(result.x, result.y);
@@ -171,21 +175,7 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
   return result;
 }
 
-std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections(Scene& scene,
-                                                                                 const PatchSurfaceHandle& h1,
-                                                                                 const PatchSurfaceHandle& h2) {
-  auto opt1 = scene.arena<PatchSurface>().get_obj(h1);
-  if (!opt1) {
-    return std::nullopt;
-  }
-  auto opt2 = scene.arena<PatchSurface>().get_obj(h2);
-  if (!opt2) {
-    return std::nullopt;
-  }
-
-  auto& ps1 = **opt1;
-  auto& ps2 = **opt2;
-
+std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(PatchSurface& ps1, PatchSurface& ps2) {
   auto bb1 = ps1.aabb_bounding_box();
   auto bb2 = ps2.aabb_bounding_box();
   if (!aabb_intersects(bb1, bb2)) {
@@ -243,6 +233,19 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", result, err_func(result));
   }
 
+  if (err_func(result) > kThreshold) {
+    return std::nullopt;
+  }
+
+  auto curve = Curve{
+      .points          = {},            //
+      .params_surface1 = {},            //
+      .params_surface2 = {},            //
+      .surface1        = ps1.handle(),  //
+      .surface2        = ps2.handle(),  //
+  };
+  curve.push_point(result, ps1);
+
   auto is_out_of_unit = [](const math::Vec4f& v) {
     return v.x < 0.F || v.x > 1.F ||  //
            v.y < 0.F || v.y > 1.F ||  //
@@ -251,25 +254,26 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
   };
 
   for (auto i = 0U; i < 1000; ++i) {
-    scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
     result = newton_next_point(result, ps1, ps2, 4);
     if (is_out_of_unit(result)) {
       break;
     }
+    curve.push_point(result, ps1);
 
     eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
   }
+
   for (auto i = 0U; i < 1000; ++i) {
-    scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
     result = newton_next_point(result, ps1, ps2, 4, true);
     if (is_out_of_unit(result)) {
       break;
     }
+    curve.push_point(result, ps1);
 
     eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
   }
 
-  return std::nullopt;
+  return curve;
 }
 
 }  // namespace mini

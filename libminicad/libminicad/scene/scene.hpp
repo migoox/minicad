@@ -13,6 +13,7 @@
 #include <libminicad/scene/arena.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
+#include <libminicad/scene/intersection_curve.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/scene/triangle.hpp>
@@ -192,7 +193,8 @@ class Scene {
   static std::uint32_t next_signature_;
   std::uint32_t signature_;
 
-  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>> arenas_;
+  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>, Arena<IntersectionCurve>>
+      arenas_;
 
   std::vector<ObjectHandle> objects_order_;
 

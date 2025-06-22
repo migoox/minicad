@@ -1,16 +1,23 @@
 #pragma once
 
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
-
-#include "libminicad/scene/patch_surface.hpp"
 
 namespace mini {
 
 class IntersectionFinder {
  public:
-  struct Result {};
+  struct Curve {
+    std::vector<eray::math::Vec3f> points;
+    std::vector<eray::math::Vec2f> params_surface1;
+    std::vector<eray::math::Vec2f> params_surface2;
+    PatchSurfaceHandle surface1;
+    PatchSurfaceHandle surface2;
+
+    void push_point(const eray::math::Vec4f& params, PatchSurface& surface);
+  };
 
   /**
    * @brief Finds intersection between two parametric surfaces. Returns nullopt if no intersections are found.
@@ -19,8 +26,9 @@ class IntersectionFinder {
    * @param h2
    * @return std::optional<Result>
    */
-  static std::optional<Result> find_intersections(Scene& scene, const PatchSurfaceHandle& h1,
-                                                  const PatchSurfaceHandle& h2);
+  [[nodiscard]] static std::optional<Curve> find_intersections(PatchSurface& ps1, PatchSurface& ps2);
+
+  static constexpr auto kThreshold = 0.001F;
 
  private:
   static bool aabb_intersects(const std::pair<eray::math::Vec3f, eray::math::Vec3f>& a,

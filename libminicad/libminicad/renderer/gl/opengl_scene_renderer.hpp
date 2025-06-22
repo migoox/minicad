@@ -18,6 +18,8 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 
+#include "libminicad/renderer/gl/intersection_curves_renderer.hpp"
+
 namespace mini::gl {
 
 class OpenGLSceneRenderer;
@@ -114,6 +116,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   SceneObjectsRenderer scene_objs_renderer_;
   PatchSurfaceRenderer patch_surface_renderer_;
   FillInSurfaceRenderer fill_in_surface_renderer_;
+  IntersectionCurvesRenderer intersection_curves_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> right_eye_framebuffer_;
@@ -122,6 +125,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
                                FillInSurfaceRenderer&& fill_in_surface_rs,
+                               IntersectionCurvesRenderer&& intersection_curves_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer);
 };

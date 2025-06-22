@@ -81,13 +81,13 @@ void FillInSurfaceRenderer::update_impl(Scene& /*scene*/) {
 
 void FillInSurfaceRenderer::render_control_grids() const {
   m_.control_grids_vao.bind();
-  ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_.control_grids.chunks_count())));
+  ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_.control_grids.count())));
 }
 
 void FillInSurfaceRenderer::render_fill_in_surfaces() const {
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 21));
   m_.surfaces_vao.bind();
-  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.surfaces.chunks_count())));
+  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.surfaces.count())));
 }
 
 }  // namespace mini::gl

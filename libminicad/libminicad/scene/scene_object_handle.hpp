@@ -29,13 +29,20 @@ using PatchSurfaceHandle = eray::util::Handle<PatchSurface>;
 class FillInSurface;
 using FillInSurfaceHandle = eray::util::Handle<FillInSurface>;
 
-using PointListObjectHandle = std::variant<CurveHandle, PatchSurfaceHandle>;
-using NonSceneObjectHandle  = std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle>;
-using ObjectHandle          = std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle>;
+class IntersectionCurve;
+using IntersectionCurveHandle = eray::util::Handle<IntersectionCurve>;
+
+using PointListObjectHandle   = std::variant<CurveHandle, PatchSurfaceHandle>;
+using ParametricSurfaceHandle = std::variant<PatchSurfaceHandle>;
+using NonSceneObjectHandle =
+    std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, IntersectionCurveHandle>;
+using ObjectHandle =
+    std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, IntersectionCurveHandle>;
 
 template <typename T>
-concept CObjectHandle = std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> ||
-                        std::is_same_v<T, PatchSurfaceHandle> || std::is_same_v<T, FillInSurfaceHandle>;
+concept CObjectHandle =
+    std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> || std::is_same_v<T, PatchSurfaceHandle> ||
+    std::is_same_v<T, FillInSurfaceHandle> || std::is_same_v<T, IntersectionCurveHandle>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;

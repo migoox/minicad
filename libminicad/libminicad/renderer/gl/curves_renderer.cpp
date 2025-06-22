@@ -148,18 +148,18 @@ std::optional<std::pair<CurveHandle, size_t>> CurvesRenderer::find_helper_point_
 
 void CurvesRenderer::render_polylines() const {
   m_.polylines_vao.bind();
-  ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_.polylines.chunks_count())));
+  ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_.polylines.count())));
 }
 
 void CurvesRenderer::render_curves() const {
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
   m_.curves_vao.bind();
-  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.curves.chunks_count())));
+  ERAY_GL_CALL(glDrawArrays(GL_PATCHES, 0, static_cast<GLsizei>(m_.curves.count())));
 }
 
 void CurvesRenderer::render_helper_points() const {
   m_.helper_points_vao.bind();
-  ERAY_GL_CALL(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_.helper_points.chunks_count())));
+  ERAY_GL_CALL(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_.helper_points.count())));
 }
 
 }  // namespace mini::gl

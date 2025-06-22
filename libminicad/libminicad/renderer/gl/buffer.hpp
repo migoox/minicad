@@ -103,7 +103,7 @@ class ChunksBuffer {
     return std::nullopt;
   }
 
-  [[nodiscard]] size_t chunks_count() const { return data_.size() / kGPUTargetPrimitiveCount; }
+  [[nodiscard]] size_t count() const { return data_.size() / kGPUTargetPrimitiveCount; }
   [[nodiscard]] size_t size() const { return data_.size(); }
 
  private:

@@ -723,7 +723,7 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::evaluate_derivativ
                         bezier3_dt(pu[0], pu[1], pu[2], pu[3], param.y));
 }
 
-std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() {
+std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() const {
   static constexpr auto kFltMin = std::numeric_limits<float>::min();
   static constexpr auto kFltMax = std::numeric_limits<float>::max();
 

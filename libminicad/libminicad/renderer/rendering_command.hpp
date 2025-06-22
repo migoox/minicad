@@ -245,9 +245,40 @@ struct RSCommandPriority<FillInSurfaceRSCommand::Internal::DeleteObject> {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
+// - IntersectionCurveRSCommand ----------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct IntersectionCurveRSCommand {
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+  };
+
+  using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject>;
+
+  explicit IntersectionCurveRSCommand(IntersectionCurveHandle _handle, CommandVariant _cmd)
+      : handle(_handle), variant(_cmd) {}
+  IntersectionCurveRSCommand() = delete;
+
+  IntersectionCurveHandle handle;
+  CommandVariant variant;
+};
+
+template <>
+struct RSCommandPriority<IntersectionCurveRSCommand::Internal::AddObject> {
+  static constexpr int kValue = ImmediatePriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<IntersectionCurveRSCommand::Internal::DeleteObject> {
+  static constexpr int kValue = DeferredPriority::kValue;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
 // - Generic RSCommand -------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand>;
+using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand,
+                               IntersectionCurveRSCommand>;
 
 }  // namespace mini
