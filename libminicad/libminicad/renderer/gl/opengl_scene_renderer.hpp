@@ -82,6 +82,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> param;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> grid;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> polyline;
+    std::unique_ptr<eray::driver::gl::RenderingShaderProgram> lines;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> bezier_surf;
     std::unique_ptr<eray::driver::gl::RenderingShaderProgram> rational_bezier_surf;
@@ -96,7 +97,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::unordered_map<zstring_view, BillboardRS> billboards;
 
     std::vector<eray::math::Vec3f> debug_points;
-    LineBuffer debug_lines;
+    PointsVAO debug_lines;
 
     eray::driver::gl::TextureHandle point_txt;
     eray::driver::gl::TextureHandle helper_point_txt;

@@ -27,6 +27,7 @@ class IntersectionFinder {
   static eray::math::Vec4f gradient_descent(const eray::math::Vec4f& init, float learning_rate, float tolerance,
                                             int max_iters, const std::function<float(const eray::math::Vec4f&)>& func,
                                             const std::function<eray::math::Vec4f(const eray::math::Vec4f&)>& grad);
+  static eray::math::Vec4f newton();
 };
 
 }  // namespace mini

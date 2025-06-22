@@ -21,6 +21,8 @@
 #include <optional>
 #include <variant>
 
+#include "libminicad/renderer/gl/line_buffer.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -146,10 +148,16 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
                      gl::RenderingShaderProgram::create("anaglyph_merger_shader", std::move(anaglyph_merger_vert),
                                                         std::move(anaglyph_merger_frag)));
 
+  TRY_UNWRAP_ASSET(lines_vert, manager.load_shader(shaders_path / "utils" / "lines.vert"));
+  TRY_UNWRAP_ASSET(lines_frag, manager.load_shader(shaders_path / "utils" / "lines.frag"));
+  TRY_UNWRAP_PROGRAM(lines_prog,
+                     gl::RenderingShaderProgram::create("lines_shader", std::move(lines_vert), std::move(lines_frag)));
+
   auto shaders = Shaders{
       .param                = std::move(param_prog),                      //
       .grid                 = std::move(grid_prog),                       //
       .polyline             = std::move(polyline_prog),                   //
+      .lines                = std::move(lines_prog),                      //
       .bezier               = std::move(bezier_prog),                     //
       .bezier_surf          = std::move(bezier_surf_prog),                //
       .rational_bezier_surf = std::move(rational_bezier_surf_prog),       //
@@ -162,6 +170,8 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
 
   auto global_rs = GlobalRS{
       .billboards             = {},                                //
+      .debug_points           = {},                                //
+      .debug_lines            = PointsVAO::create(),               //
       .point_txt              = create_texture(point_img),         //
       .helper_point_txt       = create_texture(helper_point_img),  //
       .show_grid              = true,                              //
@@ -297,7 +307,6 @@ void OpenGLSceneRenderer::clear() {
 void OpenGLSceneRenderer::debug_point(const eray::math::Vec3f& pos) { global_rs_.debug_points.push_back(pos); }
 
 void OpenGLSceneRenderer::debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) {
-  util::Logger::info("debug line requested");
   global_rs_.debug_lines.add(start, end);
 }
 

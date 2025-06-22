@@ -6,6 +6,8 @@
 #include <libminicad/scene/scene.hpp>
 #include <optional>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 namespace math = eray::math;
@@ -97,7 +99,12 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     auto diff = ps1.evaluate(p.x, p.y) - ps2.evaluate(p.z, p.w);
 
     const auto& [ps1_dx, ps1_dy] = ps1.evaluate_derivatives(p.x, p.y);
+    scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dx);
+    scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dy);
+
     const auto& [ps2_dz, ps2_dw] = ps2.evaluate_derivatives(p.z, p.w);
+    scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dz);
+    scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dw);
 
     return math::Vec4f{
         2.F * math::dot(ps1_dx, diff),
@@ -108,11 +115,10 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
   };
 
   auto result = gradient_descent(math::Vec4f::filled(0.5F), 0.01F, 0.001F, 200, len_func, len_func_grad);
-  eray::util::Logger::info("From gradient descent: {}", result);
+  eray::util::Logger::info("From gradient descent: {}, Error: {}", result, len_func(result));
 
   scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
   scene.renderer().debug_point(ps2.evaluate(result.z, result.w));
-  scene.renderer().debug_line(ps1.evaluate(result.x, result.y), ps2.evaluate(result.z, result.w));
 
   return std::nullopt;
 }
