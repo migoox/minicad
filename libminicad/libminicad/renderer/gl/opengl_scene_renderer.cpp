@@ -363,16 +363,6 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   ERAY_GL_CALL(glClearColor(background_color.x, background_color.y, background_color.z, 1.0));
   ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-  if (global_rs_.debug_lines.vertex_count() > 0) {
-    ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
-    shaders_.polyline->bind();
-    shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
-    shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
-    global_rs_.debug_lines.sync();
-    global_rs_.debug_lines.bind();
-    ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, global_rs_.debug_lines.vertex_count()));
-  }
-
   // Render parameterized surfaces
   fb.begin_pick_render();
   ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 4));
@@ -492,6 +482,16 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     shaders_.sprite->set_uniform("u_scale", 0.02F);
     shaders_.sprite->set_uniform("u_textureSampler", 0);
     ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+  }
+
+  if (global_rs_.debug_lines.vertex_count() > 0) {
+    ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+    shaders_.polyline->bind();
+    shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
+    shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
+    global_rs_.debug_lines.sync();
+    global_rs_.debug_lines.bind();
+    ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, global_rs_.debug_lines.vertex_count()));
   }
 
   ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));

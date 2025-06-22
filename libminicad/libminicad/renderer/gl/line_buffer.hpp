@@ -4,6 +4,7 @@
 #include <liberay/math/vec.hpp>
 #include <vector>
 
+namespace mini {
 struct LineBuffer {
  public:
   LineBuffer() {
@@ -42,7 +43,7 @@ struct LineBuffer {
       return;
     }
 
-    glNamedBufferData(vbo_, static_cast<GLsizeiptr>(points_.size() * sizeof(float)), points_.data(), GL_STATIC_DRAW);
+    glNamedBufferData(vbo_, static_cast<GLsizeiptr>(points_.size() * sizeof(float)), points_.data(), GL_DYNAMIC_DRAW);
     dirty_ = false;
   }
 
@@ -56,3 +57,4 @@ struct LineBuffer {
   std::vector<float> points_;
   bool dirty_ = false;
 };
+}  // namespace mini

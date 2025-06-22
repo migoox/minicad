@@ -39,7 +39,20 @@ eray::math::Vec4f IntersectionFinder::gradient_descent(
 
   auto prev_val = func(result);
   for (auto i = 0; i < max_iters; ++i) {
-    result   = result - learning_rate * grad(result);
+    auto old_result = result;
+    result          = result - learning_rate * grad(result);
+    result.x        = result.x;
+    result.y        = result.y;
+    result.z        = old_result.z;
+    result.w        = old_result.w;
+
+    old_result = result;
+    result     = result - learning_rate * grad(result);
+    result.x   = old_result.x;
+    result.y   = old_result.y;
+    result.z   = result.z;
+    result.w   = result.w;
+
     auto val = func(result);
 
     if (std::abs(prev_val - val) < tolerance) {
@@ -99,6 +112,7 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
 
   scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
   scene.renderer().debug_point(ps2.evaluate(result.z, result.w));
+  scene.renderer().debug_line(ps1.evaluate(result.x, result.y), ps2.evaluate(result.z, result.w));
 
   return std::nullopt;
 }
