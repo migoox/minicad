@@ -128,6 +128,49 @@ eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(
   return result;
 }
 
+eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f& start, PatchSurface& ps1,
+                                                        PatchSurface& ps2, int iters, bool reverse) {
+  constexpr auto kLearningRate = 0.1F;
+
+  auto d = 0.1F;
+
+  auto result = start;
+  auto p0     = ps1.evaluate(result.x, result.y);
+
+  const auto& [p0_dx, p0_dy] = ps1.evaluate_derivatives(result.x, result.y);
+  const auto& [q0_dz, q0_dw] = ps2.evaluate_derivatives(result.z, result.w);
+
+  auto p0n = math::cross(p0_dx, p0_dy);
+  auto q0n = math::cross(q0_dz, q0_dw);
+
+  auto t0 = math::normalize(math::cross(p0n, q0n));
+  if (reverse) {
+    t0 = -t0;
+  }
+
+  ps1.scene().renderer().debug_line(p0, p0 + t0);
+
+  for (auto i = 0; i < iters; ++i) {
+    auto p = ps1.evaluate(result.x, result.y);
+    auto q = ps2.evaluate(result.z, result.w);
+
+    const auto& [p_dx, p_dy] = ps1.evaluate_derivatives(result.x, result.y);
+    const auto& [q_dz, q_dw] = ps2.evaluate_derivatives(result.z, result.w);
+
+    auto mat = math::Mat4f{-math::Vec4f(p_dx, math::dot(p_dx, t0)), -math::Vec4f(p_dy, math::dot(p_dy, t0)),
+                           math::Vec4f(q_dz, 0.F), math::Vec4f(q_dw, 0.F)};
+
+    auto b = math::Vec4f(p - q, math::dot(p, t0) - math::dot(p0, t0) - d);
+
+    if (auto inv = eray::math::inverse(mat)) {
+      auto delta = kLearningRate * ((*inv) * b);
+      result     = result + delta;
+    }
+  }
+
+  return result;
+}
+
 std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections(Scene& scene,
                                                                                  const PatchSurfaceHandle& h1,
                                                                                  const PatchSurfaceHandle& h2) {
@@ -200,8 +243,31 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", result, err_func(result));
   }
 
-  scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
-  scene.renderer().debug_point(ps2.evaluate(result.z, result.w));
+  auto is_out_of_unit = [](const math::Vec4f& v) {
+    return v.x < 0.F || v.x > 1.F ||  //
+           v.y < 0.F || v.y > 1.F ||  //
+           v.z < 0.F || v.z > 1.F ||  //
+           v.w < 0.F || v.w > 1.F;
+  };
+
+  for (auto i = 0U; i < 1000; ++i) {
+    scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
+    result = newton_next_point(result, ps1, ps2, 4);
+    if (is_out_of_unit(result)) {
+      break;
+    }
+
+    eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
+  }
+  for (auto i = 0U; i < 1000; ++i) {
+    scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
+    result = newton_next_point(result, ps1, ps2, 4, true);
+    if (is_out_of_unit(result)) {
+      break;
+    }
+
+    eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
+  }
 
   return std::nullopt;
 }

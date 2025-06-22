@@ -32,6 +32,9 @@ class IntersectionFinder {
   static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, PatchSurface& ps1,
                                                       PatchSurface& ps2, int iters,
                                                       const std::function<float(const eray::math::Vec4f&)>& err_func);
+
+  static eray::math::Vec4f newton_next_point(const eray::math::Vec4f& start, PatchSurface& ps1, PatchSurface& ps2,
+                                             int iters, bool reverse = false);
 };
 
 }  // namespace mini
