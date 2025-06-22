@@ -4,6 +4,8 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 
+#include "libminicad/scene/patch_surface.hpp"
+
 namespace mini {
 
 class IntersectionFinder {
@@ -27,7 +29,9 @@ class IntersectionFinder {
   static eray::math::Vec4f gradient_descent(const eray::math::Vec4f& init, float learning_rate, float tolerance,
                                             int max_iters, const std::function<float(const eray::math::Vec4f&)>& func,
                                             const std::function<eray::math::Vec4f(const eray::math::Vec4f&)>& grad);
-  static eray::math::Vec4f newton();
+  static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, PatchSurface& ps1,
+                                                      PatchSurface& ps2, int iters,
+                                                      const std::function<float(const eray::math::Vec4f&)>& err_func);
 };
 
 }  // namespace mini

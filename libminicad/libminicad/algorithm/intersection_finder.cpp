@@ -5,7 +5,10 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <optional>
+#include <random>
 
+#include "liberay/math/mat.hpp"
+#include "liberay/math/mat_fwd.hpp"
 #include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
@@ -31,6 +34,17 @@ bool IntersectionFinder::aabb_intersects(const std::pair<eray::math::Vec3f, eray
   }
 
   return true;
+}
+
+static constexpr float wrap_to_unit_interval(float x) noexcept {
+  float int_part        = 0.F;
+  const float frac_part = std::modf(x, &int_part);
+  return frac_part < 0.0F ? frac_part + 1.0F : frac_part;
+}
+
+static constexpr math::Vec4f wrap_to_unit_interval(const math::Vec4f& v) noexcept {
+  return math::Vec4f(wrap_to_unit_interval(v.x), wrap_to_unit_interval(v.y), wrap_to_unit_interval(v.z),
+                     wrap_to_unit_interval(v.w));
 }
 
 eray::math::Vec4f IntersectionFinder::gradient_descent(
@@ -66,6 +80,54 @@ eray::math::Vec4f IntersectionFinder::gradient_descent(
   return result;
 }
 
+eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(
+    const eray::math::Vec4f& init, PatchSurface& ps1, PatchSurface& ps2, int iters,
+    const std::function<float(const eray::math::Vec4f&)>& err_func) {
+  auto result = init;
+  for (auto i = 0; i < iters; ++i) {
+    auto p                   = ps1.evaluate(result.x, result.y);
+    const auto& [p_dx, p_dy] = ps1.evaluate_derivatives(result.x, result.y);
+
+    auto q                   = ps2.evaluate(result.z, result.w);
+    const auto& [q_dz, q_dw] = ps2.evaluate_derivatives(result.z, result.w);
+
+    auto mat =
+        math::Mat4f{-math::Vec4f(p_dx, 0.F), -math::Vec4f(p_dy, 0.F), math::Vec4f(q_dz, 0.F), math::Vec4f(q_dw, 0.F)};
+
+    auto b = math::Vec4f(p - q, 0.F);
+
+    // Test each curve
+    auto new_result = math::Vec4f::filled(0.F);
+    auto new_delta  = math::Vec4f::filled(0.F);
+
+    bool found = false;
+    for (auto j = 0U; j < 4U; ++j) {
+      auto curr  = mat;
+      curr[j][3] = 1.F;
+
+      if (auto inv = eray::math::inverse(curr)) {
+        auto delta = (*inv) * b;
+
+        if (err_func(new_result) > err_func(result + delta) || !found) {
+          new_result = result + delta;
+          ps1.scene().renderer().debug_point(ps1.evaluate(new_result.x, new_result.y));
+
+          found     = true;
+          new_delta = delta;
+        }
+      }
+    }
+    result    = new_result;
+    auto vec1 = p_dx * new_delta.x + p_dy * new_delta.y;
+    auto vec2 = q_dz * new_delta.z + q_dw * new_delta.w;
+
+    ps1.scene().renderer().debug_line(p, p + vec1);
+    ps1.scene().renderer().debug_line(q, q + vec2);
+  }
+
+  return result;
+}
+
 std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections(Scene& scene,
                                                                                  const PatchSurfaceHandle& h1,
                                                                                  const PatchSurfaceHandle& h2) {
@@ -87,7 +149,7 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     return std::nullopt;
   }
 
-  auto len_func = [&](const math::Vec4f& p) {
+  auto err_func = [&](const math::Vec4f& p) {
     auto diff = ps1.evaluate(p.x, p.y) - ps2.evaluate(p.z, p.w);
     // scene.renderer().debug_point(ps1.evaluate(p.x, p.y));
     // scene.renderer().debug_point(ps1.evaluate(p.z, p.w));
@@ -95,16 +157,18 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     return res;
   };
 
-  auto len_func_grad = [&](const math::Vec4f& p) {
+  auto err_func_grad = [&](const math::Vec4f& p) {
     auto diff = ps1.evaluate(p.x, p.y) - ps2.evaluate(p.z, p.w);
 
     const auto& [ps1_dx, ps1_dy] = ps1.evaluate_derivatives(p.x, p.y);
-    scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dx);
-    scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dy);
+    // scene.renderer().debug_point(ps1.evaluate(p.x, p.y));
+    // scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dx);
+    // scene.renderer().debug_line(ps1.evaluate(p.x, p.y), ps1.evaluate(p.x, p.y) + ps1_dy);
 
     const auto& [ps2_dz, ps2_dw] = ps2.evaluate_derivatives(p.z, p.w);
-    scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dz);
-    scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dw);
+    // scene.renderer().debug_point(ps2.evaluate(p.x, p.y));
+    // scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dz);
+    // scene.renderer().debug_line(ps2.evaluate(p.z, p.w), ps2.evaluate(p.z, p.w) + ps2_dw);
 
     return math::Vec4f{
         2.F * math::dot(ps1_dx, diff),
@@ -114,11 +178,36 @@ std::optional<IntersectionFinder::Result> IntersectionFinder::find_intersections
     };
   };
 
-  auto result = gradient_descent(math::Vec4f::filled(0.5F), 0.01F, 0.001F, 200, len_func, len_func_grad);
-  eray::util::Logger::info("From gradient descent: {}, Error: {}", result, len_func(result));
+  static constexpr auto kLearningRate  = 0.01F;
+  static constexpr auto kTolerance     = 0.001F;
+  static constexpr auto kMaxIterations = 200;
+  static constexpr auto kTrials        = 10;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<float> dist(0.0F, 1.0F);
+  auto random_vec4 = [&]() { return math::Vec4f(dist(gen), dist(gen), dist(gen), dist(gen)); };
+
+  auto result =
+      gradient_descent(math::Vec4f::filled(0.5F), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
+  for (auto i = 0; i < kTrials; ++i) {
+    auto new_result =
+        gradient_descent(random_vec4(), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
+
+    new_result = math::clamp(new_result, 0.F, 1.F);
+    if (err_func(result) > err_func(new_result)) {
+      result = new_result;
+    }
+  }
+  eray::util::Logger::info("From gradient descent: {}, Error: {}", result, err_func(result));
 
   scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
   scene.renderer().debug_point(ps2.evaluate(result.z, result.w));
+
+  result = newton_start_point_refiner(result, ps1, ps2, 2, err_func);
+  eray::util::Logger::info("From newton: {}, Error: {}", result, err_func(result));
+  //   scene.renderer().debug_point(ps1.evaluate(result.x, result.y));
+  //   scene.renderer().debug_point(ps2.evaluate(result.z, result.w));
 
   return std::nullopt;
 }
