@@ -719,8 +719,8 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::evaluate_derivativ
                           points[pv_idx + 3 * kPatchSize], param.y);
   }
 
-  return std::make_pair(bezier3_dt(pu[0], pu[1], pu[2], pu[3], param.y),
-                        bezier3_dt(pv[0], pv[1], pv[2], pv[3], param.x));
+  return std::make_pair(bezier3_dt(pv[0], pv[1], pv[2], pv[3], param.x),
+                        bezier3_dt(pu[0], pu[1], pu[2], pu[3], param.y));
 }
 
 std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() {

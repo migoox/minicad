@@ -291,6 +291,19 @@ void OpenGLSceneRenderer::clear() {
   fill_in_surface_renderer_ = FillInSurfaceRenderer::create();
   patch_surface_renderer_   = PatchSurfaceRenderer::create();
   curve_renderer_           = CurvesRenderer::create();
+  clear_debug();
+}
+
+void OpenGLSceneRenderer::debug_point(const eray::math::Vec3f& pos) { global_rs_.debug_points.push_back(pos); }
+
+void OpenGLSceneRenderer::debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) {
+  util::Logger::info("debug line requested");
+  global_rs_.debug_lines.add(start, end);
+}
+
+void OpenGLSceneRenderer::clear_debug() {
+  global_rs_.debug_lines.clear();
+  global_rs_.debug_points.clear();
 }
 
 void OpenGLSceneRenderer::render(const Camera& camera) {
@@ -349,6 +362,16 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   ERAY_GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
   ERAY_GL_CALL(glClearColor(background_color.x, background_color.y, background_color.z, 1.0));
   ERAY_GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+
+  if (global_rs_.debug_lines.vertex_count() > 0) {
+    ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+    shaders_.polyline->bind();
+    shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
+    shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
+    global_rs_.debug_lines.sync();
+    global_rs_.debug_lines.bind();
+    ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, global_rs_.debug_lines.vertex_count()));
+  }
 
   // Render parameterized surfaces
   fb.begin_pick_render();
@@ -443,6 +466,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
 
   // Render billboards
   ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+  shaders_.sprite->bind();
   for (auto& [name, billboard] : global_rs_.billboards) {
     if (!billboard.state.show) {
       continue;
@@ -454,9 +478,22 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     shaders_.sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.sprite->set_uniform("u_scale", billboard.state.scale);
     shaders_.sprite->set_uniform("u_textureSampler", 0);
-    shaders_.sprite->bind();
     ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
   }
+
+  // Render debug helpers
+  ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
+  shaders_.sprite->bind();
+  for (auto& pos : global_rs_.debug_points) {
+    ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, global_rs_.helper_point_txt.get()));
+    shaders_.sprite->set_uniform("u_worldPos", pos);
+    shaders_.sprite->set_uniform("u_pvMat", proj_mat * view_mat);
+    shaders_.sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
+    shaders_.sprite->set_uniform("u_scale", 0.02F);
+    shaders_.sprite->set_uniform("u_textureSampler", 0);
+    ERAY_GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+  }
+
   ERAY_GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
 }
 

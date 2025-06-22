@@ -8,6 +8,7 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
+#include <libminicad/renderer/gl/line_buffer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
@@ -60,6 +61,10 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     global_rs_.anaglyph_output_coeffs = output_coeffs;
   }
 
+  void debug_point(const eray::math::Vec3f& pos) final;
+  void debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) final;
+  void clear_debug() final;
+
   void update(Scene& scene) final;
   void render(const Camera& camera) final;
   void clear() final;
@@ -89,6 +94,9 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
 
   struct GlobalRS {
     std::unordered_map<zstring_view, BillboardRS> billboards;
+
+    std::vector<eray::math::Vec3f> debug_points;
+    LineBuffer debug_lines;
 
     eray::driver::gl::TextureHandle point_txt;
     eray::driver::gl::TextureHandle helper_point_txt;

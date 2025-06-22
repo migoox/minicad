@@ -35,9 +35,9 @@ class BezierHole3Finder {
       };
     }
 
-    uint32_t patch_surface_id;
+    uint32_t patch_surface_id{};
     eray::math::Vec2u patch_coords;
-    BoundaryDirection boundary_dir;
+    BoundaryDirection boundary_dir{};
 
     bool is_same_patch(const PatchEdgeInternalInfo& other) const {
       return patch_surface_id == other.patch_surface_id && patch_coords.x == other.patch_coords.x &&

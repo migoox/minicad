@@ -67,6 +67,10 @@ class ISceneRenderer {
 
   virtual void render(const Camera& camera) = 0;
 
+  virtual void debug_point(const eray::math::Vec3f& pos)                                = 0;
+  virtual void debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) = 0;
+  virtual void clear_debug()                                                            = 0;
+
   virtual void clear() = 0;
 };
 

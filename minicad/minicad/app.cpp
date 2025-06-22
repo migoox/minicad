@@ -53,6 +53,7 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
+#include "libminicad/algorithm/intersection_finder.hpp"
 #include "libminicad/scene/scene.hpp"
 
 namespace mini {
@@ -656,6 +657,30 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::Begin("MiNI CAD");
   {
+    if (ImGui::Button("test")) {
+      if (m_.non_scene_obj_selection->is_multi_selection()) {
+        auto first  = PatchSurfaceHandle(0, 0, 0);
+        auto second = PatchSurfaceHandle(0, 0, 0);
+        auto count  = 0U;
+        for (const auto& h : *m_.non_scene_obj_selection) {
+          std::visit(util::match{[&](const PatchSurfaceHandle& handle) {
+                                   if (count > 0) {
+                                     second = handle;
+                                   } else {
+                                     first = handle;
+                                   }
+                                   count++;
+                                 },
+                                 [](const auto&) {}},
+                     h);
+          if (count == 2) {
+            util::Logger::info("RUN");
+            IntersectionFinder::find_intersections(m_.scene, first, second);
+          }
+        }
+      }
+    }
+
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
         os::FileDialog::FilterItem("Project", "json")};
 
