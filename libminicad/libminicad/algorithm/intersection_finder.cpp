@@ -43,10 +43,14 @@ void IntersectionFinder::Curve::fill_texture(std::vector<uint32_t>& txt,
     line_dda(txt, static_cast<int>(p0.x * kSize), static_cast<int>(p0.y * kSize), static_cast<int>(p1.x * kSize),
              static_cast<int>(p1.y * kSize));
   }
+
+  if (!is_closed && points.size() >= 2) {
+    // TODO(migoox)
+  }
 }
 
 void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1) {
-  static const uint32_t kBlack = 0xFF0000FF;
+  static const uint32_t kBlack = 0xFF000000;
 
   int dx = x1 - x0;
   int dy = y1 - y0;
@@ -348,6 +352,8 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     curve.points.push_back(curve.points.front());
     curve.is_closed = true;
   }
+
+  curve.fill_textures();
 
   return curve;
 }

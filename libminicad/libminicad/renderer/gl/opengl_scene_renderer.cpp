@@ -284,15 +284,8 @@ TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& t
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
   // Upload the texture data
-  glTexImage2D(GL_TEXTURE_2D,
-               0,         // mipmap level
-               GL_RGBA8,  // internal format on GPU
-               static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y),
-               0,                 // border
-               GL_RGBA,           // format of incoming data
-               GL_UNSIGNED_BYTE,  // type of each channel
-               texture.data()     // pointer to pixel data
-  );
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y), 0, GL_RGBA,
+               GL_UNSIGNED_INT_8_8_8_8, texture.data());
 
   glBindTexture(GL_TEXTURE_2D, 0);  // unbind
 
@@ -321,7 +314,7 @@ void OpenGLSceneRenderer::draw_imgui_texture_image(const TextureHandle& texture)
   if (txt_it != global_rs_.textures.end()) {
     // NOLINTBEGIN
     ImGui::Image((ImTextureID)(intptr_t)texture.obj_id,
-                 ImVec2(txt_it->second.second.width, txt_it->second.second.height));
+                 ImVec2(txt_it->second.second.width, txt_it->second.second.height), ImVec2(0, 1), ImVec2(1, 0));
     // NOLINTEND
   }
 }

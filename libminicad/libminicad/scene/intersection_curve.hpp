@@ -30,6 +30,10 @@ class IntersectionCurve : public ObjectBase<IntersectionCurve, IntersectionCurve
                                       TextureHandle txt_param_points_surface1, TextureHandle txt_param_points_surface2,
                                       ParametricSurfaceHandle surface1, ParametricSurfaceHandle surface2);
 
+  std::optional<TextureHandle> intersection_texture(const ParametricSurfaceHandle& handle);
+
+  std::pair<TextureHandle, TextureHandle> intersection_textures();
+
   const std::vector<eray::math::Vec3f>& points();
 
   void update();

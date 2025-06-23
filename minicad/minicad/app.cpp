@@ -661,6 +661,9 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
         obj.value()->name = object_name;
       }
+
+      m_.scene.renderer().draw_imgui_texture_image(obj.value()->intersection_textures().first);
+      m_.scene.renderer().draw_imgui_texture_image(obj.value()->intersection_textures().second);
     }
   };
 

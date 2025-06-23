@@ -4,6 +4,7 @@
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <optional>
 
 #include "liberay/util/logger.hpp"
 #include "liberay/util/object_handle.hpp"
@@ -18,6 +19,21 @@ IntersectionCurve::IntersectionCurve(IntersectionCurveHandle handle, Scene& scen
       surface2_(PatchSurfaceHandle(0, 0, 0)),
       txt_surface1_param_space_(0, 0, 0),
       txt_surface2_param_space_(0, 0, 0) {}
+
+std::optional<TextureHandle> IntersectionCurve::intersection_texture(const ParametricSurfaceHandle& handle) {
+  if (handle == this->surface1_) {
+    return txt_surface1_param_space_;
+  }
+  if (handle == this->surface2_) {
+    return txt_surface2_param_space_;
+  }
+
+  return std::nullopt;
+}
+
+std::pair<TextureHandle, TextureHandle> IntersectionCurve::intersection_textures() {
+  return std::make_pair(txt_surface1_param_space_, txt_surface2_param_space_);
+}
 
 std::expected<void, IntersectionCurve::InitError> IntersectionCurve::init(
     const std::vector<eray::math::Vec3f>& points, const std::vector<eray::math::Vec2f>& param_points_surface1,
