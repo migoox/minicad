@@ -10,6 +10,8 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 
+#include "liberay/util/object_handle.hpp"
+
 namespace mini {
 
 struct SampledHelperPoint {
@@ -26,6 +28,12 @@ struct RendererColors {
   static constexpr auto kPolylinesColor = eray::math::Vec4f(0.843F, 0.894F, 0.949F, 1.F);
   static constexpr auto kVectors        = eray::math::Vec4f(0.62F, 0.867F, 1.F, 1.F);
 };
+
+struct Texture {
+  size_t width;
+  size_t height;
+};
+using TextureHandle = eray::util::Handle<Texture>;
 
 using SamplingResult = std::optional<std::variant<SampledSceneObjects, SampledHelperPoint>>;
 
@@ -62,6 +70,11 @@ class ISceneRenderer {
   virtual bool is_anaglyph_rendering_enabled() const                                    = 0;
   virtual eray::math::Vec3f anaglyph_output_color_coeffs() const                        = 0;
   virtual void set_anaglyph_output_color_coeffs(const eray::math::Vec3f& output_coeffs) = 0;
+
+  virtual TextureHandle upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) = 0;
+  virtual void delete_texture(const TextureHandle& texture)                                                = 0;
+  virtual std::optional<Texture> get_texture_info(const TextureHandle& texture)                            = 0;
+  virtual void draw_imgui_texture_image(const TextureHandle& texture)                                      = 0;
 
   virtual void update(Scene& scene) = 0;
 

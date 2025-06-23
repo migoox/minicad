@@ -16,7 +16,21 @@ class IntersectionFinder {
     PatchSurfaceHandle surface1;
     PatchSurfaceHandle surface2;
 
+    std::vector<uint32_t> txt_params_space1;
+    std::vector<uint32_t> txt_params_space2;
+
+    bool is_closed;
+
     void push_point(const eray::math::Vec4f& params, PatchSurface& surface);
+    void reverse();
+
+    void fill_textures();
+
+    static constexpr auto kTxtSize = 512;
+
+   private:
+    void fill_texture(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
+    void line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1);
   };
 
   /**

@@ -679,36 +679,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::Begin("MiNI CAD");
   {
-    if (ImGui::Button("test")) {
-      if (m_.non_scene_obj_selection->is_multi_selection()) {
-        auto first  = PatchSurfaceHandle(0, 0, 0);
-        auto second = PatchSurfaceHandle(0, 0, 0);
-        auto count  = 0U;
-        for (const auto& h : *m_.non_scene_obj_selection) {
-          std::visit(util::match{[&](const PatchSurfaceHandle& handle) {
-                                   if (count > 0) {
-                                     second = handle;
-                                   } else {
-                                     first = handle;
-                                   }
-                                   count++;
-                                 },
-                                 [](const auto&) {}},
-                     h);
-          if (count == 2) {
-            auto obj1 = m_.scene.arena<PatchSurface>().get_obj(first);
-            auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
-            if (obj1 && obj2) {
-              auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
-              if (auto opt = m_.scene.create_obj_and_get<IntersectionCurve>(TrimmingIntersectionCurve{})) {
-                auto& obj = **opt;
-                obj.init(curve->points, curve->params_surface1, curve->params_surface2, curve->surface1,
-                         curve->surface2);
-              }
-            }
-          }
-        }
-      }
+    if (ImGui::Button("Find Intersection")) {
+      on_find_intersection();
     }
 
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
@@ -1495,6 +1467,50 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
   }
 
   return false;
+}
+
+bool MiniCadApp::on_find_intersection() {
+  if (m_.non_scene_obj_selection->is_multi_selection()) {
+    auto first  = PatchSurfaceHandle(0, 0, 0);
+    auto second = PatchSurfaceHandle(0, 0, 0);
+    auto count  = 0U;
+    for (const auto& h : *m_.non_scene_obj_selection) {
+      std::visit(util::match{[&](const PatchSurfaceHandle& handle) {
+                               if (count > 0) {
+                                 second = handle;
+                               } else {
+                                 first = handle;
+                               }
+                               count++;
+                             },
+                             [](const auto&) {}},
+                 h);
+      if (count == 2) {
+        auto obj1 = m_.scene.arena<PatchSurface>().get_obj(first);
+        auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
+        if (obj1 && obj2) {
+          auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
+          if (auto opt = m_.scene.create_obj_and_get<IntersectionCurve>(TrimmingIntersectionCurve{})) {
+            auto& obj = **opt;
+            auto txt1 =
+                m_.scene.renderer().upload_texture(curve->txt_params_space1, mini::IntersectionFinder::Curve::kTxtSize,
+                                                   mini::IntersectionFinder::Curve::kTxtSize);
+            auto txt2 =
+                m_.scene.renderer().upload_texture(curve->txt_params_space2, mini::IntersectionFinder::Curve::kTxtSize,
+                                                   mini::IntersectionFinder::Curve::kTxtSize);
+
+            if (obj.init(curve->points, curve->params_surface1, curve->params_surface2, txt1, txt2, curve->surface1,
+                         curve->surface2)) {
+              util::Logger::info("Created new intersection curve with id {}", obj.handle().obj_id);
+              return true;
+            }
+          }
+        }
+        util::Logger::info("Could not create intersection object");
+        return false;
+      }
+    }
+  }
 }
 
 MiniCadApp::~MiniCadApp() {}

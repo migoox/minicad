@@ -738,4 +738,12 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box(
   return std::make_pair(std::move(min), std::move(max));
 }
 
+void PatchSurface::add_intersection_curve(const IntersectionCurve& curve) {
+  intersection_curve_surfaces_.insert(curve.handle());
+}
+
+void PatchSurface::remove_intersection_curve(const IntersectionCurve& curve) {
+  intersection_curve_surfaces_.erase(curve.handle());
+}
+
 }  // namespace mini

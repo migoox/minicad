@@ -8,6 +8,7 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
+#include <libminicad/renderer/gl/intersection_curves_renderer.hpp>
 #include <libminicad/renderer/gl/line_buffer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
@@ -17,8 +18,7 @@
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
-
-#include "libminicad/renderer/gl/intersection_curves_renderer.hpp"
+#include <unordered_map>
 
 namespace mini::gl {
 
@@ -63,6 +63,11 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     global_rs_.anaglyph_output_coeffs = output_coeffs;
   }
 
+  TextureHandle upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) final;
+  void delete_texture(const TextureHandle& texture) final;
+  std::optional<Texture> get_texture_info(const TextureHandle& texture) final;
+  void draw_imgui_texture_image(const TextureHandle& texture) final;
+
   void debug_point(const eray::math::Vec3f& pos) final;
   void debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) final;
   void clear_debug() final;
@@ -101,6 +106,8 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     std::vector<eray::math::Vec3f> debug_points;
     PointsVAO debug_lines;
 
+    std::unordered_map<TextureHandle, std::pair<eray::driver::gl::TextureHandle, Texture>> textures;
+
     eray::driver::gl::TextureHandle point_txt;
     eray::driver::gl::TextureHandle helper_point_txt;
 
@@ -110,6 +117,9 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     bool anaglyph_enabled;
 
     eray::math::Vec3f anaglyph_output_coeffs;
+
+    uint32_t timestamp = 0;
+    uint32_t signature = 0;
   } global_rs_;
 
   CurvesRenderer curve_renderer_;

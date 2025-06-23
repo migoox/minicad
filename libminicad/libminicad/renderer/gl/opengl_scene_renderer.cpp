@@ -21,6 +21,7 @@
 #include <optional>
 #include <variant>
 
+#include "liberay/driver/gl/gl_handle.hpp"
 #include "libminicad/renderer/gl/intersection_curves_renderer.hpp"
 #include "libminicad/renderer/gl/line_buffer.hpp"
 
@@ -269,6 +270,60 @@ void OpenGLSceneRenderer::update(Scene& scene) {
   patch_surface_renderer_.update(scene);
   intersection_curves_renderer_.update(scene);
   fill_in_surface_renderer_.update(scene);
+}
+
+TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) {
+  GLuint tex_id = 0;
+  glGenTextures(1, &tex_id);
+  glBindTexture(GL_TEXTURE_2D, tex_id);
+
+  // Set texture filtering and wrapping
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);  // or GL_NEAREST
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  // or GL_NEAREST
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  // Upload the texture data
+  glTexImage2D(GL_TEXTURE_2D,
+               0,         // mipmap level
+               GL_RGBA8,  // internal format on GPU
+               static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y),
+               0,                 // border
+               GL_RGBA,           // format of incoming data
+               GL_UNSIGNED_BYTE,  // type of each channel
+               texture.data()     // pointer to pixel data
+  );
+
+  glBindTexture(GL_TEXTURE_2D, 0);  // unbind
+
+  auto handle = TextureHandle(global_rs_.signature, global_rs_.timestamp, tex_id);
+  global_rs_.textures.emplace(
+      handle, std::make_pair(eray::driver::gl::TextureHandle(tex_id), Texture{.width = size_x, .height = size_y}));
+  eray::util::Logger::info("Created OpenGL texture with id {}", handle.obj_id);
+  return handle;
+}
+
+std::optional<Texture> OpenGLSceneRenderer::get_texture_info(const TextureHandle& texture) {
+  auto txt_it = global_rs_.textures.find(texture);
+  if (txt_it != global_rs_.textures.end()) {
+    return txt_it->second.second;
+  }
+  return std::nullopt;
+}
+
+void OpenGLSceneRenderer::delete_texture(const TextureHandle& texture) {
+  global_rs_.textures.erase(texture);
+  eray::util::Logger::info("Deleted OpenGL texture with id {}", texture.obj_id);
+}
+
+void OpenGLSceneRenderer::draw_imgui_texture_image(const TextureHandle& texture) {
+  auto txt_it = global_rs_.textures.find(texture);
+  if (txt_it != global_rs_.textures.end()) {
+    // NOLINTBEGIN
+    ImGui::Image((ImTextureID)(intptr_t)texture.obj_id,
+                 ImVec2(txt_it->second.second.width, txt_it->second.second.height));
+    // NOLINTEND
+  }
 }
 
 SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x, size_t y, size_t width,

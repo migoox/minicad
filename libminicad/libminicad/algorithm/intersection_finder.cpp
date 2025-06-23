@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <liberay/math/mat.hpp>
 #include <liberay/math/vec.hpp>
 #include <liberay/math/vec_fwd.hpp>
@@ -8,6 +9,8 @@
 #include <libminicad/scene/scene.hpp>
 #include <optional>
 #include <random>
+#include <ranges>
+#include <vector>
 
 namespace mini {
 
@@ -17,6 +20,59 @@ void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, Patc
   params_surface1.emplace_back(params.x, params.y);
   params_surface2.emplace_back(params.z, params.w);
   points.push_back(surface.evaluate(params.x, params.y));
+}
+
+void IntersectionFinder::Curve::reverse() {
+  std::ranges::reverse(points);
+  std::ranges::reverse(params_surface1);
+  std::ranges::reverse(params_surface2);
+}
+
+void IntersectionFinder::Curve::fill_textures() {
+  fill_texture(txt_params_space1, params_surface1);
+  fill_texture(txt_params_space2, params_surface2);
+}
+
+void IntersectionFinder::Curve::fill_texture(std::vector<uint32_t>& txt,
+                                             const std::vector<eray::math::Vec2f>& params_surface) {
+  txt.resize(kTxtSize * kTxtSize, 0xFFFFFFFF);
+  constexpr auto kSize = static_cast<float>(kTxtSize);
+
+  auto wins = params_surface | std::views::adjacent<2>;
+  for (const auto& [p0, p1] : wins) {
+    line_dda(txt, static_cast<int>(p0.x * kSize), static_cast<int>(p0.y * kSize), static_cast<int>(p1.x * kSize),
+             static_cast<int>(p1.y * kSize));
+  }
+}
+
+void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1) {
+  static const uint32_t kBlack = 0xFF0000FF;
+
+  int dx = x1 - x0;
+  int dy = y1 - y0;
+
+  int steps = std::max(std::abs(dx), std::abs(dy));
+  if (steps == 0) {
+    return;
+  }
+
+  float x_inc = dx / static_cast<float>(steps);
+  float y_inc = dy / static_cast<float>(steps);
+
+  float x = x0;
+  float y = y0;
+
+  for (int i = 0; i <= steps; ++i) {
+    int xi = std::round(x);
+    int yi = std::round(y);
+
+    if (xi >= 0 && xi < kTxtSize && yi >= 0 && yi < kTxtSize) {
+      txt[yi * kTxtSize + xi] = kBlack;
+    }
+
+    x += x_inc;
+    y += y_inc;
+  }
 }
 
 bool IntersectionFinder::aabb_intersects(const std::pair<eray::math::Vec3f, eray::math::Vec3f>& a,
@@ -152,8 +208,6 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
     t0 = -t0;
   }
 
-  //   ps1.scene().renderer().debug_line(p0, p0 + t0);
-
   for (auto i = 0; i < iters; ++i) {
     auto p = ps1.evaluate(result.x, result.y);
     auto q = ps2.evaluate(result.z, result.w);
@@ -169,6 +223,8 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
     if (auto inv = eray::math::inverse(mat)) {
       auto delta = kLearningRate * ((*inv) * b);
       result     = result + delta;
+    } else {
+      return result;
     }
   }
 
@@ -211,40 +267,45 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   std::uniform_real_distribution<float> dist(0.0F, 1.0F);
   auto random_vec4 = [&]() { return math::Vec4f(dist(gen), dist(gen), dist(gen), dist(gen)); };
 
-  auto result =
+  auto start_point =
       gradient_descent(math::Vec4f::filled(0.5F), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
   for (auto i = 0; i < kTrials; ++i) {
     auto new_result =
         gradient_descent(random_vec4(), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
 
     new_result = math::clamp(new_result, 0.F, 1.F);
-    if (err_func(result) > err_func(new_result)) {
-      result = new_result;
+    if (err_func(start_point) > err_func(new_result)) {
+      start_point = new_result;
     }
   }
 
-  eray::util::Logger::info("Found start point with gradient descent: {}, Error: {}", result, err_func(result));
+  eray::util::Logger::info("Found start point with gradient descent: {}, Error: {}", start_point,
+                           err_func(start_point));
 
   {
-    auto new_result = newton_start_point_refiner(result, ps1, ps2, 5, err_func);
-    if (err_func(new_result) < err_func(result)) {
-      result = new_result;
+    auto new_result = newton_start_point_refiner(start_point, ps1, ps2, 5, err_func);
+    if (err_func(new_result) < err_func(start_point)) {
+      start_point = new_result;
     }
-    eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", result, err_func(result));
+    eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", start_point,
+                             err_func(start_point));
   }
 
-  if (err_func(result) > kThreshold) {
+  if (err_func(start_point) > kThreshold) {
     return std::nullopt;
   }
 
   auto curve = Curve{
-      .points          = {},            //
-      .params_surface1 = {},            //
-      .params_surface2 = {},            //
-      .surface1        = ps1.handle(),  //
-      .surface2        = ps2.handle(),  //
+      .points            = {},            //
+      .params_surface1   = {},            //
+      .params_surface2   = {},            //
+      .surface1          = ps1.handle(),  //
+      .surface2          = ps2.handle(),  //
+      .txt_params_space1 = {},            //
+      .txt_params_space2 = {},            //
+      .is_closed         = false,         //
   };
-  curve.push_point(result, ps1);
+  curve.push_point(start_point, ps1);
 
   auto is_out_of_unit = [](const math::Vec4f& v) {
     return v.x < 0.F || v.x > 1.F ||  //
@@ -253,24 +314,39 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
            v.w < 0.F || v.w > 1.F;
   };
 
-  for (auto i = 0U; i < 1000; ++i) {
-    result = newton_next_point(result, ps1, ps2, 4);
-    if (is_out_of_unit(result)) {
+  auto next_point = start_point;
+  for (auto i = 0U; i < 10000; ++i) {
+    next_point   = newton_next_point(next_point, ps1, ps2, 4);
+    auto refined = newton_start_point_refiner(next_point, ps1, ps2, 4, err_func);
+    if (err_func(refined) < err_func(next_point)) {
+      next_point = refined;
+    }
+    // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
+    if (is_out_of_unit(next_point)) {
       break;
     }
-    curve.push_point(result, ps1);
-
-    eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
+    curve.push_point(next_point, ps1);
   }
 
-  for (auto i = 0U; i < 1000; ++i) {
-    result = newton_next_point(result, ps1, ps2, 4, true);
-    if (is_out_of_unit(result)) {
+  curve.reverse();
+
+  next_point = start_point;
+  for (auto i = 0U; i < 10000; ++i) {
+    next_point   = newton_next_point(next_point, ps1, ps2, 4, true);
+    auto refined = newton_start_point_refiner(next_point, ps1, ps2, 4, err_func);
+    if (err_func(refined) < err_func(next_point)) {
+      next_point = refined;
+    }
+    // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
+    if (is_out_of_unit(next_point)) {
       break;
     }
-    curve.push_point(result, ps1);
+    curve.push_point(next_point, ps1);
+  }
 
-    eray::util::Logger::info("Next point: {}, Error: {}", result, err_func(result));
+  if (math::distance(curve.points.front(), curve.points.back()) < 0.1F) {
+    curve.points.push_back(curve.points.front());
+    curve.is_closed = true;
   }
 
   return curve;

@@ -145,6 +145,8 @@ class MiniCadApp final : public eray::os::Application {
   bool on_project_save_as(const std::filesystem::path& path);
   bool on_project_save();
 
+  bool on_find_intersection();
+
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
