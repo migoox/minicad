@@ -2,12 +2,14 @@
 #include <imgui/imgui.h>
 
 #include <liberay/driver/gl/buffer.hpp>
+#include <liberay/driver/gl/gl_handle.hpp>
 #include <liberay/math/mat.hpp>
 #include <liberay/util/logger.hpp>
 #include <liberay/util/try.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
+#include <libminicad/renderer/gl/line_buffer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
@@ -20,10 +22,6 @@
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 #include <variant>
-
-#include "liberay/driver/gl/gl_handle.hpp"
-#include "libminicad/renderer/gl/intersection_curves_renderer.hpp"
-#include "libminicad/renderer/gl/line_buffer.hpp"
 
 namespace mini::gl {
 
@@ -185,7 +183,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
 
   return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
       std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), CurvesRenderer::create(),
-      PatchSurfaceRenderer::create(), FillInSurfaceRenderer::create(), IntersectionCurvesRenderer::create(),
+      PatchSurfaceRenderer::create(), FillInSurfaceRenderer::create(), ApproxCurvesRenderer::create(),
       std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
       std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
@@ -193,7 +191,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
 OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                          CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
                                          FillInSurfaceRenderer&& fill_in_surface_rs,
-                                         IntersectionCurvesRenderer&& intersection_curves_rs,
+                                         ApproxCurvesRenderer&& intersection_curves_rs,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer)
     : shaders_(std::move(shaders)),
@@ -212,7 +210,7 @@ void OpenGLSceneRenderer::push_object_rs_cmd(const RSCommand& cmd) {
                  [this](const CurveRSCommand& v) { curve_renderer_.push_cmd(v); },
                  [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); },
                  [this](const FillInSurfaceRSCommand& v) { fill_in_surface_renderer_.push_cmd(v); },
-                 [this](const IntersectionCurveRSCommand& v) { intersection_curves_renderer_.push_cmd(v); },
+                 [this](const ApproxCurveRSCommand& v) { intersection_curves_renderer_.push_cmd(v); },
              },
              cmd);
 }
@@ -229,7 +227,7 @@ std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handl
           [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> {
             return fill_in_surface_renderer_.object_rs(handle);
           },
-          [this](const IntersectionCurveHandle& handle) -> std::optional<ObjectRS> {
+          [this](const ApproxCurveHandle& handle) -> std::optional<ObjectRS> {
             return intersection_curves_renderer_.object_rs(handle);
           },
       },
@@ -355,7 +353,7 @@ void OpenGLSceneRenderer::clear() {
   fill_in_surface_renderer_     = FillInSurfaceRenderer::create();
   patch_surface_renderer_       = PatchSurfaceRenderer::create();
   curve_renderer_               = CurvesRenderer::create();
-  intersection_curves_renderer_ = IntersectionCurvesRenderer::create();
+  intersection_curves_renderer_ = ApproxCurvesRenderer::create();
   clear_debug();
 }
 

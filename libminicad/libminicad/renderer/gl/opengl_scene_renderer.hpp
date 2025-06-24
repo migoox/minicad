@@ -6,9 +6,9 @@
 #include <liberay/driver/gl/shader_program.hpp>
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/renderer/gl/approx_curve_renderer.hpp>
 #include <libminicad/renderer/gl/curves_renderer.hpp>
 #include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
-#include <libminicad/renderer/gl/intersection_curves_renderer.hpp>
 #include <libminicad/renderer/gl/line_buffer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
@@ -126,7 +126,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   SceneObjectsRenderer scene_objs_renderer_;
   PatchSurfaceRenderer patch_surface_renderer_;
   FillInSurfaceRenderer fill_in_surface_renderer_;
-  IntersectionCurvesRenderer intersection_curves_renderer_;
+  ApproxCurvesRenderer intersection_curves_renderer_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> right_eye_framebuffer_;
@@ -135,7 +135,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
                                CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
                                FillInSurfaceRenderer&& fill_in_surface_rs,
-                               IntersectionCurvesRenderer&& intersection_curves_rs,
+                               ApproxCurvesRenderer&& intersection_curves_rs,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer);
 };

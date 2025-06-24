@@ -151,6 +151,7 @@ struct PatchSurfaceRSCommand {
     struct AddObject {};
     struct DeleteObject {};
     struct UpdateControlPoints {};
+    struct UpdateTrimmingTextures {};
   };
 
   struct UpdateObjectVisibility {
@@ -245,10 +246,10 @@ struct RSCommandPriority<FillInSurfaceRSCommand::Internal::DeleteObject> {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - IntersectionCurveRSCommand ----------------------------------------------------------------------------------------
+// - ApproxCurveRSCommand ----------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-struct IntersectionCurveRSCommand {
+struct ApproxCurveRSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};
@@ -256,21 +257,20 @@ struct IntersectionCurveRSCommand {
 
   using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject>;
 
-  explicit IntersectionCurveRSCommand(IntersectionCurveHandle _handle, CommandVariant _cmd)
-      : handle(_handle), variant(_cmd) {}
-  IntersectionCurveRSCommand() = delete;
+  explicit ApproxCurveRSCommand(ApproxCurveHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
+  ApproxCurveRSCommand() = delete;
 
-  IntersectionCurveHandle handle;
+  ApproxCurveHandle handle;
   CommandVariant variant;
 };
 
 template <>
-struct RSCommandPriority<IntersectionCurveRSCommand::Internal::AddObject> {
+struct RSCommandPriority<ApproxCurveRSCommand::Internal::AddObject> {
   static constexpr int kValue = ImmediatePriority::kValue;
 };
 
 template <>
-struct RSCommandPriority<IntersectionCurveRSCommand::Internal::DeleteObject> {
+struct RSCommandPriority<ApproxCurveRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 
@@ -279,6 +279,6 @@ struct RSCommandPriority<IntersectionCurveRSCommand::Internal::DeleteObject> {
 // ---------------------------------------------------------------------------------------------------------------------
 
 using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand,
-                               IntersectionCurveRSCommand>;
+                               ApproxCurveRSCommand>;
 
 }  // namespace mini

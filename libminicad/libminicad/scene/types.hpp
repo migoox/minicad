@@ -6,8 +6,6 @@
 #include <liberay/math/vec_fwd.hpp>
 #include <utility>
 
-#include "libminicad/scene/intersection_curve.hpp"
-
 namespace mini {
 
 template <typename T>
@@ -19,14 +17,12 @@ concept CParametricCurveObject = requires(T t, float param) {
 };
 
 template <typename T>
-concept CParametricSurfaceObject = requires(T t, float param1, float param2, const IntersectionCurve& curve) {
+concept CParametricSurfaceObject = requires(T t, float param1, float param2) {
   typename T::Variant;
   { t.frenet_frame(param1, param1) } -> std::same_as<eray::math::Mat4f>;
   { t.evaluate(param1, param2) } -> std::same_as<eray::math::Vec3f>;
   { t.evaluate_derivatives(param1, param2) } -> std::same_as<std::pair<eray::math::Vec3f, eray::math::Vec3f>>;
   { t.aabb_bounding_box() } -> std::same_as<std::pair<eray::math::Vec3f, eray::math::Vec3f>>;
-  { t.add_intersection_curve(curve) } -> std::same_as<void>;
-  { t.remove_intersection_curve(curve) } -> std::same_as<void>;
 };
 
 template <typename T>

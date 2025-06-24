@@ -27,13 +27,16 @@
 #include <liberay/util/timer.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/algorithm/hole_finder.hpp>
+#include <libminicad/algorithm/intersection_finder.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
+#include <libminicad/scene/approx_curve.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/patch_surface.hpp>
+#include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/serialization/json/json.hpp>
@@ -52,10 +55,6 @@
 #include <ranges>
 #include <tracy/Tracy.hpp>
 #include <variant>
-
-#include "libminicad/algorithm/intersection_finder.hpp"
-#include "libminicad/scene/intersection_curve.hpp"
-#include "libminicad/scene/scene.hpp"
 
 namespace mini {
 
@@ -644,8 +643,8 @@ void MiniCadApp::gui_object_window() {
     }
   };
 
-  auto draw_intersection_curve = [&](const IntersectionCurveHandle& h) {
-    if (auto obj = m_.scene.arena<IntersectionCurve>().get_obj(h)) {
+  auto draw_intersection_curve = [&](const ApproxCurveHandle& h) {
+    if (auto obj = m_.scene.arena<ApproxCurve>().get_obj(h)) {
       const auto& patch = *obj.value();
       auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, patch.object);
 
@@ -661,9 +660,6 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
         obj.value()->name = object_name;
       }
-
-      m_.scene.renderer().draw_imgui_texture_image(obj.value()->param_spaces1().curve_txt);
-      m_.scene.renderer().draw_imgui_texture_image(obj.value()->param_spaces2().curve_txt);
     }
   };
 
@@ -1141,7 +1137,7 @@ bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
 
   auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->add(h); };
 
-  auto intersection_curve_obj = [&](const IntersectionCurveHandle& h) { m_.non_scene_obj_selection->add(h); };
+  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_scene_obj_selection->add(h); };
 
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
@@ -1167,7 +1163,7 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
 
   auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
 
-  auto intersection_curve_obj = [&](const IntersectionCurveHandle& h) { m_.non_scene_obj_selection->remove(h); };
+  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_scene_obj_selection->remove(h); };
 
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
@@ -1493,45 +1489,12 @@ bool MiniCadApp::on_find_intersection() {
         auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
         if (obj1 && obj2) {
           auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
-          if (auto opt = m_.scene.create_obj_and_get<IntersectionCurve>(TrimmingIntersectionCurve{})) {
+          if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
             auto& obj = **opt;
-
-            auto ps1 = IntersectionCurve::ParamSpace{
-                .handle        = curve->param_space1.surface_handle,
-                .curve_txt     = m_.scene.renderer().upload_texture(curve->param_space1.curve_txt,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .trimming_txt1 = m_.scene.renderer().upload_texture(curve->param_space1.trimming_txt1,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .trimming_txt2 = m_.scene.renderer().upload_texture(curve->param_space1.trimming_txt2,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .params        = curve->param_space1.params,
-
-            };
-
-            auto ps2 = IntersectionCurve::ParamSpace{
-                .handle        = curve->param_space2.surface_handle,
-                .curve_txt     = m_.scene.renderer().upload_texture(curve->param_space2.curve_txt,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .trimming_txt1 = m_.scene.renderer().upload_texture(curve->param_space2.trimming_txt1,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .trimming_txt2 = m_.scene.renderer().upload_texture(curve->param_space2.trimming_txt2,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize,
-                                                                    mini::IntersectionFinder::Curve::kTxtSize),
-                .params        = curve->param_space2.params,
-            };
-
-            if (obj.init(curve->points, ps1, ps2)) {
-              util::Logger::info("Created new intersection curve with id {}", obj.handle().obj_id);
-              return true;
-            }
+            obj.set_points(curve->points);
+            util::Logger::info("Created new approx curve from intersection points");
           }
         }
-        util::Logger::info("Could not create intersection object");
         return false;
       }
     }

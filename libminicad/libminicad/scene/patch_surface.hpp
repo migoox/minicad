@@ -3,9 +3,8 @@
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/scene/types.hpp>
-
-#include "libminicad/scene/scene_object_handle.hpp"
 
 namespace mini {
 
@@ -172,9 +171,6 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box() const;
 
-  void add_intersection_curve(const IntersectionCurve& curve);
-  void remove_intersection_curve(const IntersectionCurve& curve);
-
  private:
   void mark_bezier3_dirty() { bezier_dirty_ = true; }
   void clear();
@@ -194,7 +190,6 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   bool bezier_dirty_ = true;
 
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
-  std::unordered_set<IntersectionCurveHandle> intersection_curve_surfaces_;
 };
 
 static_assert(CParametricSurfaceObject<PatchSurface>);
