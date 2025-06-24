@@ -72,9 +72,11 @@ class ISceneRenderer {
   virtual void set_anaglyph_output_color_coeffs(const eray::math::Vec3f& output_coeffs) = 0;
 
   virtual TextureHandle upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) = 0;
+  virtual void reupload_texture(const TextureHandle& handle, const std::vector<uint32_t>& texture, size_t size_x,
+                                size_t size_y)                                                             = 0;
   virtual void delete_texture(const TextureHandle& texture)                                                = 0;
   virtual std::optional<Texture> get_texture_info(const TextureHandle& texture)                            = 0;
-  virtual void draw_imgui_texture_image(const TextureHandle& texture)                                      = 0;
+  virtual void draw_imgui_texture_image(const TextureHandle& texture, size_t size_x, size_t size_y)        = 0;
 
   virtual void update(Scene& scene) = 0;
 

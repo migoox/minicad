@@ -23,6 +23,8 @@
 #include <optional>
 #include <variant>
 
+#include "liberay/driver/gl/gl_error.hpp"
+
 namespace mini::gl {
 
 namespace driver = eray::driver;
@@ -280,8 +282,8 @@ TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& t
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y), 0, GL_RGBA,
-               GL_UNSIGNED_INT_8_8_8_8, texture.data());
+  ERAY_GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y), 0,
+                            GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, texture.data()));
 
   glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -290,6 +292,14 @@ TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& t
       handle, std::make_pair(eray::driver::gl::TextureHandle(tex_id), Texture{.width = size_x, .height = size_y}));
   eray::util::Logger::info("Created OpenGL texture with id {}", handle.obj_id);
   return handle;
+}
+
+void OpenGLSceneRenderer::reupload_texture(const TextureHandle& handle, const std::vector<uint32_t>& texture,
+                                           size_t size_x, size_t size_y) {
+  glBindTexture(GL_TEXTURE_2D, handle.obj_id);
+  ERAY_GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y), 0,
+                            GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, texture.data()));
+  glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 std::optional<Texture> OpenGLSceneRenderer::get_texture_info(const TextureHandle& texture) {
@@ -301,16 +311,20 @@ std::optional<Texture> OpenGLSceneRenderer::get_texture_info(const TextureHandle
 }
 
 void OpenGLSceneRenderer::delete_texture(const TextureHandle& texture) {
-  global_rs_.textures.erase(texture);
-  eray::util::Logger::info("Deleted OpenGL texture with id {}", texture.obj_id);
+  auto it = global_rs_.textures.find(texture);
+  if (it != global_rs_.textures.end()) {
+    global_rs_.textures.erase(it);
+  } else {
+    eray::util::Logger::info("Requested OpenGL texture with id {} but it was already deleted or nonexistent",
+                             texture.obj_id);
+  }
 }
 
-void OpenGLSceneRenderer::draw_imgui_texture_image(const TextureHandle& texture) {
+void OpenGLSceneRenderer::draw_imgui_texture_image(const TextureHandle& texture, size_t size_x, size_t size_y) {
   auto txt_it = global_rs_.textures.find(texture);
   if (txt_it != global_rs_.textures.end()) {
     // NOLINTBEGIN
-    ImGui::Image((ImTextureID)(intptr_t)texture.obj_id,
-                 ImVec2(txt_it->second.second.width, txt_it->second.second.height), ImVec2(0, 1), ImVec2(1, 0));
+    ImGui::Image((ImTextureID)(intptr_t)texture.obj_id, ImVec2(size_x, size_y), ImVec2(0, 1), ImVec2(1, 0));
     // NOLINTEND
   }
 }

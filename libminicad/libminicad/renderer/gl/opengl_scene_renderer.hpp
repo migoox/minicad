@@ -64,9 +64,11 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
   }
 
   TextureHandle upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) final;
+  void reupload_texture(const TextureHandle& handle, const std::vector<uint32_t>& texture, size_t size_x,
+                        size_t size_y) final;
   void delete_texture(const TextureHandle& texture) final;
   std::optional<Texture> get_texture_info(const TextureHandle& texture) final;
-  void draw_imgui_texture_image(const TextureHandle& texture) final;
+  void draw_imgui_texture_image(const TextureHandle& texture, size_t size_x, size_t size_y) final;
 
   void debug_point(const eray::math::Vec3f& pos) final;
   void debug_line(const eray::math::Vec3f& start, const eray::math::Vec3f& end) final;

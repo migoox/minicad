@@ -569,6 +569,31 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::Button(ICON_FA_UP_LONG " Remove row")) {
         obj.value()->delete_row_top();
       }
+
+      ImGui::Text("Trimming texture");
+      m_.scene.renderer().draw_imgui_texture_image(obj.value()->txt_handle(), 128, 128);
+
+      bool update_txt = false;
+      for (auto idx = 0; auto& o : obj.value()->trimming_manager().data()) {
+        ImGui::PushID(idx++);
+        if (ImGui::Checkbox("Enable", &o.enable)) {
+          update_txt = true;
+          obj.value()->trimming_manager().mark_dirty();
+        }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("Inverse", &o.reverse)) {
+          update_txt = true;
+          obj.value()->trimming_manager().mark_dirty();
+        }
+
+        m_.scene.renderer().draw_imgui_texture_image(o.get_current_trimming_variant_txt(), 128, 128);
+
+        ImGui::PopID();
+      }
+
+      if (update_txt) {
+        obj.value()->update_trimming_txt();
+      }
     }
   };
 
@@ -1484,6 +1509,7 @@ bool MiniCadApp::on_find_intersection() {
                              },
                              [](const auto&) {}},
                  h);
+
       if (count == 2) {
         auto obj1 = m_.scene.arena<PatchSurface>().get_obj(first);
         auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
@@ -1494,6 +1520,11 @@ bool MiniCadApp::on_find_intersection() {
             obj.set_points(curve->points);
             util::Logger::info("Created new approx curve from intersection points");
           }
+
+          obj1.value()->trimming_manager().add(
+              ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space1));
+          obj2.value()->trimming_manager().add(
+              ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2));
         }
         return false;
       }

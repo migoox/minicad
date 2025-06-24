@@ -1,9 +1,11 @@
 #pragma once
 #include <liberay/math/vec.hpp>
 #include <liberay/util/zstring_view.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/trimming.hpp>
 #include <libminicad/scene/types.hpp>
 
 namespace mini {
@@ -171,6 +173,11 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box() const;
 
+  ParamSpaceTrimmingDataManager& trimming_manager() { return trimming_manager_; }
+  const ParamSpaceTrimmingDataManager& trimming_manager() const { return trimming_manager_; }
+  void update_trimming_txt();
+  const TextureHandle& txt_handle() { return txt_handle_; }
+
  private:
   void mark_bezier3_dirty() { bezier_dirty_ = true; }
   void clear();
@@ -190,6 +197,12 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   bool bezier_dirty_ = true;
 
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
+
+  ParamSpaceTrimmingDataManager trimming_manager_;
+
+  std::vector<uint32_t> final_trimming_txt_;
+
+  TextureHandle txt_handle_;
 };
 
 static_assert(CParametricSurfaceObject<PatchSurface>);

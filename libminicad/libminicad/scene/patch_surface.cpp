@@ -4,7 +4,10 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/trimming.hpp>
 #include <vector>
+
+#include "libminicad/renderer/scene_renderer.hpp"
 
 namespace mini {
 
@@ -87,8 +90,14 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
 }
 
 PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
-    : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene) {
-  scene.renderer().push_object_rs_cmd(PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
+    : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene),
+      trimming_manager_(ParamSpaceTrimmingDataManager::create(IntersectionFinder::Curve::kTxtSize,
+                                                              IntersectionFinder::Curve::kTxtSize)),
+      txt_handle_(TextureHandle(0, 0, 0)) {
+  txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt(), trimming_manager_.width(),
+                                                       trimming_manager_.height());
+  scene_.get().renderer().push_object_rs_cmd(
+      PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
 
 void PatchSurface::init_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim) {
@@ -734,6 +743,12 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box(
   }
 
   return std::make_pair(std::move(min), std::move(max));
+}
+
+void PatchSurface::update_trimming_txt() {
+  trimming_manager_.update_final_txt();
+  scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt(), trimming_manager_.width(),
+                                      trimming_manager_.height());
 }
 
 }  // namespace mini

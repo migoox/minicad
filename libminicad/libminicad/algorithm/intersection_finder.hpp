@@ -1,11 +1,12 @@
 #pragma once
 
 #include <liberay/math/vec_fwd.hpp>
-#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
 #include <optional>
 
 namespace mini {
+
+class PatchSurface;
 
 class IntersectionFinder {
  public:
