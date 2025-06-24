@@ -668,7 +668,7 @@ void MiniCadApp::gui_object_window() {
     }
   };
 
-  auto draw_intersection_curve = [&](const ApproxCurveHandle& h) {
+  auto draw_approx_curve = [&](const ApproxCurveHandle& h) {
     if (auto obj = m_.scene.arena<ApproxCurve>().get_obj(h)) {
       const auto& patch = *obj.value();
       auto type_name    = std::visit(util::match{[](auto& o) { return o.type_name(); }}, patch.object);
@@ -685,12 +685,21 @@ void MiniCadApp::gui_object_window() {
       if (ImGui::mini::RenameModal("Rename object", object_name)) {
         obj.value()->name = object_name;
       }
+
+      if (ImGui::Button("Create Natural Spline")) {
+        ImGui::mini::OpenModal("Natural Spline");
+      }
+
+      static auto points = 3;
+      if (ImGui::mini::NaturalSplineModal("Natural Spline", points)) {
+        on_natural_spline_from_approx_curve(h, static_cast<size_t>(points));
+      }
     }
   };
 
   ImGui::Begin(ICON_FA_PEN " Object");
   if (m_.non_scene_obj_selection->is_single_selection()) {  // non scene objects have priority
-    std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface, draw_intersection_curve},
+    std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface, draw_approx_curve},
                m_.non_scene_obj_selection->first());
   } else if (!m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_single_selection()) {
     draw_scene_object(m_.scene_obj_selection->first());
@@ -1527,6 +1536,41 @@ bool MiniCadApp::on_find_intersection() {
               ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2));
         }
         return false;
+      }
+    }
+  }
+  return false;
+}
+
+bool MiniCadApp::on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count) {
+  if (auto opt = m_.scene.arena<ApproxCurve>().get_obj(handle)) {
+    auto& obj = **opt;
+    if (obj.points().size() < count) {
+      util::Logger::err("Could not create a natural spline from approx curve. Requested to many points.");
+    }
+
+    auto spline_opt = m_.scene.create_obj_and_get<Curve>(NaturalSplineCurve{});
+    if (!spline_opt) {
+      util::Logger::err("Could not create a natural spline from approx curve.");
+      return false;
+    }
+    auto& spline = **spline_opt;
+
+    auto point_handles_opt = m_.scene.create_many_objs<SceneObject>(Point{}, count);
+    if (!point_handles_opt) {
+      util::Logger::err("Could not create a natural spline from approx curve. Could not create point objects.");
+      return false;
+    }
+
+    auto points               = obj.get_equidistant_points(count);
+    const auto& point_handles = *point_handles_opt;
+
+    for (auto i = 0U; i < count; ++i) {
+      auto& p_obj = **m_.scene.arena<SceneObject>().get_obj(point_handles[i]);
+      p_obj.transform.set_local_pos(points[i]);
+      p_obj.update();
+      if (!spline.push_back(p_obj.handle())) {
+        util::Logger::err("Failed to append a point to a curve.");
       }
     }
   }

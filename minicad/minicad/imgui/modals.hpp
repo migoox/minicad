@@ -44,6 +44,8 @@ struct PatchSurfaceInfo {
 
 bool AddPatchSurfaceModal(zstring_view modal_name, PatchSurfaceInfo& info, bool cylinder_from_curve = false);
 
+bool NaturalSplineModal(zstring_view modal_name, int& control_points);
+
 }  // namespace mini
 
 }  // namespace ImGui

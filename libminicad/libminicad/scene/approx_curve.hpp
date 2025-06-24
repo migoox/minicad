@@ -6,6 +6,8 @@
 #include <variant>
 #include <vector>
 
+#include "liberay/math/vec_fwd.hpp"
+
 namespace mini {
 
 struct DefaultApproxCurve {
@@ -23,6 +25,9 @@ class ApproxCurve : public ObjectBase<ApproxCurve, ApproxCurveVariant> {
   ERAY_DELETE_COPY(ApproxCurve)
 
   void set_points(const std::vector<eray::math::Vec3f>& points);
+
+  std::vector<eray::math::Vec3f> get_equidistant_points(size_t count);
+
   const std::vector<eray::math::Vec3f>& points();
 
   void update();

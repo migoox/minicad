@@ -32,4 +32,15 @@ void ApproxCurve::on_delete() {
 
 bool ApproxCurve::can_be_deleted() const { return true; }
 
+std::vector<eray::math::Vec3f> ApproxCurve::get_equidistant_points(size_t count) {
+  auto step = points_.size() / count;
+  auto v    = std::vector<eray::math::Vec3f>();
+  v.reserve(count);
+  for (auto i = 0U; i < points_.size() - step; i += step) {
+    v.push_back(points_.at(i));
+  }
+  v.push_back(points_.back());
+  return v;
+}
+
 }  // namespace mini

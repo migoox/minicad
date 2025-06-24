@@ -77,6 +77,30 @@ bool RenameModal(zstring_view modal_name, std::string& name_holder) {
   return result;
 }
 
+bool NaturalSplineModal(zstring_view modal_name, int& control_points) {
+  bool result = false;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10.0F, 10.0F});
+  if (ImGui::BeginPopupModal(modal_name.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    control_points = std::max(control_points, 3);
+
+    ImGui::InputInt("Points", &control_points);
+
+    if (ImGui::Button("Create", ImVec2(120, 0))) {
+      result = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+  ImGui::PopStyleVar();
+  return result;
+}
+
 bool MessageOkCancelModal(zstring_view modal_name, zstring_view msg, zstring_view ok_button_label,
                           zstring_view cancel_button_label) {
   bool result = false;

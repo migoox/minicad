@@ -147,6 +147,8 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_find_intersection();
 
+  bool on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count);
+
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
   bool on_mouse_released(const eray::os::MouseButtonReleasedEvent& ev);
