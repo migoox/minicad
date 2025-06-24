@@ -3,6 +3,8 @@
 #include <liberay/util/ruleof.hpp>
 #include <libminicad/renderer/gl/buffer.hpp>
 #include <libminicad/renderer/gl/subrenderer.hpp>
+#include <libminicad/renderer/gl/texture_array.hpp>
+#include <libminicad/renderer/gl/trimming_texture_manager.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene_object.hpp>
@@ -22,6 +24,7 @@ struct PatchSurfaceRSCommandHandler {
   void operator()(const PatchSurfaceRSCommand::Internal::AddObject&);
   void operator()(const PatchSurfaceRSCommand::Internal::UpdateControlPoints&);
   void operator()(const PatchSurfaceRSCommand::Internal::DeleteObject&);
+  void operator()(const PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures&);
   void operator()(const PatchSurfaceRSCommand::UpdateObjectVisibility&);
   void operator()(const PatchSurfaceRSCommand::ShowPolyline&);
 
@@ -60,6 +63,7 @@ class PatchSurfaceRenderer : public SubRenderer<PatchSurfaceRenderer, PatchSurfa
   struct Members {
     eray::driver::gl::VertexArray surfaces_vao;
     PointsChunksBuffer surfaces;
+    TrimmingTexturesManager<PatchSurface> textures_manager;
 
     eray::driver::gl::VertexArray control_grids_vao;
     PointsChunksBuffer control_grids;

@@ -7,6 +7,7 @@
 #include <libminicad/scene/trimming.hpp>
 #include <vector>
 
+#include "libminicad/renderer/rendering_command.hpp"
 #include "libminicad/renderer/scene_renderer.hpp"
 
 namespace mini {
@@ -749,6 +750,8 @@ void PatchSurface::update_trimming_txt() {
   trimming_manager_.update_final_txt();
   scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt(), trimming_manager_.width(),
                                       trimming_manager_.height());
+  scene().renderer().push_object_rs_cmd(
+      PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures{}));
 }
 
 }  // namespace mini

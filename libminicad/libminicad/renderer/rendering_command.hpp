@@ -170,7 +170,7 @@ struct PatchSurfaceRSCommand {
   };
 
   using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateControlPoints,
-                                      UpdateObjectVisibility, ShowPolyline>;
+                                      Internal::UpdateTrimmingTextures, UpdateObjectVisibility, ShowPolyline>;
 
   explicit PatchSurfaceRSCommand(PatchSurfaceHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
   PatchSurfaceRSCommand() = delete;

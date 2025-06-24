@@ -94,7 +94,7 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   TRY_UNWRAP_ASSET(bezier_surf_vert, manager.load_shader(shaders_path / "patch_surfaces" / "surface.vert"));
   TRY_UNWRAP_ASSET(bezier_surf_tesc, manager.load_shader(shaders_path / "patch_surfaces" / "bezier.tesc"));
   TRY_UNWRAP_ASSET(bezier_surf_tese, manager.load_shader(shaders_path / "patch_surfaces" / "bezier.tese"));
-  TRY_UNWRAP_ASSET(bezier_surf_frag, manager.load_shader(shaders_path / "utils" / "solid_color.frag"));
+  TRY_UNWRAP_ASSET(bezier_surf_frag, manager.load_shader(shaders_path / "patch_surfaces" / "bezier.frag"));
   TRY_UNWRAP_PROGRAM(bezier_surf_prog, gl::RenderingShaderProgram::create(
                                            "bezier_shader", std::move(bezier_surf_vert), std::move(bezier_surf_frag),
                                            std::move(bezier_surf_tesc), std::move(bezier_surf_tese)));

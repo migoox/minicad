@@ -10,6 +10,7 @@ uniform float u_height;
 const int IsolinesCount = 2;
 patch out float isolinesCount;
 patch out float subdivisions;
+patch out int textureId;
 
 float find_polyline_length() {
     vec2 screen_control_points[CONTROL_POINTS_COUNT];
@@ -35,6 +36,7 @@ void main()
     {
         isolinesCount = float(IsolinesCount);
         subdivisions = float(int(sqrt(gl_in[CONTROL_POINTS_COUNT].gl_Position.x)));
+        textureId = int(gl_in[CONTROL_POINTS_COUNT].gl_Position.y);
 
         // float tess_level = clamp(find_polyline_length() / float(IsolinesCount), 4.0, 64.0);
         float tess_level = 64.0;

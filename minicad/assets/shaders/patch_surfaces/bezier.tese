@@ -7,6 +7,9 @@ uniform bool u_horizontal;
 
 patch in float isolinesCount;
 patch in float subdivisions;
+patch in int textureId;
+
+out vec3 texCoords;
 
 vec3 find_bezier_degree_3(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t) {
     float u = (1.0 - t);
@@ -34,6 +37,8 @@ vec3 find_bezier_surface_degree_3(float u, float v)
 void main() {
     float u = gl_TessCoord.x;
     float v = (subdivisions + 1)/subdivisions*gl_TessCoord.y;
+
+    texCoords = vec3(u, v, textureId);
     if (!u_horizontal) {
         vec4 p = vec4(find_bezier_surface_degree_3(u, v), 1.0);
         gl_Position = u_pvMat*p;
