@@ -17,24 +17,26 @@ namespace mini {
 namespace math = eray::math;
 
 void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, PatchSurface& surface) {
-  params_surface1.emplace_back(params.x, params.y);
-  params_surface2.emplace_back(params.z, params.w);
+  param_space1.params.emplace_back(params.x, params.y);
+  param_space2.params.emplace_back(params.z, params.w);
   points.push_back(surface.evaluate(params.x, params.y));
 }
 
 void IntersectionFinder::Curve::reverse() {
   std::ranges::reverse(points);
-  std::ranges::reverse(params_surface1);
-  std::ranges::reverse(params_surface2);
+  std::ranges::reverse(param_space1.params);
+  std::ranges::reverse(param_space2.params);
 }
 
 void IntersectionFinder::Curve::fill_textures() {
-  fill_texture(txt_params_space1, params_surface1);
-  fill_texture(txt_params_space2, params_surface2);
+  draw_curve(param_space1.curve_txt, param_space1.params);
+  draw_curve(param_space2.curve_txt, param_space2.params);
+  fill_trimming_txts(param_space1.curve_txt, param_space1.trimming_txt1, param_space1.trimming_txt2);
+  fill_trimming_txts(param_space2.curve_txt, param_space2.trimming_txt1, param_space2.trimming_txt2);
 }
 
-void IntersectionFinder::Curve::fill_texture(std::vector<uint32_t>& txt,
-                                             const std::vector<eray::math::Vec2f>& params_surface) {
+void IntersectionFinder::Curve::draw_curve(std::vector<uint32_t>& txt,
+                                           const std::vector<eray::math::Vec2f>& params_surface) {
   txt.resize(kTxtSize * kTxtSize, 0xFFFFFFFF);
   constexpr auto kSize = static_cast<float>(kTxtSize);
 
@@ -43,9 +45,60 @@ void IntersectionFinder::Curve::fill_texture(std::vector<uint32_t>& txt,
     line_dda(txt, static_cast<int>(p0.x * kSize), static_cast<int>(p0.y * kSize), static_cast<int>(p1.x * kSize),
              static_cast<int>(p1.y * kSize));
   }
+}
 
-  if (!is_closed && points.size() >= 2) {
-    // TODO(migoox)
+void IntersectionFinder::Curve::fill_trimming_txts(const std::vector<uint32_t>& curve_txt, std::vector<uint32_t>& txt1,
+                                                   std::vector<uint32_t>& txt2) {
+  txt1.reserve(curve_txt.size());
+  txt2.reserve(curve_txt.size());
+  std::ranges::copy(curve_txt, std::back_inserter(txt1));
+  std::ranges::copy(curve_txt, std::back_inserter(txt2));
+
+  static constexpr uint32_t kWhite = 0xFFFFFFFF;
+
+  auto start_idx = 0U;
+  for (auto i = 0U; i < kTxtSize * kTxtSize; ++i) {
+    if (curve_txt[i] == kWhite) {
+      start_idx = i;
+      break;
+    }
+  }
+
+  flood_fill(txt1, start_idx % kTxtSize, start_idx / kTxtSize);
+  start_idx = 0U;
+  for (auto i = 0U; i < kTxtSize * kTxtSize; ++i) {
+    if (txt1[i] == kWhite) {
+      start_idx = i;
+      break;
+    }
+  }
+
+  flood_fill(txt2, start_idx % kTxtSize, start_idx / kTxtSize);
+}
+
+void IntersectionFinder::Curve::flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y) {
+  static constexpr uint32_t kBlack = 0xFF000000;
+
+  auto s = std::stack<std::pair<size_t, size_t>>();
+  s.emplace(start_x, start_y);
+
+  while (!s.empty()) {
+    auto [x, y] = s.top();
+    s.pop();
+    txt[y * kTxtSize + x] = kBlack;
+
+    if (x + 1 < kTxtSize && txt[y * kTxtSize + x + 1] != kBlack) {
+      s.emplace(x + 1, y);
+    }
+    if (x - 1 < kTxtSize && txt[y * kTxtSize + x - 1] != kBlack) {
+      s.emplace(x - 1, y);
+    }
+    if (y + 1 < kTxtSize && txt[(y + 1) * kTxtSize + x] != kBlack) {
+      s.emplace(x, y + 1);
+    }
+    if (y - 1 < kTxtSize && txt[(y - 1) * kTxtSize + x] != kBlack) {
+      s.emplace(x, y - 1);
+    }
   }
 }
 
@@ -300,15 +353,25 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   }
 
   auto curve = Curve{
-      .points            = {},            //
-      .params_surface1   = {},            //
-      .params_surface2   = {},            //
-      .surface1          = ps1.handle(),  //
-      .surface2          = ps2.handle(),  //
-      .txt_params_space1 = {},            //
-      .txt_params_space2 = {},            //
-      .is_closed         = false,         //
+      .points = {},  //
+      .param_space1 =
+          {
+              .surface_handle = ps1.handle(),
+              .curve_txt      = {},
+              .trimming_txt1  = {},
+              .trimming_txt2  = {},
+              .params         = {},
+          },  //
+      .param_space2 =
+          {
+              .surface_handle = ps1.handle(),
+              .curve_txt      = {},
+              .trimming_txt1  = {},
+              .trimming_txt2  = {},
+              .params         = {},
+          }  //
   };
+
   curve.push_point(start_point, ps1);
 
   auto is_out_of_unit = [](const math::Vec4f& v) {
@@ -320,7 +383,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   auto next_point = start_point;
   for (auto i = 0U; i < 10000; ++i) {
-    next_point   = newton_next_point(next_point, ps1, ps2, 4);
+    next_point   = newton_next_point(next_point, ps1, ps2, 100);
     auto refined = newton_start_point_refiner(next_point, ps1, ps2, 4, err_func);
     if (err_func(refined) < err_func(next_point)) {
       next_point = refined;
@@ -348,9 +411,40 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     curve.push_point(next_point, ps1);
   }
 
+  auto fix_border_closure = [](eray::math::Vec2f& p) {
+    static constexpr auto kBorderTolerance = 0.1F;
+    auto result                            = false;
+
+    if (p.x < kBorderTolerance) {
+      p.x    = 0.F;
+      result = true;
+    }
+    if (std::abs(p.x - 1.F) < kBorderTolerance) {
+      p.x    = 1.F;
+      result = true;
+    }
+
+    if (p.y < kBorderTolerance) {
+      p.y    = 0.F;
+      result = true;
+    }
+    if (std::abs(p.y - 1.F) < kBorderTolerance) {
+      p.y    = 1.F;
+      result = true;
+    }
+
+    return result;
+  };
+
   if (math::distance(curve.points.front(), curve.points.back()) < 0.1F) {
     curve.points.push_back(curve.points.front());
-    curve.is_closed = true;
+    curve.param_space1.params.push_back(curve.param_space1.params.front());
+    curve.param_space2.params.push_back(curve.param_space2.params.front());
+  } else {
+    fix_border_closure(curve.param_space1.params.front());
+    fix_border_closure(curve.param_space1.params.back());
+    fix_border_closure(curve.param_space2.params.front());
+    fix_border_closure(curve.param_space2.params.back());
   }
 
   curve.fill_textures();

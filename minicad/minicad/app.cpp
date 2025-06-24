@@ -662,8 +662,8 @@ void MiniCadApp::gui_object_window() {
         obj.value()->name = object_name;
       }
 
-      m_.scene.renderer().draw_imgui_texture_image(obj.value()->intersection_textures().first);
-      m_.scene.renderer().draw_imgui_texture_image(obj.value()->intersection_textures().second);
+      m_.scene.renderer().draw_imgui_texture_image(obj.value()->param_spaces1().curve_txt);
+      m_.scene.renderer().draw_imgui_texture_image(obj.value()->param_spaces2().curve_txt);
     }
   };
 
@@ -1495,15 +1495,37 @@ bool MiniCadApp::on_find_intersection() {
           auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
           if (auto opt = m_.scene.create_obj_and_get<IntersectionCurve>(TrimmingIntersectionCurve{})) {
             auto& obj = **opt;
-            auto txt1 =
-                m_.scene.renderer().upload_texture(curve->txt_params_space1, mini::IntersectionFinder::Curve::kTxtSize,
-                                                   mini::IntersectionFinder::Curve::kTxtSize);
-            auto txt2 =
-                m_.scene.renderer().upload_texture(curve->txt_params_space2, mini::IntersectionFinder::Curve::kTxtSize,
-                                                   mini::IntersectionFinder::Curve::kTxtSize);
 
-            if (obj.init(curve->points, curve->params_surface1, curve->params_surface2, txt1, txt2, curve->surface1,
-                         curve->surface2)) {
+            auto ps1 = IntersectionCurve::ParamSpace{
+                .handle        = curve->param_space1.surface_handle,
+                .curve_txt     = m_.scene.renderer().upload_texture(curve->param_space1.curve_txt,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .trimming_txt1 = m_.scene.renderer().upload_texture(curve->param_space1.trimming_txt1,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .trimming_txt2 = m_.scene.renderer().upload_texture(curve->param_space1.trimming_txt2,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .params        = curve->param_space1.params,
+
+            };
+
+            auto ps2 = IntersectionCurve::ParamSpace{
+                .handle        = curve->param_space2.surface_handle,
+                .curve_txt     = m_.scene.renderer().upload_texture(curve->param_space2.curve_txt,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .trimming_txt1 = m_.scene.renderer().upload_texture(curve->param_space2.trimming_txt1,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .trimming_txt2 = m_.scene.renderer().upload_texture(curve->param_space2.trimming_txt2,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize,
+                                                                    mini::IntersectionFinder::Curve::kTxtSize),
+                .params        = curve->param_space2.params,
+            };
+
+            if (obj.init(curve->points, ps1, ps2)) {
               util::Logger::info("Created new intersection curve with id {}", obj.handle().obj_id);
               return true;
             }
@@ -1514,6 +1536,7 @@ bool MiniCadApp::on_find_intersection() {
       }
     }
   }
+  return false;
 }
 
 MiniCadApp::~MiniCadApp() {}

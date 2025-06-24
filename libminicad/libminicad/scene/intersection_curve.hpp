@@ -19,20 +19,24 @@ class IntersectionCurve : public ObjectBase<IntersectionCurve, IntersectionCurve
   IntersectionCurve() = delete;
   IntersectionCurve(IntersectionCurveHandle handle, Scene& scene);
 
+  struct ParamSpace {
+    ParametricSurfaceHandle handle = PatchSurfaceHandle(0, 0, 0);
+    TextureHandle curve_txt        = TextureHandle(0, 0, 0);
+    TextureHandle trimming_txt1    = TextureHandle(0, 0, 0);
+    TextureHandle trimming_txt2    = TextureHandle(0, 0, 0);
+    std::vector<eray::math::Vec2f> params;
+  };
+
   ERAY_DEFAULT_MOVE(IntersectionCurve)
   ERAY_DELETE_COPY(IntersectionCurve)
 
   enum class InitError : uint8_t { ParametricSurfaceDoesNotExist = 0 };
 
-  std::expected<void, InitError> init(const std::vector<eray::math::Vec3f>& points,
-                                      const std::vector<eray::math::Vec2f>& param_points_surface1,
-                                      const std::vector<eray::math::Vec2f>& param_points_surface2,
-                                      TextureHandle txt_param_points_surface1, TextureHandle txt_param_points_surface2,
-                                      ParametricSurfaceHandle surface1, ParametricSurfaceHandle surface2);
+  std::expected<void, InitError> init(const std::vector<eray::math::Vec3f>& points, const ParamSpace& ps1,
+                                      const ParamSpace& ps2);
 
-  std::optional<TextureHandle> intersection_texture(const ParametricSurfaceHandle& handle);
-
-  std::pair<TextureHandle, TextureHandle> intersection_textures();
+  const ParamSpace& param_spaces1() { return param_space1_; }
+  const ParamSpace& param_spaces2() { return param_space2_; }
 
   const std::vector<eray::math::Vec3f>& points();
 
@@ -42,14 +46,12 @@ class IntersectionCurve : public ObjectBase<IntersectionCurve, IntersectionCurve
   bool can_be_deleted() const;
 
  private:
-  ParametricSurfaceHandle surface1_;
-  ParametricSurfaceHandle surface2_;
-  TextureHandle txt_surface1_param_space_;
-  TextureHandle txt_surface2_param_space_;
+  ParamSpace param_space1_;
+  ParamSpace param_space2_;
+
   std::vector<eray::math::Vec2f> param_points_surface1_;
   std::vector<eray::math::Vec2f> param_points_surface2_;
   std::vector<eray::math::Vec3f> points_;
-  bool is_closed_;
 };
 
 }  // namespace mini

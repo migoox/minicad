@@ -1,44 +1,22 @@
 #include <expected>
+#include <liberay/util/logger.hpp>
+#include <liberay/util/object_handle.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/intersection_curve.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/scene_object_handle.hpp>
-#include <optional>
-
-#include "liberay/util/logger.hpp"
-#include "liberay/util/object_handle.hpp"
-#include "liberay/util/variant_match.hpp"
-#include "libminicad/scene/types.hpp"
+#include <libminicad/scene/types.hpp>
 
 namespace mini {
 
 IntersectionCurve::IntersectionCurve(IntersectionCurveHandle handle, Scene& scene)
-    : ObjectBase<IntersectionCurve, IntersectionCurveVariant>(handle, scene),
-      surface1_(PatchSurfaceHandle(0, 0, 0)),
-      surface2_(PatchSurfaceHandle(0, 0, 0)),
-      txt_surface1_param_space_(0, 0, 0),
-      txt_surface2_param_space_(0, 0, 0) {}
+    : ObjectBase<IntersectionCurve, IntersectionCurveVariant>(handle, scene) {}
 
-std::optional<TextureHandle> IntersectionCurve::intersection_texture(const ParametricSurfaceHandle& handle) {
-  if (handle == this->surface1_) {
-    return txt_surface1_param_space_;
-  }
-  if (handle == this->surface2_) {
-    return txt_surface2_param_space_;
-  }
-
-  return std::nullopt;
-}
-
-std::pair<TextureHandle, TextureHandle> IntersectionCurve::intersection_textures() {
-  return std::make_pair(txt_surface1_param_space_, txt_surface2_param_space_);
-}
-
-std::expected<void, IntersectionCurve::InitError> IntersectionCurve::init(
-    const std::vector<eray::math::Vec3f>& points, const std::vector<eray::math::Vec2f>& param_points_surface1,
-    const std::vector<eray::math::Vec2f>& param_points_surface2, TextureHandle txt_param_points_surface1,
-    TextureHandle txt_param_points_surface2, ParametricSurfaceHandle surface1, ParametricSurfaceHandle surface2) {
+std::expected<void, IntersectionCurve::InitError> IntersectionCurve::init(const std::vector<eray::math::Vec3f>& points,
+                                                                          const IntersectionCurve::ParamSpace& ps1,
+                                                                          const IntersectionCurve::ParamSpace& ps2) {
   auto param_surface_visitor = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
     if (auto opt = scene().arena<T>().get_obj(h)) {
@@ -49,24 +27,21 @@ std::expected<void, IntersectionCurve::InitError> IntersectionCurve::init(
     return false;
   };
 
-  if (!std::visit(eray::util::match{param_surface_visitor}, surface1)) {
+  if (!std::visit(eray::util::match{param_surface_visitor}, ps1.handle)) {
     eray::util::Logger::err("Could not init the intersection curve. Parametric Surface does not exist.");
     return std::unexpected(IntersectionCurve::InitError::ParametricSurfaceDoesNotExist);
   }
-  if (!std::visit(eray::util::match{param_surface_visitor}, surface2)) {
+  if (!std::visit(eray::util::match{param_surface_visitor}, ps2.handle)) {
     eray::util::Logger::err("Could not init the intersection curve. Parametric Surface does not exist.");
     return std::unexpected(IntersectionCurve::InitError::ParametricSurfaceDoesNotExist);
   }
 
-  surface1_                 = surface1;
-  surface2_                 = surface2;
-  param_points_surface1_    = param_points_surface1;
-  param_points_surface2_    = param_points_surface2;
-  points_                   = points;
-  txt_surface1_param_space_ = txt_param_points_surface1;
-  txt_surface2_param_space_ = txt_param_points_surface2;
+  param_space1_ = std::move(ps1);
+  param_space2_ = std::move(ps2);
 
-  this->scene().renderer().push_object_rs_cmd(
+  points_ = points;
+
+  scene().renderer().push_object_rs_cmd(
       IntersectionCurveRSCommand(handle_, IntersectionCurveRSCommand::Internal::AddObject{}));
 
   return {};
@@ -89,8 +64,8 @@ void IntersectionCurve::on_delete() {
     return false;
   };
 
-  std::visit(eray::util::match{param_surface_visitor}, surface1_);
-  std::visit(eray::util::match{param_surface_visitor}, surface2_);
+  std::visit(eray::util::match{param_surface_visitor}, param_space1_.handle);
+  std::visit(eray::util::match{param_surface_visitor}, param_space2_.handle);
 
   this->scene().renderer().push_object_rs_cmd(
       IntersectionCurveRSCommand(handle_, IntersectionCurveRSCommand::Internal::DeleteObject{}));

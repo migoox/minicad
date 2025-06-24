@@ -277,17 +277,15 @@ TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& t
   glGenTextures(1, &tex_id);
   glBindTexture(GL_TEXTURE_2D, tex_id);
 
-  // Set texture filtering and wrapping
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);  // or GL_NEAREST
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  // or GL_NEAREST
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-  // Upload the texture data
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size_x), static_cast<GLsizei>(size_y), 0, GL_RGBA,
                GL_UNSIGNED_INT_8_8_8_8, texture.data());
 
-  glBindTexture(GL_TEXTURE_2D, 0);  // unbind
+  glBindTexture(GL_TEXTURE_2D, 0);
 
   auto handle = TextureHandle(global_rs_.signature, global_rs_.timestamp, tex_id);
   global_rs_.textures.emplace(

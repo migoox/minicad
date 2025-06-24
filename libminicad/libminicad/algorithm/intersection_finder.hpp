@@ -9,17 +9,18 @@ namespace mini {
 
 class IntersectionFinder {
  public:
+  struct ParamSpace {
+    PatchSurfaceHandle surface_handle;
+    std::vector<uint32_t> curve_txt;
+    std::vector<uint32_t> trimming_txt1;
+    std::vector<uint32_t> trimming_txt2;
+    std::vector<eray::math::Vec2f> params;
+  };
+
   struct Curve {
     std::vector<eray::math::Vec3f> points;
-    std::vector<eray::math::Vec2f> params_surface1;
-    std::vector<eray::math::Vec2f> params_surface2;
-    PatchSurfaceHandle surface1;
-    PatchSurfaceHandle surface2;
-
-    std::vector<uint32_t> txt_params_space1;
-    std::vector<uint32_t> txt_params_space2;
-
-    bool is_closed;
+    ParamSpace param_space1;
+    ParamSpace param_space2;
 
     void push_point(const eray::math::Vec4f& params, PatchSurface& surface);
     void reverse();
@@ -29,8 +30,11 @@ class IntersectionFinder {
     static constexpr auto kTxtSize = 512;
 
    private:
-    void fill_texture(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
+    void draw_curve(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
     void line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1);
+    void fill_trimming_txts(const std::vector<uint32_t>& curve_txt, std::vector<uint32_t>& txt1,
+                            std::vector<uint32_t>& txt2);
+    void flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y);
   };
 
   /**
