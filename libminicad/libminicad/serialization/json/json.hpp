@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/serialization/json/schema.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <string>

@@ -5,7 +5,7 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <memory>
 #include <optional>
 #include <type_traits>

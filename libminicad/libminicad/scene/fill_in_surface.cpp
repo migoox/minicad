@@ -4,7 +4,7 @@
 #include <liberay/util/logger.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 
 namespace mini {
 

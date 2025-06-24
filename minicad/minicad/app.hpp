@@ -22,7 +22,7 @@
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <memory>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>

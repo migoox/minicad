@@ -19,7 +19,7 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <optional>
 #include <variant>
 

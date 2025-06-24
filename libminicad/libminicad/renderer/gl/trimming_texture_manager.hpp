@@ -4,7 +4,7 @@
 #include <libminicad/algorithm/intersection_finder.hpp>
 #include <libminicad/renderer/gl/texture_array.hpp>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/types.hpp>
 
 namespace mini::gl {

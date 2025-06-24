@@ -4,7 +4,7 @@
 #include <libminicad/renderer/gl/subrenderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 
 namespace mini::gl {
 

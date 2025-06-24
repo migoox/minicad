@@ -2,7 +2,7 @@
 #include <liberay/util/logger.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <unordered_map>
 #include <unordered_set>
 

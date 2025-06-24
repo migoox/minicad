@@ -4,7 +4,7 @@
 #include <liberay/math/vec.hpp>
 #include <liberay/util/iterator.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <optional>
 #include <unordered_set>

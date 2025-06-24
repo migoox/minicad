@@ -2,9 +2,9 @@
 #include <liberay/math/vec.hpp>
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/scene/trimming.hpp>
 #include <libminicad/scene/types.hpp>
 
@@ -176,13 +176,13 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   ParamSpaceTrimmingDataManager& trimming_manager() { return trimming_manager_; }
   const ParamSpaceTrimmingDataManager& trimming_manager() const { return trimming_manager_; }
   void update_trimming_txt();
-  const TextureHandle& txt_handle() { return txt_handle_; }
+  const TextureHandle& txt_handle() const { return txt_handle_; }
 
  private:
   void mark_bezier3_dirty() { bezier_dirty_ = true; }
   void clear();
 
-  std::pair<eray::math::Vec2f, eray::math::Vec2u> find_bezier3_patch_and_param(float u, float v);
+  std::pair<eray::math::Vec2f, eray::math::Vec2u> find_bezier3_patch_and_param(float u, float v) const;
 
  private:
   friend SceneObject;
@@ -199,8 +199,6 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
 
   ParamSpaceTrimmingDataManager trimming_manager_;
-
-  std::vector<uint32_t> final_trimming_txt_;
 
   TextureHandle txt_handle_;
 };

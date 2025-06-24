@@ -6,7 +6,7 @@
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/serialization/json/json.hpp>
 #include <libminicad/serialization/json/schema.hpp>
 #include <nlohmann/json.hpp>

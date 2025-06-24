@@ -8,7 +8,7 @@
 #include <liberay/math/vec.hpp>
 #include <liberay/util/generator.hpp>
 #include <liberay/util/ruleof.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <optional>
 #include <ranges>
 #include <unordered_map>

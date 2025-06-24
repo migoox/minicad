@@ -15,7 +15,7 @@
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/patch_surface.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/triangle.hpp>
 #include <memory>
 #include <vector>

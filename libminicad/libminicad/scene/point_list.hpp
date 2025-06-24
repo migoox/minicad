@@ -1,7 +1,7 @@
 #pragma once
 
 #include <expected>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <optional>
 #include <ranges>
 #include <unordered_set>

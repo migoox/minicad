@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <liberay/math/vec.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 
 namespace mini {
 

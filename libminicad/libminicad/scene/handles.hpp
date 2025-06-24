@@ -20,6 +20,9 @@ class Scene;
 class SceneObject;
 using SceneObjectHandle = eray::util::Handle<SceneObject>;
 
+class ParamPrimitive;
+using ParamPrimitiveHandle = eray::util::Handle<ParamPrimitive>;
+
 class Curve;
 using CurveHandle = eray::util::Handle<Curve>;
 

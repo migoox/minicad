@@ -4,7 +4,7 @@
 #include <libminicad/algorithm/hole_finder.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <unordered_map>
 
 namespace mini {

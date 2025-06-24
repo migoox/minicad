@@ -6,7 +6,7 @@
 #include <libminicad/scene/approx_curve.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/types.hpp>
 
 namespace mini {

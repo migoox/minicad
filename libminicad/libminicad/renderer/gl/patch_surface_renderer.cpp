@@ -12,7 +12,7 @@
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 
 namespace mini::gl {
 

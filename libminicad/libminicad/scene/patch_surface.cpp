@@ -1,14 +1,13 @@
 #include <liberay/util/logger.hpp>
 #include <libminicad/math/bezier3.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/curve.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
 #include <libminicad/scene/trimming.hpp>
 #include <vector>
-
-#include "libminicad/renderer/rendering_command.hpp"
-#include "libminicad/renderer/scene_renderer.hpp"
 
 namespace mini {
 
@@ -670,7 +669,7 @@ void PatchSurface::clone_to(PatchSurface& obj) const {
   obj.update();
 }
 
-std::pair<eray::math::Vec2f, eray::math::Vec2u> PatchSurface::find_bezier3_patch_and_param(float u, float v) {
+std::pair<eray::math::Vec2f, eray::math::Vec2u> PatchSurface::find_bezier3_patch_and_param(float u, float v) const {
   auto param = eray::math::Vec2f(u, v);
 
   auto patch_size   = 1.F / eray::math::Vec2f(static_cast<float>(dim_.x), static_cast<float>(dim_.y));

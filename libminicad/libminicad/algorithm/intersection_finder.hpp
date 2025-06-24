@@ -1,7 +1,7 @@
 #pragma once
 
 #include <liberay/math/vec_fwd.hpp>
-#include <libminicad/scene/scene_object_handle.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <optional>
 
 namespace mini {
