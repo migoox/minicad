@@ -48,12 +48,12 @@ std::string JsonSerializer::serialize(const Scene& scene) {
     ++curr_id;
   }
 
-  for (auto& obj : scene.arena<ParamPrimitive>().objs()) {
+  for (const auto& obj : scene.arena<ParamPrimitive>().objs()) {
     std::visit(
         eray::util::match{
             [&](const Torus& torus) {
-              auto target_p = json_schema::Float3();
               auto geometry = json_schema::Geometry();
+
               geometry.set_object_type(json_schema::ObjectType::TORUS);
               geometry.set_id(curr_id);
               geometry.set_name(obj.name);
@@ -66,6 +66,11 @@ std::string JsonSerializer::serialize(const Scene& scene) {
               target_uv.set_v(torus.tess_level.y);
               geometry.set_samples(target_uv);
 
+              auto p        = obj.transform().pos();
+              auto target_p = json_schema::Float3();
+              target_p.set_x(static_cast<double>(p.x));
+              target_p.set_y(static_cast<double>(p.y));
+              target_p.set_z(static_cast<double>(p.z));
               geometry.set_position(target_p);
 
               auto q        = obj.transform().rot();
@@ -253,7 +258,7 @@ void JsonDeserializer::Visitor::operator()(ParamPrimitiveVariant&& v, const json
 
               if (const auto& p = elem.get_position()) {
                 obj.transform().set_local_pos(eray::math::Vec3f(
-                    static_cast<float>(p->get_x()), static_cast<float>(p->get_y()), static_cast<float>(p->get_y())));
+                    static_cast<float>(p->get_x()), static_cast<float>(p->get_y()), static_cast<float>(p->get_z())));
               } else {
                 eray::util::Logger::warn("Expected position defined for torus with id {}", elem.get_id());
               }
