@@ -6,14 +6,12 @@ in VS_OUT {
     mat4 worldMat;
     vec2 radii;
     ivec2 tess_level;
-    int id;
     int state;
 } tcs_in[];
 
 out TCS_OUT {
     mat4 worldMat;
     vec2 radii;
-    int id;
     int state;
 } tcs_out[];
 
@@ -22,7 +20,6 @@ void main()
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
     tcs_out[gl_InvocationID].worldMat = tcs_in[gl_InvocationID].worldMat;
     tcs_out[gl_InvocationID].radii = tcs_in[gl_InvocationID].radii;
-    tcs_out[gl_InvocationID].id = tcs_in[gl_InvocationID].id;
     tcs_out[gl_InvocationID].state = tcs_in[gl_InvocationID].state;
 
     int tessLevelX = tcs_in[gl_InvocationID].tess_level.x;

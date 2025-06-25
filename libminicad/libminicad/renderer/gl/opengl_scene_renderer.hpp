@@ -13,8 +13,8 @@
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
 #include <libminicad/renderer/gl/param_primitive_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
+#include <libminicad/renderer/gl/point_object_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
-#include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>

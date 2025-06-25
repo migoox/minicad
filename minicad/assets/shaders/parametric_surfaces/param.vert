@@ -12,7 +12,6 @@ out VS_OUT {
     mat4 worldMat;
     vec2 radii;
     ivec2 tess_level;
-    int id;
     int state;
 } vs_out;
 
@@ -27,7 +26,6 @@ void main() {
         vs_out.worldMat = a_worldMat;
         vs_out.radii = a_radii;
         vs_out.tess_level = a_tess_level;
-        vs_out.id = a_id;
         vs_out.state = a_state;
     }
 }

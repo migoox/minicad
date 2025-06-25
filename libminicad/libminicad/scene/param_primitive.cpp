@@ -1,8 +1,7 @@
 #include <liberay/util/logger.hpp>
+#include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/param_primitive.hpp>
 #include <libminicad/scene/scene.hpp>
-
-#include "libminicad/renderer/rendering_command.hpp"
 
 namespace mini {
 
@@ -17,7 +16,10 @@ ParamPrimitive::ParamPrimitive(ParamPrimitiveHandle handle, Scene& scene)
       ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::AddObject{}));
 }
 
-void ParamPrimitive::update() {}
+void ParamPrimitive::update() {
+  scene().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::UpdateObjectMembers{}));
+}
 
 void ParamPrimitive::on_delete() {
   scene_.get().renderer().push_object_rs_cmd(

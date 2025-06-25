@@ -10,9 +10,9 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 
 namespace mini::gl {
 

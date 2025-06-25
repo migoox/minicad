@@ -1,7 +1,7 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/variant_match.hpp>
+#include <libminicad/renderer/gl/point_object_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
-#include <libminicad/renderer/gl/scene_objects_renderer.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene.hpp>

@@ -945,13 +945,19 @@ void MiniCadApp::render_gui(Duration /* delta */) {
           })) {
         m_.select_tool.end_box_select();
       }
-    } else if (auto point_handle = m_.transformable_selection->single_point()) {
-      if (auto o = m_.scene.arena<PointObject>().get_obj(*point_handle)) {
-        if (ImGui::mini::gizmo::Transform(o.value()->transform(), *m_.camera, mode, operation,
-                                          [&]() { o.value()->update(); })) {
-          m_.select_tool.end_box_select();
+    } else if (auto handle = m_.transformable_selection->single()) {
+      auto transform = [&](const auto& h) {
+        using T = ERAY_HANDLE_OBJ(h);
+        if (auto opt = m_.scene.arena<T>().get_obj(h)) {
+          CTransformableObject auto& obj = **opt;
+
+          if (ImGui::mini::gizmo::Transform(obj.transform(), *m_.camera, mode, operation, [&]() { obj.update(); })) {
+            m_.select_tool.end_box_select();
+          }
         }
-      }
+      };
+
+      std::visit(match{transform}, *handle);
     }
 
     if (m_.helper_point_selection.is_selected()) {
