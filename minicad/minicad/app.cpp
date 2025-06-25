@@ -761,6 +761,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       on_find_intersection();
     }
 
+#ifndef NDEBUG
+    if (ImGui::Button("Clear Debug")) {
+      m_.scene.renderer().clear_debug();
+    }
+
+#endif
+
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
         os::FileDialog::FilterItem("Project", "json")};
 
@@ -1183,6 +1190,7 @@ bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui
         auto starter = PlanePatchSurfaceStarter{.size = math::Vec2f(info.size_x, info.size_y)};
         o.value()->init_from_starter(starter,
                                      eray::math::Vec2u(static_cast<uint32_t>(info.x), static_cast<uint32_t>(info.y)));
+
       } else {
         auto starter = CylinderPatchSurfaceStarter{
             .radius = info.r,
@@ -1645,6 +1653,10 @@ bool MiniCadApp::on_find_intersection() {
       CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
       CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
       auto curve                          = IntersectionFinder::find_intersections(m_.scene.renderer(), obj1, obj2);
+      if (!curve) {
+        util::Logger::info("No intersection found");
+        return;
+      }
       if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
         auto& obj = **opt;
         obj.set_points(curve->points);

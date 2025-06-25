@@ -540,24 +540,24 @@ void BPatches::update_bezier3_points(PatchSurface& base) {
 
   math::Vec3f bezier_patch[4][4];
   auto idx = 0U;
-  for (auto x = 0U; x < dim.x; ++x) {
-    for (auto y = 0U; y < dim.y; ++y) {
-      for (auto iy = 0U; iy < PatchSurface::kPatchSize; ++iy) {
-        auto p0 = base.points_.unsafe_by_idx(find_idx(x, y, 0, iy, dim.x)).transform().pos();
-        auto p1 = base.points_.unsafe_by_idx(find_idx(x, y, 1, iy, dim.x)).transform().pos();
-        auto p2 = base.points_.unsafe_by_idx(find_idx(x, y, 2, iy, dim.x)).transform().pos();
-        auto p3 = base.points_.unsafe_by_idx(find_idx(x, y, 3, iy, dim.x)).transform().pos();
-
-        bezier_patch[iy][0] = (p0 + 4 * p1 + p2) / 6.0;
-        bezier_patch[iy][1] = (4 * p1 + 2 * p2) / 6.0;
-        bezier_patch[iy][2] = (2 * p1 + 4 * p2) / 6.0;
-        bezier_patch[iy][3] = (p1 + 4 * p2 + p3) / 6.0;
-      }
+  for (auto y = 0U; y < dim.y; ++y) {
+    for (auto x = 0U; x < dim.x; ++x) {
       for (auto ix = 0U; ix < PatchSurface::kPatchSize; ++ix) {
-        auto c0 = bezier_patch[0][ix];
-        auto c1 = bezier_patch[1][ix];
-        auto c2 = bezier_patch[2][ix];
-        auto c3 = bezier_patch[3][ix];
+        auto p0 = base.points_.unsafe_by_idx(find_idx(x, y, ix, 0, dim.x)).transform().pos();
+        auto p1 = base.points_.unsafe_by_idx(find_idx(x, y, ix, 1, dim.x)).transform().pos();
+        auto p2 = base.points_.unsafe_by_idx(find_idx(x, y, ix, 2, dim.x)).transform().pos();
+        auto p3 = base.points_.unsafe_by_idx(find_idx(x, y, ix, 3, dim.x)).transform().pos();
+
+        bezier_patch[ix][0] = (p0 + 4 * p1 + p2) / 6.0;
+        bezier_patch[ix][1] = (4 * p1 + 2 * p2) / 6.0;
+        bezier_patch[ix][2] = (2 * p1 + 4 * p2) / 6.0;
+        bezier_patch[ix][3] = (p1 + 4 * p2 + p3) / 6.0;
+      }
+      for (auto iy = 0U; iy < PatchSurface::kPatchSize; ++iy) {
+        auto c0 = bezier_patch[0][iy];
+        auto c1 = bezier_patch[1][iy];
+        auto c2 = bezier_patch[2][iy];
+        auto c3 = bezier_patch[3][iy];
 
         base.bezier3_points_[idx++] = (c0 + 4.0 * c1 + c2) / 6.0;
         base.bezier3_points_[idx++] = (4.0 * c1 + 2.0 * c2) / 6.0;

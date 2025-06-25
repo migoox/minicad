@@ -426,7 +426,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   auto next_point       = start_point;
   auto end_point        = start_point;
   bool closure_detected = false;
-  for (auto i = 0U; i < 10000; ++i) {
+  for (auto i = 0U; i < 50000; ++i) {
     auto prev_point = next_point;
     next_point      = newton_next_point(accuracy, next_point, s1, s2, 8);
     if (is_nan(next_point)) {
@@ -455,7 +455,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     curve.reverse();
     end_point  = next_point;
     next_point = start_point;
-    for (auto i = 0U; i < 10000; ++i) {
+    for (auto i = 0U; i < 50000; ++i) {
       auto prev_point = next_point;
       next_point      = newton_next_point(accuracy, next_point, s1, s2, 8, true);
       if (is_nan(next_point)) {
@@ -471,6 +471,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       if (detect_closure(next_point, prev_point, end_point)) {
         eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
         curve.push_point(end_point, s1);
+        closure_detected = true;
         break;
       }
       if (err_func.eval(next_point) > kTolerance) {
@@ -480,35 +481,37 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     }
   }
 
-  static constexpr auto kBorderTolerance = 0.01F;
-  auto fix_border_closure                = [](eray::math::Vec2f& p) {
-    auto result = false;
+  if (!closure_detected) {
+    static constexpr auto kBorderTolerance = 0.01F;
+    auto fix_border_closure                = [](eray::math::Vec2f& p) {
+      auto result = false;
 
-    if (p.x < kBorderTolerance) {
-      p.x    = 0.F;
-      result = true;
-    }
-    if (std::abs(p.x - 1.F) < kBorderTolerance) {
-      p.x    = 1.F;
-      result = true;
-    }
+      if (p.x < kBorderTolerance) {
+        p.x    = 0.F;
+        result = true;
+      }
+      if (std::abs(p.x - 1.F) < kBorderTolerance) {
+        p.x    = 1.F;
+        result = true;
+      }
 
-    if (p.y < kBorderTolerance) {
-      p.y    = 0.F;
-      result = true;
-    }
-    if (std::abs(p.y - 1.F) < kBorderTolerance) {
-      p.y    = 1.F;
-      result = true;
-    }
+      if (p.y < kBorderTolerance) {
+        p.y    = 0.F;
+        result = true;
+      }
+      if (std::abs(p.y - 1.F) < kBorderTolerance) {
+        p.y    = 1.F;
+        result = true;
+      }
 
-    return result;
-  };
+      return result;
+    };
 
-  fix_border_closure(curve.param_space1.params.front());
-  fix_border_closure(curve.param_space1.params.back());
-  fix_border_closure(curve.param_space2.params.front());
-  fix_border_closure(curve.param_space2.params.back());
+    fix_border_closure(curve.param_space1.params.front());
+    fix_border_closure(curve.param_space1.params.back());
+    fix_border_closure(curve.param_space2.params.front());
+    fix_border_closure(curve.param_space2.params.back());
+  }
 
   curve.fill_textures();
 
