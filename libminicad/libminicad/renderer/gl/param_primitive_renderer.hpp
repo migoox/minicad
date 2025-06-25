@@ -2,6 +2,8 @@
 
 #include <liberay/driver/gl/vertex_array.hpp>
 #include <libminicad/renderer/gl/subrenderer.hpp>
+#include <libminicad/renderer/gl/texture_array.hpp>
+#include <libminicad/renderer/gl/trimming_texture_manager.hpp>
 #include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/param_primitive.hpp>
 
@@ -44,6 +46,7 @@ class ParamPrimitiveRenderer : public SubRenderer<ParamPrimitiveRenderer, ParamP
     eray::driver::gl::VertexArrays torus_vao;
     std::vector<ParamPrimitiveHandle> transferred_torus_buff;
     std::unordered_map<ParamPrimitiveHandle, std::size_t> transferred_torus_ind;
+    TrimmingTexturesManager<ParamPrimitive> textures_manager;
   } m_;
 
   explicit ParamPrimitiveRenderer(Members&& members);

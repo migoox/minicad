@@ -2,6 +2,7 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/gl/param_primitive_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
+#include <libminicad/renderer/gl/trimming_texture_manager.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/param_primitive.hpp>
@@ -14,16 +15,34 @@ namespace util = eray::util;
 namespace math = eray::math;
 
 void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::Internal::AddObject&) {
-  if (auto o = scene.arena<ParamPrimitive>().get_obj(cmd_ctx.handle)) {
+  if (auto opt = scene.arena<ParamPrimitive>().get_obj(cmd_ctx.handle)) {
+    auto& obj = **opt;
+
     renderer.rs_.emplace(cmd_ctx.handle, ParamPrimitiveRS());
     auto ind = renderer.m_.transferred_torus_buff.size();
+    renderer.m_.textures_manager.update(obj);
     renderer.m_.transferred_torus_ind.insert({cmd_ctx.handle, ind});
     renderer.m_.transferred_torus_buff.push_back(cmd_ctx.handle);
   }
 }
 
 void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures&) {
-  // TODO(migoox): trimming support
+  const auto& handle = cmd_ctx.handle;
+  if (!renderer.rs_.contains(handle)) {
+    util::Logger::warn(
+        "OpenGL Renderer received update UpdateObjectMembers command but there is no rendering state created");
+    return;
+  }
+
+  auto ind = static_cast<GLuint>(renderer.m_.transferred_torus_ind.at(handle));
+
+  if (auto opt = scene.arena<ParamPrimitive>().get_obj(handle)) {
+    auto& obj = **opt;
+
+    auto id = static_cast<int>(renderer.m_.textures_manager.get_id(obj));
+    renderer.m_.textures_manager.update(obj);
+    renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
+  }
 }
 
 void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::UpdateObjectMembers&) {
@@ -172,9 +191,10 @@ namespace mini::gl {
 
 ParamPrimitiveRenderer ParamPrimitiveRenderer::create() {
   return ParamPrimitiveRenderer(Members{
-      .torus_vao              = create_torus_vao(),  //
-      .transferred_torus_buff = {},
-      .transferred_torus_ind  = {},
+      .torus_vao              = create_torus_vao(),                                 //
+      .transferred_torus_buff = {},                                                 //
+      .transferred_torus_ind  = {},                                                 //
+      .textures_manager       = TrimmingTexturesManager<ParamPrimitive>::create(),  //
   });
 }
 

@@ -76,6 +76,10 @@ ParamPrimitive::ParamPrimitive(ParamPrimitiveHandle handle, Scene& scene)
                                                        trimming_manager_.height());
   scene_.get().renderer().push_object_rs_cmd(
       ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::AddObject{}));
+  scene_.get().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::UpdateObjectMembers{}));
+  scene_.get().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures{}));
 }
 
 void ParamPrimitive::update() {
