@@ -445,6 +445,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       curve.push_point(end_point, s1);
       break;
     }
+    if (err_func.eval(next_point) > kTolerance) {
+      break;
+    }
     curve.push_point(next_point, s1);
   }
 
@@ -468,6 +471,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       if (detect_closure(next_point, prev_point, end_point)) {
         eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
         curve.push_point(end_point, s1);
+        break;
+      }
+      if (err_func.eval(next_point) > kTolerance) {
         break;
       }
       curve.push_point(next_point, s1);
