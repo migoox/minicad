@@ -5,10 +5,11 @@
 #include <liberay/math/transform3_fwd.hpp>
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
-#include <libminicad/scene/trimming.hpp>
 #include <utility>
 
 namespace mini {
+class ParamSpaceTrimmingData;
+class ParamSpaceTrimmingDataManager;
 
 template <typename T>
 concept CParametricCurveObject = requires(T t, float param) {

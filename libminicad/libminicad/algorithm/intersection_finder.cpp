@@ -16,10 +16,10 @@ namespace mini {
 
 namespace math = eray::math;
 
-void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, PatchSurface& surface) {
+void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, ParamSurface& surface) {
   param_space1.params.emplace_back(params.x, params.y);
   param_space2.params.emplace_back(params.z, params.w);
-  points.push_back(surface.evaluate(params.x, params.y));
+  points.push_back(surface.eval(params.x, params.y));
 }
 
 void IntersectionFinder::Curve::reverse() {
@@ -164,29 +164,28 @@ static constexpr math::Vec4f wrap_to_unit_interval(const math::Vec4f& v) noexcep
                      wrap_to_unit_interval(v.w));
 }
 
-eray::math::Vec4f IntersectionFinder::gradient_descent(
-    const eray::math::Vec4f& init, const float learning_rate, const float tolerance, const int max_iters,
-    const std::function<float(const eray::math::Vec4f&)>& func,
-    const std::function<eray::math::Vec4f(const eray::math::Vec4f&)>& grad) {
+eray::math::Vec4f IntersectionFinder::gradient_descent(const eray::math::Vec4f& init, const float learning_rate,
+                                                       const float tolerance, const int max_iters,
+                                                       const ErrorFunc& err_func) {
   auto result = init;
 
-  auto prev_val = func(result);
+  auto prev_val = err_func.eval(result);
   for (auto i = 0; i < max_iters; ++i) {
     auto old_result = result;
-    result          = result - learning_rate * grad(result);
+    result          = result - learning_rate * err_func.grad(result);
     result.x        = result.x;
     result.y        = result.y;
     result.z        = old_result.z;
     result.w        = old_result.w;
 
     old_result = result;
-    result     = result - learning_rate * grad(result);
+    result     = result - learning_rate * err_func.grad(result);
     result.x   = old_result.x;
     result.y   = old_result.y;
     result.z   = result.z;
     result.w   = result.w;
 
-    auto val = func(result);
+    auto val = err_func.eval(result);
 
     if (std::abs(prev_val - val) < tolerance) {
       break;
@@ -197,18 +196,18 @@ eray::math::Vec4f IntersectionFinder::gradient_descent(
   return result;
 }
 
-eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(
-    const eray::math::Vec4f& init, PatchSurface& ps1, PatchSurface& ps2, int iters,
-    const std::function<float(const eray::math::Vec4f&)>& err_func) {
+eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(const eray::math::Vec4f& init, ParamSurface& ps1,
+                                                                 ParamSurface& ps2, int iters,
+                                                                 const ErrorFunc& err_func) {
   constexpr auto kLearningRate = 0.1F;
 
   auto result = init;
   for (auto i = 0; i < iters; ++i) {
-    auto p                   = ps1.evaluate(result.x, result.y);
-    const auto& [p_dx, p_dy] = ps1.evaluate_derivatives(result.x, result.y);
+    auto p                   = ps1.eval(result.x, result.y);
+    const auto& [p_dx, p_dy] = ps1.evald(result.x, result.y);
 
-    auto q                   = ps2.evaluate(result.z, result.w);
-    const auto& [q_dz, q_dw] = ps2.evaluate_derivatives(result.z, result.w);
+    auto q                   = ps2.eval(result.z, result.w);
+    const auto& [q_dz, q_dw] = ps2.evald(result.z, result.w);
 
     auto mat =
         math::Mat4f{-math::Vec4f(p_dx, 0.F), -math::Vec4f(p_dy, 0.F), math::Vec4f(q_dz, 0.F), math::Vec4f(q_dw, 0.F)};
@@ -227,7 +226,7 @@ eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(
       if (auto inv = eray::math::inverse(curr)) {
         auto delta = (*inv) * b;
 
-        if (!found || err_func(new_result) > err_func(result + kLearningRate * delta)) {
+        if (!found || err_func.eval(new_result) > err_func.eval(result + kLearningRate * delta)) {
           new_delta  = kLearningRate * delta;  // why do i multiply by 0.1? idk
           new_result = result + kLearningRate * delta;
           found      = true;
@@ -245,17 +244,17 @@ eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(
   return result;
 }
 
-eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f& start, PatchSurface& ps1,
-                                                        PatchSurface& ps2, int iters, bool reverse) {
+eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f& start, ParamSurface& ps1,
+                                                        ParamSurface& ps2, int iters, bool reverse) {
   constexpr auto kLearningRate = 0.1F;
 
   auto d = 0.1F;
 
   auto result = start;
-  auto p0     = ps1.evaluate(result.x, result.y);
+  auto p0     = ps1.eval(result.x, result.y);
 
-  const auto& [p0_dx, p0_dy] = ps1.evaluate_derivatives(result.x, result.y);
-  const auto& [q0_dz, q0_dw] = ps2.evaluate_derivatives(result.z, result.w);
+  const auto& [p0_dx, p0_dy] = ps1.evald(result.x, result.y);
+  const auto& [q0_dz, q0_dw] = ps2.evald(result.z, result.w);
 
   auto p0n = math::cross(p0_dx, p0_dy);
   auto q0n = math::cross(q0_dz, q0_dw);
@@ -266,11 +265,11 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
   }
 
   for (auto i = 0; i < iters; ++i) {
-    auto p = ps1.evaluate(result.x, result.y);
-    auto q = ps2.evaluate(result.z, result.w);
+    auto p = ps1.eval(result.x, result.y);
+    auto q = ps2.eval(result.z, result.w);
 
-    const auto& [p_dx, p_dy] = ps1.evaluate_derivatives(result.x, result.y);
-    const auto& [q_dz, q_dw] = ps2.evaluate_derivatives(result.z, result.w);
+    const auto& [p_dx, p_dy] = ps1.evald(result.x, result.y);
+    const auto& [q_dz, q_dw] = ps2.evald(result.z, result.w);
 
     auto mat = math::Mat4f{-math::Vec4f(p_dx, math::dot(p_dx, t0)), -math::Vec4f(p_dy, math::dot(p_dy, t0)),
                            math::Vec4f(q_dz, 0.F), math::Vec4f(q_dw, 0.F)};
@@ -288,31 +287,27 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
   return result;
 }
 
-std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(PatchSurface& ps1, PatchSurface& ps2) {
-  auto bb1 = ps1.aabb_bounding_box();
-  auto bb2 = ps2.aabb_bounding_box();
-  if (!aabb_intersects(bb1, bb2)) {
-    return std::nullopt;
-  }
-
-  auto err_func = [&](const math::Vec4f& p) {
-    auto diff = ps1.evaluate(p.x, p.y) - ps2.evaluate(p.z, p.w);
-    auto res  = math::dot(diff, diff);
+std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2) {
+  auto err_func_eval = [&](const eray::math::Vec4f& p) {
+    auto diff = s1.eval(p.x, p.y) - s2.eval(p.z, p.w);
+    auto res  = eray::math::dot(diff, diff);
     return res;
   };
 
-  auto err_func_grad = [&](const math::Vec4f& p) {
-    auto diff = ps1.evaluate(p.x, p.y) - ps2.evaluate(p.z, p.w);
+  auto err_func_grad = [&](const eray::math::Vec4f& p) {
+    auto diff = s1.eval(p.x, p.y) - s2.eval(p.z, p.w);
 
-    const auto& [ps1_dx, ps1_dy] = ps1.evaluate_derivatives(p.x, p.y);
-    const auto& [ps2_dz, ps2_dw] = ps2.evaluate_derivatives(p.z, p.w);
-    return math::Vec4f{
-        2.F * math::dot(ps1_dx, diff),
-        2.F * math::dot(ps1_dy, diff),
-        -2.F * math::dot(ps2_dz, diff),
-        -2.F * math::dot(ps2_dw, diff),
+    const auto& [ps1_dx, ps1_dy] = s1.evald(p.x, p.y);
+    const auto& [ps2_dz, ps2_dw] = s2.evald(p.z, p.w);
+    return eray::math::Vec4f{
+        2.F * eray::math::dot(ps1_dx, diff),
+        2.F * eray::math::dot(ps1_dy, diff),
+        -2.F * eray::math::dot(ps2_dz, diff),
+        -2.F * eray::math::dot(ps2_dw, diff),
     };
   };
+
+  auto err_func = ErrorFunc{.eval = err_func_eval, .grad = err_func_grad};
 
   static constexpr auto kLearningRate  = 0.01F;
   static constexpr auto kTolerance     = 0.001F;
@@ -324,31 +319,26 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   std::uniform_real_distribution<float> dist(0.0F, 1.0F);
   auto random_vec4 = [&]() { return math::Vec4f(dist(gen), dist(gen), dist(gen), dist(gen)); };
 
-  auto start_point =
-      gradient_descent(math::Vec4f::filled(0.5F), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
+  auto start_point = gradient_descent(math::Vec4f::filled(0.5F), kLearningRate, kTolerance, kMaxIterations, err_func);
   for (auto i = 0; i < kTrials; ++i) {
-    auto new_result =
-        gradient_descent(random_vec4(), kLearningRate, kTolerance, kMaxIterations, err_func, err_func_grad);
+    auto new_result = gradient_descent(random_vec4(), kLearningRate, kTolerance, kMaxIterations, err_func);
 
     new_result = math::clamp(new_result, 0.F, 1.F);
-    if (err_func(start_point) > err_func(new_result)) {
+    if (err_func.eval(start_point) > err_func.eval(new_result)) {
       start_point = new_result;
     }
   }
 
-  eray::util::Logger::info("Found start point with gradient descent: {}, Error: {}", start_point,
-                           err_func(start_point));
-
   {
-    auto new_result = newton_start_point_refiner(start_point, ps1, ps2, 5, err_func);
-    if (err_func(new_result) < err_func(start_point)) {
+    auto new_result = newton_start_point_refiner(start_point, s1, s2, 5, err_func);
+    if (err_func.eval(new_result) < err_func.eval(start_point)) {
       start_point = new_result;
     }
     eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", start_point,
-                             err_func(start_point));
+                             err_func.eval(start_point));
   }
 
-  if (err_func(start_point) > kThreshold) {
+  if (err_func.eval(start_point) > kThreshold) {
     return std::nullopt;
   }
 
@@ -356,23 +346,21 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       .points = {},  //
       .param_space1 =
           {
-              .surface_handle = ps1.handle(),
-              .curve_txt      = {},
-              .trimming_txt1  = {},
-              .trimming_txt2  = {},
-              .params         = {},
+              .curve_txt     = {},
+              .trimming_txt1 = {},
+              .trimming_txt2 = {},
+              .params        = {},
           },  //
       .param_space2 =
           {
-              .surface_handle = ps1.handle(),
-              .curve_txt      = {},
-              .trimming_txt1  = {},
-              .trimming_txt2  = {},
-              .params         = {},
+              .curve_txt     = {},
+              .trimming_txt1 = {},
+              .trimming_txt2 = {},
+              .params        = {},
           }  //
   };
 
-  curve.push_point(start_point, ps1);
+  curve.push_point(start_point, s1);
 
   auto is_out_of_unit = [](const math::Vec4f& v) {
     return v.x < 0.F || v.x > 1.F ||  //
@@ -383,32 +371,32 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   auto next_point = start_point;
   for (auto i = 0U; i < 10000; ++i) {
-    next_point   = newton_next_point(next_point, ps1, ps2, 100);
-    auto refined = newton_start_point_refiner(next_point, ps1, ps2, 4, err_func);
-    if (err_func(refined) < err_func(next_point)) {
+    next_point   = newton_next_point(next_point, s1, s2, 100);
+    auto refined = newton_start_point_refiner(next_point, s1, s2, 4, err_func);
+    if (err_func.eval(refined) < err_func.eval(next_point)) {
       next_point = refined;
     }
     // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
     if (is_out_of_unit(next_point)) {
       break;
     }
-    curve.push_point(next_point, ps1);
+    curve.push_point(next_point, s1);
   }
 
   curve.reverse();
 
   next_point = start_point;
   for (auto i = 0U; i < 10000; ++i) {
-    next_point   = newton_next_point(next_point, ps1, ps2, 4, true);
-    auto refined = newton_start_point_refiner(next_point, ps1, ps2, 4, err_func);
-    if (err_func(refined) < err_func(next_point)) {
+    next_point   = newton_next_point(next_point, s1, s2, 4, true);
+    auto refined = newton_start_point_refiner(next_point, s1, s2, 4, err_func);
+    if (err_func.eval(refined) < err_func.eval(next_point)) {
       next_point = refined;
     }
     // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
     if (is_out_of_unit(next_point)) {
       break;
     }
-    curve.push_point(next_point, ps1);
+    curve.push_point(next_point, s1);
   }
 
   auto fix_border_closure = [](eray::math::Vec2f& p) {

@@ -60,7 +60,6 @@ class ParamPrimitive : public ObjectBase<ParamPrimitive, ParamPrimitiveVariant> 
 
   ParamSpaceTrimmingDataManager& trimming_manager() { return trimming_manager_; }
   const ParamSpaceTrimmingDataManager& trimming_manager() const { return trimming_manager_; }
-
   void update_trimming_txt();
   const TextureHandle& txt_handle() const { return txt_handle_; }
 

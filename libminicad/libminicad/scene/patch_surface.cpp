@@ -755,7 +755,7 @@ void PatchSurface::update_trimming_txt() {
       PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures{}));
 }
 
-eray::math::Mat4f PatchSurface::frenet_frame(float u, float v) {
+eray::math::Mat4f PatchSurface::frenet_frame(float /*u*/, float /*v*/) {
   eray::util::Logger::err("Frenet frame not implemented!");
   return math::Mat4f::identity();
 }

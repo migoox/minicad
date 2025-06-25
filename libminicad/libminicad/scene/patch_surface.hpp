@@ -197,9 +197,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   bool bezier_dirty_ = true;
 
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
-
   ParamSpaceTrimmingDataManager trimming_manager_;
-
   TextureHandle txt_handle_;
 };
 

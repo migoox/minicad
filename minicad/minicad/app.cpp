@@ -1599,42 +1599,61 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
 }
 
 bool MiniCadApp::on_find_intersection() {
-  if (m_.non_transformable_selection->is_multi_selection()) {
-    auto first  = PatchSurfaceHandle(0, 0, 0);
-    auto second = PatchSurfaceHandle(0, 0, 0);
-    auto count  = 0U;
-    for (const auto& h : *m_.non_transformable_selection) {
-      std::visit(util::match{[&](const PatchSurfaceHandle& handle) {
-                               if (count > 0) {
-                                 second = handle;
-                               } else {
-                                 first = handle;
-                               }
-                               count++;
-                             },
-                             [](const auto&) {}},
-                 h);
+  ParametricSurfaceHandle first  = PatchSurfaceHandle(0, 0, 0);
+  ParametricSurfaceHandle second = PatchSurfaceHandle(0, 0, 0);
 
-      if (count == 2) {
-        auto obj1 = m_.scene.arena<PatchSurface>().get_obj(first);
-        auto obj2 = m_.scene.arena<PatchSurface>().get_obj(second);
-        if (obj1 && obj2) {
-          auto curve = IntersectionFinder::find_intersections(**obj1, **obj2);
-          if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
-            auto& obj = **opt;
-            obj.set_points(curve->points);
-            util::Logger::info("Created new approx curve from intersection points");
-          }
+  auto count    = 0U;
+  auto is_valid = [&](const auto& handle) {
+    using T = ERAY_HANDLE_OBJ(handle);
+    return m_.scene.arena<T>().exists(handle);
+  };
 
-          obj1.value()->trimming_manager().add(
-              ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space1));
-          obj2.value()->trimming_manager().add(
-              ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2));
-        }
-        return false;
-      }
+  auto append = [&](const CParametricSurfaceHandle auto& handle) {
+    if (count > 0) {
+      second = handle;
+    } else {
+      first = handle;
     }
+    count++;
+  };
+
+  for (const auto& h : *m_.non_transformable_selection) {
+    if (!std::visit(util::match{is_valid}, h)) {
+      continue;
+    }
+    std::visit(util::match{append, [](const auto&) {}}, h);
   }
+
+  for (const auto& h : *m_.transformable_selection) {
+    if (!std::visit(util::match{is_valid}, h)) {
+      continue;
+    }
+    std::visit(util::match{append, [](const auto&) {}}, h);
+  }
+
+  if (count == 2) {
+    auto unsafe_param_obj_extractor = [&](const auto& handle1, const auto& handle2) {
+      using T1 = ERAY_HANDLE_OBJ(handle1);
+      using T2 = ERAY_HANDLE_OBJ(handle2);
+
+      CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
+      CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
+      auto curve                          = IntersectionFinder::find_intersections(obj1, obj2);
+      if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+        auto& obj = **opt;
+        obj.set_points(curve->points);
+        util::Logger::info("Created new approx curve from intersection points");
+      }
+
+      obj1.trimming_manager().add(
+          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space1));
+      obj2.trimming_manager().add(
+          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2));
+    };
+
+    std::visit(match{unsafe_param_obj_extractor}, first, second);
+  }
+
   return false;
 }
 

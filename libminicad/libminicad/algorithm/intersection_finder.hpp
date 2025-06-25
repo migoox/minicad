@@ -2,6 +2,7 @@
 
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/types.hpp>
 #include <optional>
 
 namespace mini {
@@ -10,8 +11,12 @@ class PatchSurface;
 
 class IntersectionFinder {
  public:
+  struct ParamSurface {
+    std::function<eray::math::Vec3f(float, float)> eval;
+    std::function<std::pair<eray::math::Vec3f, eray::math::Vec3f>(float, float)> evald;
+  };
+
   struct ParamSpace {
-    PatchSurfaceHandle surface_handle;
     std::vector<uint32_t> curve_txt;
     std::vector<uint32_t> trimming_txt1;
     std::vector<uint32_t> trimming_txt2;
@@ -23,7 +28,7 @@ class IntersectionFinder {
     ParamSpace param_space1;
     ParamSpace param_space2;
 
-    void push_point(const eray::math::Vec4f& params, PatchSurface& surface);
+    void push_point(const eray::math::Vec4f& params, ParamSurface& surface);
     void reverse();
 
     void fill_textures();
@@ -45,22 +50,51 @@ class IntersectionFinder {
    * @param h2
    * @return std::optional<Result>
    */
-  [[nodiscard]] static std::optional<Curve> find_intersections(PatchSurface& ps1, PatchSurface& ps2);
+  template <CParametricSurfaceObject T1, CParametricSurfaceObject T2>
+  [[nodiscard]] static std::optional<Curve> find_intersections(T1& ps1, T2& ps2) {
+    auto bb1 = ps1.aabb_bounding_box();
+    auto bb2 = ps2.aabb_bounding_box();
+    if (!aabb_intersects(bb1, bb2)) {
+      return std::nullopt;
+    }
+
+    auto eval1  = [&](float u, float v) { return ps1.evaluate(u, v); };
+    auto evald1 = [&](float u, float v) { return ps1.evaluate_derivatives(u, v); };
+
+    auto eval2  = [&](float u, float v) { return ps2.evaluate(u, v); };
+    auto evald2 = [&](float u, float v) { return ps2.evaluate_derivatives(u, v); };
+
+    auto s1 = ParamSurface{
+        .eval  = std::move(eval1),
+        .evald = std::move(evald2),
+    };
+    auto s2 = ParamSurface{
+        .eval  = std::move(eval2),
+        .evald = std::move(evald2),
+    };
+
+    return find_intersections(s1, s2);
+  }
+
+  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2);
 
   static constexpr auto kThreshold = 0.001F;
 
  private:
+  struct ErrorFunc {
+    std::function<float(const eray::math::Vec4f&)> eval;
+    std::function<eray::math::Vec4f(const eray::math::Vec4f&)> grad;
+  };
+
   static bool aabb_intersects(const std::pair<eray::math::Vec3f, eray::math::Vec3f>& a,
                               const std::pair<eray::math::Vec3f, eray::math::Vec3f>& b);
 
   static eray::math::Vec4f gradient_descent(const eray::math::Vec4f& init, float learning_rate, float tolerance,
-                                            int max_iters, const std::function<float(const eray::math::Vec4f&)>& func,
-                                            const std::function<eray::math::Vec4f(const eray::math::Vec4f&)>& grad);
-  static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, PatchSurface& ps1,
-                                                      PatchSurface& ps2, int iters,
-                                                      const std::function<float(const eray::math::Vec4f&)>& err_func);
+                                            int max_iters, const ErrorFunc& err_func);
+  static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, ParamSurface& ps1,
+                                                      ParamSurface& ps2, int iters, const ErrorFunc& err_func);
 
-  static eray::math::Vec4f newton_next_point(const eray::math::Vec4f& start, PatchSurface& ps1, PatchSurface& ps2,
+  static eray::math::Vec4f newton_next_point(const eray::math::Vec4f& start, ParamSurface& ps1, ParamSurface& ps2,
                                              int iters, bool reverse = false);
 };
 

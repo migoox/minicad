@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/observer_ptr.hpp>
 #include <liberay/util/zstring_view.hpp>
@@ -9,14 +8,9 @@
 
 namespace mini {
 
-using SceneObjectId = std::uint32_t;
-using CurveId       = std::uint32_t;
-
-template <typename T>
-using ref = std::reference_wrapper<T>;
-
-class Scene;
-
+// ---------------------------------------------------------------------------------------------------------------------
+// - Fundamental handle types ------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 class PointObject;
 using PointObjectHandle = eray::util::Handle<PointObject>;
 
@@ -35,19 +29,38 @@ using FillInSurfaceHandle = eray::util::Handle<FillInSurface>;
 class ApproxCurve;
 using ApproxCurveHandle = eray::util::Handle<ApproxCurve>;
 
-using PointListObjectHandle   = std::variant<CurveHandle, PatchSurfaceHandle>;
-using ParametricSurfaceHandle = std::variant<PatchSurfaceHandle>;
+// ---------------------------------------------------------------------------------------------------------------------
+// - Sum handle types --------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+using PointListObjectHandle = std::variant<CurveHandle, PatchSurfaceHandle>;
+template <typename T>
+concept CPointListObjectHandle = std::is_convertible_v<T, PointListObjectHandle>;
+
+using ParametricSurfaceHandle = std::variant<PatchSurfaceHandle, ParamPrimitiveHandle>;
+template <typename T>
+concept CParametricSurfaceHandle = std::is_convertible_v<T, ParametricSurfaceHandle>;
+
 using NonTransformableObjectHandle =
     std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, ApproxCurveHandle>;
+template <typename T>
+concept CNonTransformableObjectHandle = std::is_convertible_v<T, NonTransformableObjectHandle>;
+
 using TransformableObjectHandle = std::variant<ParamPrimitiveHandle, PointObjectHandle>;
+template <typename T>
+concept CTransformableObjectHandle = std::is_convertible_v<T, TransformableObjectHandle>;
 
 using ObjectHandle = std::variant<PointObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle,
                                   ApproxCurveHandle, ParamPrimitiveHandle>;
+template <typename T>
+concept CObjectHandle = std::is_convertible_v<T, ObjectHandle>;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - Helpers -----------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+class Scene;
 
 template <typename T>
-concept CObjectHandle = std::is_same_v<T, PointObjectHandle> || std::is_same_v<T, CurveHandle> ||
-                        std::is_same_v<T, PatchSurfaceHandle> || std::is_same_v<T, FillInSurfaceHandle> ||
-                        std::is_same_v<T, ApproxCurveHandle> || std::is_same_v<T, ParamPrimitiveHandle>;
+using ref = std::reference_wrapper<T>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;
