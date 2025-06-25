@@ -4,7 +4,7 @@
 
 namespace ImGui::mini {
 
-void mini::ReorderDnD::drag_and_drop_component(const ::mini::SceneObject& obj, const size_t idx, bool ignore_middle) {
+void mini::ReorderDnD::drag_and_drop_component(const ::mini::PointObject& obj, const size_t idx, bool ignore_middle) {
   if (ImGui::BeginDragDropSource()) {
     ImGui::SetDragDropPayload(payload_type_.c_str(), &idx, sizeof(size_t));
     ImGui::Text("%s", obj.name.c_str());

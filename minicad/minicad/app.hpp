@@ -20,15 +20,17 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <memory>
 #include <minicad/camera/orbiting_camera_operator.hpp>
 #include <minicad/cursor/cursor.hpp>
 #include <minicad/imgui/modals.hpp>
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
+
+#include "libminicad/scene/param_primitive.hpp"
 
 namespace mini {
 
@@ -74,8 +76,8 @@ class MiniCadApp final : public eray::os::Application {
     // TODO(migoox): state machine
     ToolState tool_state;
 
-    std::unique_ptr<SceneObjectsSelection> scene_obj_selection;
-    std::unique_ptr<NonSceneObjectSelection> non_scene_obj_selection;
+    std::unique_ptr<TransformableSelection> transformable_selection;
+    std::unique_ptr<NonTransformableSelection> non_transformable_selection;
     HelperPointSelection helper_point_selection;
   };
 
@@ -90,8 +92,9 @@ class MiniCadApp final : public eray::os::Application {
   void gui_object_window();
 
   // GUI Events
-  bool on_scene_object_added(SceneObjectVariant variant);
+  bool on_point_object_added(PointObjectVariant variant);
   bool on_point_created_in_point_list(const CurveHandle& handle);
+  bool on_param_primitive_added(ParamPrimitiveVariant variant);
   bool on_curve_added(CurveVariant variant);
   bool on_curve_added_from_points_selection(CurveVariant variant);
   bool on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info);
@@ -114,23 +117,23 @@ class MiniCadApp final : public eray::os::Application {
   bool on_tool_action_start();
   bool on_tool_action_end();
 
-  template <eray::util::Iterator<SceneObjectHandle> It>
+  template <eray::util::Iterator<TransformableObjectHandle> It>
   bool on_selection_add_many(It begin, It end) {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       m_.scene.renderer().push_object_rs_cmd(
-          SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+          PointObjectRSCommand(handle, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
     }
-    m_.scene_obj_selection->add_many(m_.scene, begin, end);
+    m_.transformable_selection->add_many(m_.scene, begin, end);
     return true;
   }
 
-  template <eray::util::Iterator<SceneObjectHandle> It>
+  template <eray::util::Iterator<TransformableObjectHandle> It>
   bool on_selection_remove_many(It begin, It end) {
     for (const auto& handle : std::ranges::subrange(begin, end)) {
       m_.scene.renderer().push_object_rs_cmd(
-          SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+          PointObjectRSCommand(handle, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
     }
-    m_.scene_obj_selection->remove_many(m_.scene, begin, end);
+    m_.transformable_selection->remove_many(m_.scene, begin, end);
     return true;
   }
 

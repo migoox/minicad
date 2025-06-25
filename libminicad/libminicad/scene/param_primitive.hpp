@@ -2,14 +2,28 @@
 
 #include <liberay/math/mat_fwd.hpp>
 #include <liberay/math/vec_fwd.hpp>
-#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/trimming.hpp>
 #include <libminicad/scene/types.hpp>
 
 namespace mini {
+class Torus {
+ public:
+  [[nodiscard]] static zstring_view type_name() noexcept { return "Torus"; }
+
+ public:
+  float minor_radius           = 1.F;
+  float major_radius           = 2.F;
+  eray::math::Vec2i tess_level = eray::math::Vec2i(16, 16);
+};
+
+template <typename T>
+concept CParamPrimitiveType = requires {
+  { T::type_name() } -> std::same_as<zstring_view>;
+};
 
 using ParamPrimitiveVariant = std::variant<Torus>;
+MINI_VALIDATE_VARIANT_TYPES(ParamPrimitiveVariant, CParamPrimitiveType);
 
 class ParamPrimitive : public ObjectBase<ParamPrimitive, ParamPrimitiveVariant> {
  public:
@@ -44,6 +58,7 @@ class ParamPrimitive : public ObjectBase<ParamPrimitive, ParamPrimitiveVariant> 
   TextureHandle txt_handle_;
 };
 
+static_assert(CObject<ParamPrimitive>);
 static_assert(CParametricSurfaceObject<ParamPrimitive>);
 static_assert(CTransformableObject<ParamPrimitive>);
 

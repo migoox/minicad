@@ -11,6 +11,7 @@
 #include <libminicad/renderer/gl/fill_in_surfaces_renderer.hpp>
 #include <libminicad/renderer/gl/line_buffer.hpp>
 #include <libminicad/renderer/gl/opengl_scene_renderer.hpp>
+#include <libminicad/renderer/gl/param_primitive_renderer.hpp>
 #include <libminicad/renderer/gl/patch_surface_renderer.hpp>
 #include <libminicad/renderer/gl/rendering_state.hpp>
 #include <libminicad/renderer/gl/scene_objects_renderer.hpp>
@@ -84,7 +85,7 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
                        const eray::math::Vec3f& background_color);
 
  private:
-  friend SceneObjectRSCommandHandler;
+  friend PointObjectRSCommandHandler;
   friend CurveRSCommandHandler;
 
   struct Shaders {
@@ -124,20 +125,20 @@ class OpenGLSceneRenderer final : public ISceneRenderer {
     uint32_t signature = 0;
   } global_rs_;
 
-  CurvesRenderer curve_renderer_;
-  SceneObjectsRenderer scene_objs_renderer_;
-  PatchSurfaceRenderer patch_surface_renderer_;
-  FillInSurfaceRenderer fill_in_surface_renderer_;
-  ApproxCurvesRenderer intersection_curves_renderer_;
+  struct Renderers {
+    CurvesRenderer curve_renderer_;
+    PointObjectRenderer point_renderer_;
+    ParamPrimitiveRenderer param_primitive_renderer_;
+    PatchSurfaceRenderer patch_surface_renderer_;
+    FillInSurfaceRenderer fill_in_surface_renderer_;
+    ApproxCurvesRenderer intersection_curves_renderer_;
+  } renderers_;
 
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> framebuffer_;
   std::unique_ptr<eray::driver::gl::ViewportFramebuffer> right_eye_framebuffer_;
 
  private:
-  explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                               CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
-                               FillInSurfaceRenderer&& fill_in_surface_rs,
-                               ApproxCurvesRenderer&& intersection_curves_rs,
+  explicit OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, Renderers&& renderers,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer);
 };

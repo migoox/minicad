@@ -9,7 +9,7 @@ struct ReorderDnD {
   ReorderDnD() = delete;
   explicit ReorderDnD(zstring_view payload_type) : payload_type_(payload_type) {}
 
-  void drag_and_drop_component(const ::mini::SceneObject& obj, size_t idx, bool ignore_middle);
+  void drag_and_drop_component(const ::mini::PointObject& obj, size_t idx, bool ignore_middle);
 
  public:
   std::optional<size_t> source;

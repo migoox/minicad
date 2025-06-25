@@ -17,8 +17,8 @@ using ref = std::reference_wrapper<T>;
 
 class Scene;
 
-class SceneObject;
-using SceneObjectHandle = eray::util::Handle<SceneObject>;
+class PointObject;
+using PointObjectHandle = eray::util::Handle<PointObject>;
 
 class ParamPrimitive;
 using ParamPrimitiveHandle = eray::util::Handle<ParamPrimitive>;
@@ -37,14 +37,17 @@ using ApproxCurveHandle = eray::util::Handle<ApproxCurve>;
 
 using PointListObjectHandle   = std::variant<CurveHandle, PatchSurfaceHandle>;
 using ParametricSurfaceHandle = std::variant<PatchSurfaceHandle>;
-using NonSceneObjectHandle    = std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, ApproxCurveHandle>;
-using ObjectHandle =
-    std::variant<SceneObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, ApproxCurveHandle>;
+using NonTransformableObjectHandle =
+    std::variant<CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle, ApproxCurveHandle>;
+using TransformableObjectHandle = std::variant<ParamPrimitiveHandle, PointObjectHandle>;
+
+using ObjectHandle = std::variant<PointObjectHandle, CurveHandle, PatchSurfaceHandle, FillInSurfaceHandle,
+                                  ApproxCurveHandle, ParamPrimitiveHandle>;
 
 template <typename T>
-concept CObjectHandle =
-    std::is_same_v<T, SceneObjectHandle> || std::is_same_v<T, CurveHandle> || std::is_same_v<T, PatchSurfaceHandle> ||
-    std::is_same_v<T, FillInSurfaceHandle> || std::is_same_v<T, ApproxCurveHandle>;
+concept CObjectHandle = std::is_same_v<T, PointObjectHandle> || std::is_same_v<T, CurveHandle> ||
+                        std::is_same_v<T, PatchSurfaceHandle> || std::is_same_v<T, FillInSurfaceHandle> ||
+                        std::is_same_v<T, ApproxCurveHandle> || std::is_same_v<T, ParamPrimitiveHandle>;
 
 template <typename T>
 using ObserverPtr = eray::util::ObserverPtr<T>;

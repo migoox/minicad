@@ -33,13 +33,13 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
   auto unique_points_dim = std::visit(
       eray::util::match{[&](auto& obj) { return obj.unique_control_points_dim(starter, dim); }}, this->object);
 
-  auto unique_point_handles = scene().create_many_objs<SceneObject>(Point{}, unique_points_dim.x * unique_points_dim.y);
+  auto unique_point_handles = scene().create_many_objs<PointObject>(Point{}, unique_points_dim.x * unique_points_dim.y);
   if (!unique_point_handles) {
     util::Logger::err("Could not create new point objects");
     return;
   }
 
-  auto handles = std::vector<SceneObjectHandle>(points_dim.y * points_dim.x, SceneObjectHandle(0, 0, 0));
+  auto handles = std::vector<PointObjectHandle>(points_dim.y * points_dim.x, PointObjectHandle(0, 0, 0));
   for (auto i = 0U; i < points_dim.y; ++i) {
     for (auto j = 0U; j < points_dim.x; ++j) {
       auto idx        = points_dim.x * i + j;
@@ -77,7 +77,7 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
         p = math::Vec3f(frame_mat * eray::math::Vec4f(p, 1.F));
 
         auto idx = points_dim.x * y + x_idx;
-        points_.unsafe_by_idx(idx).transform.set_local_pos(p);
+        points_.unsafe_by_idx(idx).transform().set_local_pos(p);
         x_idx++;
       }
     }
@@ -112,13 +112,13 @@ void PatchSurface::init_from_starter(const PatchSurfaceStarter& starter, eray::m
   auto unique_points_dim = std::visit(
       eray::util::match{[&](auto& obj) { return obj.unique_control_points_dim(starter, dim); }}, this->object);
 
-  auto unique_point_handles = scene().create_many_objs<SceneObject>(Point{}, unique_points_dim.x * unique_points_dim.y);
+  auto unique_point_handles = scene().create_many_objs<PointObject>(Point{}, unique_points_dim.x * unique_points_dim.y);
   if (!unique_point_handles) {
     util::Logger::err("Could not create new point objects");
     return;
   }
 
-  auto handles = std::vector<SceneObjectHandle>(points_dim.y * points_dim.x, SceneObjectHandle(0, 0, 0));
+  auto handles = std::vector<PointObjectHandle>(points_dim.y * points_dim.x, PointObjectHandle(0, 0, 0));
   for (auto i = 0U; i < points_dim.y; ++i) {
     for (auto j = 0U; j < points_dim.x; ++j) {
       auto idx        = points_dim.x * i + j;
@@ -138,7 +138,7 @@ void PatchSurface::init_from_starter(const PatchSurfaceStarter& starter, eray::m
 }
 
 std::expected<void, PatchSurface::InitError> PatchSurface::init_from_points(
-    eray::math::Vec2u points_dim, const std::vector<SceneObjectHandle>& points) {
+    eray::math::Vec2u points_dim, const std::vector<PointObjectHandle>& points) {
   if (points_dim.x * points_dim.y != points.size()) {
     return std::unexpected(InitError::PointsAndDimensionsMismatch);
   }
@@ -149,7 +149,7 @@ std::expected<void, PatchSurface::InitError> PatchSurface::init_from_points(
   }
 
   for (const auto& h : points) {
-    if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+    if (auto opt = scene().arena<PointObject>().get_obj(h)) {
       auto& obj = **opt;
       if (obj.has_type<Point>()) {
         obj.patch_surfaces_.insert(handle_);
@@ -172,7 +172,7 @@ std::expected<void, PatchSurface::InitError> PatchSurface::init_from_points(
 
 void PatchSurface::clear() {
   for (const auto& h : points_.point_handles()) {
-    if (auto o = scene().arena<SceneObject>().get_obj(h)) {
+    if (auto o = scene().arena<PointObject>().get_obj(h)) {
       auto& obj = *o.value();
       auto it   = obj.patch_surfaces_.find(handle());
       if (it == obj.patch_surfaces_.end()) {
@@ -206,7 +206,7 @@ void BezierPatches::set_control_points(PointList& points, const PatchSurfaceStar
                   static_cast<float>(dim.y * (PatchSurface::kPatchSize - 1) + 1);
             auto idx = find_idx(col, row, in_col, in_row, dim.x);
 
-            points.unsafe_by_idx(idx).transform.set_local_pos(p);
+            points.unsafe_by_idx(idx).transform().set_local_pos(p);
           }
         }
       }
@@ -235,7 +235,7 @@ void BezierPatches::set_control_points(PointList& points, const PatchSurfaceStar
           p.z = std::sin(curr_alpha) * inner_r;
 
           auto idx = points_dim.x * y + x_idx;
-          points.unsafe_by_idx(idx).transform.set_local_pos(p);
+          points.unsafe_by_idx(idx).transform().set_local_pos(p);
           x_idx++;
         }
 
@@ -244,7 +244,7 @@ void BezierPatches::set_control_points(PointList& points, const PatchSurfaceStar
 
         auto idx = points_dim.x * y + x_idx;
 
-        points.unsafe_by_idx(idx).transform.set_local_pos(p);
+        points.unsafe_by_idx(idx).transform().set_local_pos(p);
         x_idx++;
       }
     }
@@ -266,7 +266,7 @@ void PatchSurface::insert_row_bottom() {
     const auto points_x = dim_.x + 3;
     const auto points_y = dim_.y + 3;
 
-    auto opt_points = scene().create_many_objs<SceneObject>(Point{}, points_x);
+    auto opt_points = scene().create_many_objs<PointObject>(Point{}, points_x);
     if (!opt_points) {
       util::Logger::err("Failed to insert row");
       return;
@@ -275,17 +275,17 @@ void PatchSurface::insert_row_bottom() {
     auto all_handles        = points_.point_handles() | std::ranges::to<std::vector>();
     const auto& new_handles = *opt_points;
     for (auto i = 0U; i < points_x; ++i) {
-      if (auto opt_up = scene().arena<SceneObject>().get_obj(all_handles[points_x * (points_y - 2) + i])) {
-        if (auto opt = scene().arena<SceneObject>().get_obj(all_handles[points_x * (points_y - 1) + i])) {
+      if (auto opt_up = scene().arena<PointObject>().get_obj(all_handles[points_x * (points_y - 2) + i])) {
+        if (auto opt = scene().arena<PointObject>().get_obj(all_handles[points_x * (points_y - 1) + i])) {
           auto& old_obj_up = **opt_up;
           auto& old_obj    = **opt;
 
-          auto p0 = old_obj_up.transform.pos();
-          auto p1 = old_obj.transform.pos();
+          auto p0 = old_obj_up.transform().pos();
+          auto p1 = old_obj.transform().pos();
 
-          auto& new_obj = **scene().arena<SceneObject>().get_obj(new_handles[i]);
+          auto& new_obj = **scene().arena<PointObject>().get_obj(new_handles[i]);
           new_obj.patch_surfaces_.insert(handle_);
-          new_obj.transform.set_local_pos(2.F * p1 - p0);
+          new_obj.transform().set_local_pos(2.F * p1 - p0);
           new_obj.update();
         }
       }
@@ -310,7 +310,7 @@ void PatchSurface::delete_row_top() {
   auto delete_bpatches = [&](const BPatches&) {
     const auto points_x = dim_.x + 3;
 
-    auto handles_to_remove = std::vector<SceneObjectHandle>();
+    auto handles_to_remove = std::vector<PointObjectHandle>();
     handles_to_remove.reserve(points_x);
     for (auto i = 0U; i < points_x; ++i) {
       auto& obj = points_.unsafe_by_idx(i);
@@ -332,7 +332,7 @@ void PatchSurface::delete_row_bottom() {
     const auto points_x = dim_.x + 3;
     const auto points_y = dim_.y + 3;
 
-    auto handles_to_remove = std::vector<SceneObjectHandle>();
+    auto handles_to_remove = std::vector<PointObjectHandle>();
     handles_to_remove.reserve(points_x);
     for (auto i = 0U; i < points_x; ++i) {
       auto& obj = points_.unsafe_by_idx(points_x * (points_y - 1) + i);
@@ -384,15 +384,15 @@ std::generator<eray::math::Vec3f> PatchSurface::control_grid_points() const {
 
   for (auto row = 0U; row < dim.y; ++row) {
     for (auto col = 0U; col < dim.x - 1; ++col) {
-      co_yield points_.unsafe_by_idx(dim.x * row + col).transform.pos();
-      co_yield points_.unsafe_by_idx(dim.x * row + col + 1).transform.pos();
+      co_yield points_.unsafe_by_idx(dim.x * row + col).transform().pos();
+      co_yield points_.unsafe_by_idx(dim.x * row + col + 1).transform().pos();
     }
   }
 
   for (auto row = 0U; row < dim.y - 1; ++row) {
     for (auto col = 0U; col < dim.x; ++col) {
-      co_yield points_.unsafe_by_idx(dim.x * row + col).transform.pos();
-      co_yield points_.unsafe_by_idx(dim.x * (row + 1) + col).transform.pos();
+      co_yield points_.unsafe_by_idx(dim.x * row + col).transform().pos();
+      co_yield points_.unsafe_by_idx(dim.x * (row + 1) + col).transform().pos();
     }
   }
 }
@@ -441,7 +441,7 @@ void BezierPatches::update_bezier3_points(PatchSurface& base) {
       for (auto in_row = 0U; in_row < PatchSurface::kPatchSize; ++in_row) {
         for (auto in_col = 0U; in_col < PatchSurface::kPatchSize; ++in_col) {
           base.bezier3_points_[idx++] =
-              base.points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, base.dim_.x)).transform.pos();
+              base.points_.unsafe_by_idx(find_idx(col, row, in_col, in_row, base.dim_.x)).transform().pos();
         }
       }
     }
@@ -471,7 +471,7 @@ void BPatches::set_control_points(PointList& points, const PatchSurfaceStarter& 
                 auto p   = eray::math::Vec3f::filled(0.F);
                 p.x = s.size.x * static_cast<float>(col) / static_cast<float>(dim.x + PatchSurface::kPatchSize - 1);
                 p.z = s.size.y * static_cast<float>(row) / static_cast<float>(dim.y + PatchSurface::kPatchSize - 1);
-                points.unsafe_by_idx(idx).transform.set_local_pos(p);
+                points.unsafe_by_idx(idx).transform().set_local_pos(p);
               }
             }
           },
@@ -498,7 +498,7 @@ void BPatches::set_control_points(PointList& points, const PatchSurfaceStarter& 
                 p.z             = std::sin(curr_alpha) * r;
 
                 auto idx = points_dim.x * y + x_idx;
-                points.unsafe_by_idx(idx).transform.set_local_pos(p);
+                points.unsafe_by_idx(idx).transform().set_local_pos(p);
                 x_idx++;
               }
             }
@@ -541,10 +541,10 @@ void BPatches::update_bezier3_points(PatchSurface& base) {
   for (auto x = 0U; x < dim.x; ++x) {
     for (auto y = 0U; y < dim.y; ++y) {
       for (auto iy = 0U; iy < PatchSurface::kPatchSize; ++iy) {
-        auto p0 = base.points_.unsafe_by_idx(find_idx(x, y, 0, iy, dim.x)).transform.pos();
-        auto p1 = base.points_.unsafe_by_idx(find_idx(x, y, 1, iy, dim.x)).transform.pos();
-        auto p2 = base.points_.unsafe_by_idx(find_idx(x, y, 2, iy, dim.x)).transform.pos();
-        auto p3 = base.points_.unsafe_by_idx(find_idx(x, y, 3, iy, dim.x)).transform.pos();
+        auto p0 = base.points_.unsafe_by_idx(find_idx(x, y, 0, iy, dim.x)).transform().pos();
+        auto p1 = base.points_.unsafe_by_idx(find_idx(x, y, 1, iy, dim.x)).transform().pos();
+        auto p2 = base.points_.unsafe_by_idx(find_idx(x, y, 2, iy, dim.x)).transform().pos();
+        auto p3 = base.points_.unsafe_by_idx(find_idx(x, y, 3, iy, dim.x)).transform().pos();
 
         bezier_patch[iy][0] = (p0 + 4 * p1 + p2) / 6.0;
         bezier_patch[iy][1] = (4 * p1 + 2 * p2) / 6.0;
@@ -586,7 +586,7 @@ void PatchSurface::update() {
       PatchSurfaceRSCommand(handle(), PatchSurfaceRSCommand::Internal::UpdateControlPoints{}));
 }
 
-std::expected<std::array<std::array<SceneObjectHandle, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>,
+std::expected<std::array<std::array<PointObjectHandle, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>,
               PatchSurface::GetterError>
 PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const {
   if (patch_coords.x > dim_.x || patch_coords.y > dim_.y) {
@@ -595,7 +595,7 @@ PatchSurface::patch_control_point_handles(eray::math::Vec2u patch_coords) const 
   return unsafe_patch_control_point_handles(patch_coords);
 }
 
-std::array<std::array<SceneObjectHandle, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>
+std::array<std::array<PointObjectHandle, PatchSurface::kPatchSize>, PatchSurface::kPatchSize>
 PatchSurface::unsafe_patch_control_point_handles(eray::math::Vec2u patch_coords) const {
   auto size_x =
       std::visit(eray::util::match{[&](const auto& variant) { return variant.find_size_x(dim_.x); }}, this->object);
@@ -636,14 +636,14 @@ void PatchSurface::clone_to(PatchSurface& obj) const {
   obj.dim_        = this->dim_;
   obj.tess_level_ = this->tess_level_;
 
-  auto handles = scene_.get().create_many_objs<SceneObject>(Point{}, this->points_.size_unique());
+  auto handles = scene_.get().create_many_objs<PointObject>(Point{}, this->points_.size_unique());
   if (!handles) {
     util::Logger::err("Could not copy curve. Points could not be created.");
     return;
   }
 
   for (const auto& h : *handles) {
-    if (auto opt = scene_.get().arena<SceneObject>().get_obj(h)) {
+    if (auto opt = scene_.get().arena<PointObject>().get_obj(h)) {
       auto& p_obj = **opt;
       p_obj.patch_surfaces_.insert(obj.handle());
     }
@@ -652,8 +652,8 @@ void PatchSurface::clone_to(PatchSurface& obj) const {
   obj.points_      = this->points_;
   auto old_handles = this->points_.unique_point_handles();
   for (const auto& h : old_handles) {
-    if (auto opt1 = scene().arena<SceneObject>().get_obj(h)) {
-      if (auto opt2 = scene_.get().arena<SceneObject>().get_obj(handles->back())) {
+    if (auto opt1 = scene().arena<PointObject>().get_obj(h)) {
+      if (auto opt2 = scene_.get().arena<PointObject>().get_obj(handles->back())) {
         const auto& obj1 = **opt1;
         auto& obj2       = **opt2;
 

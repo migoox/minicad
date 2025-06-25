@@ -5,19 +5,21 @@
 #include <liberay/util/logger.hpp>
 #include <liberay/util/object_handle.hpp>
 #include <liberay/util/variant_match.hpp>
-#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/serialization/json/json.hpp>
 #include <libminicad/serialization/json/schema.hpp>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
 
+#include "libminicad/scene/param_primitive.hpp"
+
 namespace mini {
 
 JsonSerializer JsonSerializer::create() {
   return JsonSerializer(Members{
-      .id_map = std::unordered_map<SceneObjectHandle, std::int64_t>(),
+      .id_map = std::unordered_map<PointObjectHandle, std::int64_t>(),
   });
 }
 
@@ -27,60 +29,64 @@ std::string JsonSerializer::serialize(const Scene& scene) {
   int64_t curr_id = 0;
   auto project    = json_schema::JsonProject();
 
-  auto scene_objs = scene.arena<SceneObject>().objs();
+  auto scene_objs = scene.arena<PointObject>().objs();
   for (const auto& obj : scene_objs) {
     m_.id_map.emplace(obj.handle(), curr_id);
 
-    auto p        = obj.transform.pos();
+    auto p        = obj.transform().pos();
     auto target_p = json_schema::Float3();
     target_p.set_x(static_cast<double>(p.x));
     target_p.set_y(static_cast<double>(p.y));
     target_p.set_z(static_cast<double>(p.z));
 
-    std::visit(eray::util::match{
-                   [&](const Point&) {
-                     auto point_element = json_schema::PointElement();
-                     point_element.set_id(curr_id);
-                     point_element.set_position(target_p);
-                     point_element.set_name(obj.name);
-                     project.add_point(std::move(point_element));
-                   },  //
-                   [&](const Torus& torus) {
-                     auto geometry = json_schema::Geometry();
-                     geometry.set_object_type(json_schema::ObjectType::TORUS);
-                     geometry.set_id(curr_id);
-                     geometry.set_name(obj.name);
+    auto point_element = json_schema::PointElement();
+    point_element.set_id(curr_id);
+    point_element.set_position(target_p);
+    point_element.set_name(obj.name);
+    project.add_point(std::move(point_element));
 
-                     geometry.set_large_radius(torus.major_radius);
-                     geometry.set_small_radius(torus.minor_radius);
-
-                     auto target_uv = json_schema::Uint2();
-                     target_uv.set_u(torus.tess_level.x);
-                     target_uv.set_v(torus.tess_level.y);
-                     geometry.set_samples(target_uv);
-
-                     geometry.set_position(target_p);
-
-                     auto q        = obj.transform.rot();
-                     auto target_q = json_schema::Quaternion();
-                     target_q.set_w(static_cast<double>(q.w));
-                     target_q.set_x(static_cast<double>(q.x));
-                     target_q.set_y(static_cast<double>(q.y));
-                     target_q.set_z(static_cast<double>(q.z));
-                     geometry.set_rotation(target_q);
-
-                     auto s        = obj.transform.scale();
-                     auto target_s = json_schema::Float3();
-                     target_s.set_x(static_cast<double>(s.x));
-                     target_s.set_y(static_cast<double>(s.y));
-                     target_s.set_z(static_cast<double>(s.z));
-                     geometry.set_scale(target_s);
-
-                     project.add_geometry(std::move(geometry));
-                   }  //
-               },
-               obj.object);
     ++curr_id;
+  }
+
+  for (auto& obj : scene.arena<ParamPrimitive>().objs()) {
+    std::visit(
+        eray::util::match{
+            [&](const Torus& torus) {
+              auto target_p = json_schema::Float3();
+              auto geometry = json_schema::Geometry();
+              geometry.set_object_type(json_schema::ObjectType::TORUS);
+              geometry.set_id(curr_id);
+              geometry.set_name(obj.name);
+
+              geometry.set_large_radius(torus.major_radius);
+              geometry.set_small_radius(torus.minor_radius);
+
+              auto target_uv = json_schema::Uint2();
+              target_uv.set_u(torus.tess_level.x);
+              target_uv.set_v(torus.tess_level.y);
+              geometry.set_samples(target_uv);
+
+              geometry.set_position(target_p);
+
+              auto q        = obj.transform().rot();
+              auto target_q = json_schema::Quaternion();
+              target_q.set_w(static_cast<double>(q.w));
+              target_q.set_x(static_cast<double>(q.x));
+              target_q.set_y(static_cast<double>(q.y));
+              target_q.set_z(static_cast<double>(q.z));
+              geometry.set_rotation(target_q);
+
+              auto s        = obj.transform().scale();
+              auto target_s = json_schema::Float3();
+              target_s.set_x(static_cast<double>(s.x));
+              target_s.set_y(static_cast<double>(s.y));
+              target_s.set_z(static_cast<double>(s.z));
+              geometry.set_scale(target_s);
+
+              project.add_geometry(std::move(geometry));
+            }  //
+        },
+        obj.object);
   }
 
   auto control_points = std::vector<json_schema::ControlPointElement>();
@@ -152,7 +158,7 @@ std::string JsonSerializer::serialize(const Scene& scene) {
 
 JsonDeserializer JsonDeserializer::create() {
   return JsonDeserializer(Members{
-      .id_map = std::unordered_map<std::int64_t, SceneObjectHandle>(),
+      .id_map = std::unordered_map<std::int64_t, PointObjectHandle>(),
   });
 }
 std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer::deserialize(Scene& scene,
@@ -174,7 +180,7 @@ std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer
 
   if (auto point_elements = project.get_points()) {
     for (const auto& point_element : *point_elements) {
-      if (auto opt = scene.create_obj_and_get<SceneObject>(Point{})) {
+      if (auto opt = scene.create_obj_and_get<PointObject>(Point{})) {
         auto& obj = **opt;
 
         auto id = point_element.get_id();
@@ -185,16 +191,16 @@ std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer
         }
 
         const auto& p = point_element.get_position();
-        obj.transform.set_local_pos(eray::math::Vec3f(static_cast<float>(p.get_x()), static_cast<float>(p.get_y()),
-                                                      static_cast<float>(p.get_z())));
+        obj.transform().set_local_pos(eray::math::Vec3f(static_cast<float>(p.get_x()), static_cast<float>(p.get_y()),
+                                                        static_cast<float>(p.get_z())));
         obj.update();
       }
     }
   }
 
   static constexpr auto kObjectTypeToVariant =
-      eray::util::EnumMapper<json_schema::ObjectType,
-                             std::variant<SceneObjectVariant, CurveVariant, PatchSurfaceVariant>>({
+      eray::util::EnumMapper<json_schema::ObjectType, std::variant<ParamPrimitiveVariant, PointObjectVariant,
+                                                                   CurveVariant, PatchSurfaceVariant>>({
           {json_schema::ObjectType::TORUS, Torus{}},
           {json_schema::ObjectType::CHAIN, Polyline{}},
           {json_schema::ObjectType::BEZIER_C0, MultisegmentBezierCurve{}},
@@ -217,7 +223,9 @@ std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer
 
   return {};
 }
-void JsonDeserializer::Visitor::operator()(SceneObjectVariant&& v, const json_schema::Geometry& elem) {
+void JsonDeserializer::Visitor::operator()(PointObjectVariant&& /*v*/, const json_schema::Geometry& /*elem*/) {}
+
+void JsonDeserializer::Visitor::operator()(ParamPrimitiveVariant&& v, const json_schema::Geometry& elem) {
   std::visit(  //
       eray::util::match{
           [&](Torus&& t) {
@@ -237,21 +245,21 @@ void JsonDeserializer::Visitor::operator()(SceneObjectVariant&& v, const json_sc
               eray::util::Logger::warn("Expected samples defined for torus with id {}", elem.get_id());
             }
 
-            if (auto opt = scene.create_obj_and_get<SceneObject>(std::move(t))) {
+            if (auto opt = scene.create_obj_and_get<ParamPrimitive>(std::move(t))) {
               auto& obj = **opt;
               if (auto name = elem.get_name()) {
                 obj.set_name(std::move(*name));
               }
 
               if (const auto& p = elem.get_position()) {
-                obj.transform.set_local_pos(eray::math::Vec3f(
+                obj.transform().set_local_pos(eray::math::Vec3f(
                     static_cast<float>(p->get_x()), static_cast<float>(p->get_y()), static_cast<float>(p->get_y())));
               } else {
                 eray::util::Logger::warn("Expected position defined for torus with id {}", elem.get_id());
               }
 
               if (const auto& q = elem.get_rotation()) {
-                obj.transform.set_local_rot(
+                obj.transform().set_local_rot(
                     eray::math::Quatf(static_cast<float>(q->get_w()), static_cast<float>(q->get_x()),
                                       static_cast<float>(q->get_y()), static_cast<float>(q->get_z())));
               } else {
@@ -259,7 +267,7 @@ void JsonDeserializer::Visitor::operator()(SceneObjectVariant&& v, const json_sc
               }
 
               if (const auto& s = elem.get_scale()) {
-                obj.transform.set_local_scale(eray::math::Vec3f(
+                obj.transform().set_local_scale(eray::math::Vec3f(
                     static_cast<float>(s->get_x()), static_cast<float>(s->get_y()), static_cast<float>(s->get_z())));
               } else {
                 eray::util::Logger::warn("Expected rotation defined for torus with id {}", elem.get_id());
@@ -306,7 +314,7 @@ void JsonDeserializer::Visitor::operator()(PatchSurfaceVariant&& v, const json_s
       obj.set_name(std::move(*name));
     }
 
-    auto point_handles = std::vector<SceneObjectHandle>();
+    auto point_handles = std::vector<PointObjectHandle>();
     if (auto control_points = elem.get_control_points()) {
       for (auto& cp : *control_points) {
         point_handles.push_back(deserializer.m_.id_map.at(cp.get_id()));

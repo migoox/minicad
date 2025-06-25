@@ -17,13 +17,15 @@
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <optional>
 #include <variant>
 
 #include "liberay/driver/gl/gl_error.hpp"
+#include "libminicad/renderer/gl/approx_curve_renderer.hpp"
+#include "libminicad/renderer/gl/param_primitive_renderer.hpp"
 
 namespace mini::gl {
 
@@ -171,9 +173,10 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
   };
 
   auto global_rs = GlobalRS{
-      .billboards             = {},                                //
-      .debug_points           = {},                                //
-      .debug_lines            = PointsVAO::create(),               //
+      .billboards             = {},                   //
+      .debug_points           = {},                   //
+      .debug_lines            = PointsVAO::create(),  //
+      .textures               = {},
       .point_txt              = create_texture(point_img),         //
       .helper_point_txt       = create_texture(helper_point_img),  //
       .show_grid              = true,                              //
@@ -181,69 +184,82 @@ OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math
       .show_points            = true,                              //
       .anaglyph_enabled       = false,                             //
       .anaglyph_output_coeffs = eray::math::Vec3f::filled(0.F),
+      .timestamp              = 0,  //
+      .signature              = 0   //
   };
 
-  return std::unique_ptr<ISceneRenderer>(new OpenGLSceneRenderer(
-      std::move(shaders), std::move(global_rs), SceneObjectsRenderer::create(), CurvesRenderer::create(),
-      PatchSurfaceRenderer::create(), FillInSurfaceRenderer::create(), ApproxCurvesRenderer::create(),
-      std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
-      std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
+  auto renderers = Renderers{
+      .curve_renderer_               = CurvesRenderer::create(),          //
+      .point_renderer_               = PointObjectRenderer::create(),     //
+      .param_primitive_renderer_     = ParamPrimitiveRenderer::create(),  //
+      .patch_surface_renderer_       = PatchSurfaceRenderer::create(),    //
+      .fill_in_surface_renderer_     = FillInSurfaceRenderer::create(),   //
+      .intersection_curves_renderer_ = ApproxCurvesRenderer::create(),    //
+  };
+
+  return std::unique_ptr<ISceneRenderer>(
+      new OpenGLSceneRenderer(std::move(shaders), std::move(global_rs), std::move(renderers),
+                              std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y),
+                              std::make_unique<gl::ViewportFramebuffer>(win_size.x, win_size.y)));
 }
 
-OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, SceneObjectsRenderer&& objs_rs,
-                                         CurvesRenderer&& curve_objs_rs, PatchSurfaceRenderer&& patch_surface_rs,
-                                         FillInSurfaceRenderer&& fill_in_surface_rs,
-                                         ApproxCurvesRenderer&& intersection_curves_rs,
+OpenGLSceneRenderer::OpenGLSceneRenderer(Shaders&& shaders, GlobalRS&& global_rs, Renderers&& renderers,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& framebuffer,
                                          std::unique_ptr<eray::driver::gl::ViewportFramebuffer>&& right_framebuffer)
     : shaders_(std::move(shaders)),
       global_rs_(std::move(global_rs)),
-      curve_renderer_(std::move(curve_objs_rs)),
-      scene_objs_renderer_(std::move(objs_rs)),
-      patch_surface_renderer_(std::move(patch_surface_rs)),
-      fill_in_surface_renderer_(std::move(fill_in_surface_rs)),
-      intersection_curves_renderer_(std::move(intersection_curves_rs)),
+      renderers_(std::move(renderers)),
       framebuffer_(std::move(framebuffer)),
       right_eye_framebuffer_(std::move(right_framebuffer)) {}
 
 void OpenGLSceneRenderer::push_object_rs_cmd(const RSCommand& cmd) {
   std::visit(eray::util::match{
-                 [this](const SceneObjectRSCommand& v) { scene_objs_renderer_.push_cmd(v); },
-                 [this](const CurveRSCommand& v) { curve_renderer_.push_cmd(v); },
-                 [this](const PatchSurfaceRSCommand& v) { patch_surface_renderer_.push_cmd(v); },
-                 [this](const FillInSurfaceRSCommand& v) { fill_in_surface_renderer_.push_cmd(v); },
-                 [this](const ApproxCurveRSCommand& v) { intersection_curves_renderer_.push_cmd(v); },
+                 [this](const PointObjectRSCommand& v) { renderers_.point_renderer_.push_cmd(v); },
+                 [this](const CurveRSCommand& v) { renderers_.curve_renderer_.push_cmd(v); },
+                 [this](const PatchSurfaceRSCommand& v) { renderers_.patch_surface_renderer_.push_cmd(v); },
+                 [this](const FillInSurfaceRSCommand& v) { renderers_.fill_in_surface_renderer_.push_cmd(v); },
+                 [this](const ApproxCurveRSCommand& v) { renderers_.intersection_curves_renderer_.push_cmd(v); },
+                 [this](const ParamPrimitiveRSCommand& v) { renderers_.param_primitive_renderer_.push_cmd(v); },
              },
              cmd);
 }
 std::optional<ObjectRS> OpenGLSceneRenderer::object_rs(const ObjectHandle& handle) {
-  return std::visit(
-      eray::util::match{
-          [this](const SceneObjectHandle& handle) -> std::optional<ObjectRS> {
-            return scene_objs_renderer_.object_rs(handle);
-          },
-          [this](const CurveHandle& handle) -> std::optional<ObjectRS> { return curve_renderer_.object_rs(handle); },
-          [this](const PatchSurfaceHandle& handle) -> std::optional<ObjectRS> {
-            return patch_surface_renderer_.object_rs(handle);
-          },
-          [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> {
-            return fill_in_surface_renderer_.object_rs(handle);
-          },
-          [this](const ApproxCurveHandle& handle) -> std::optional<ObjectRS> {
-            return intersection_curves_renderer_.object_rs(handle);
-          },
-      },
-      handle);
+  return std::visit(eray::util::match{
+                        [this](const PointObjectHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.point_renderer_.object_rs(handle);
+                        },
+                        [this](const CurveHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.curve_renderer_.object_rs(handle);
+                        },
+                        [this](const PatchSurfaceHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.patch_surface_renderer_.object_rs(handle);
+                        },
+                        [this](const FillInSurfaceHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.fill_in_surface_renderer_.object_rs(handle);
+                        },
+                        [this](const ApproxCurveHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.intersection_curves_renderer_.object_rs(handle);
+                        },
+                        [this](const ParamPrimitiveHandle& handle) -> std::optional<ObjectRS> {
+                          return renderers_.param_primitive_renderer_.object_rs(handle);
+                        },
+                    },
+                    handle);
 }
 
 void OpenGLSceneRenderer::set_object_rs(const ObjectHandle& handle, const ObjectRS& state) {
   std::visit(
       eray::util::match{
-          [&](const SceneObjectHandle& h, const SceneObjectRS& s) { scene_objs_renderer_.set_object_rs(h, s); },
-          [&](const CurveHandle& h, const CurveRS& s) { curve_renderer_.set_object_rs(h, s); },
-          [&](const PatchSurfaceHandle& h, const PatchSurfaceRS& s) { patch_surface_renderer_.set_object_rs(h, s); },
+          [&](const PointObjectHandle& h, const PointObjectRS& s) { renderers_.point_renderer_.set_object_rs(h, s); },
+          [&](const CurveHandle& h, const CurveRS& s) { renderers_.curve_renderer_.set_object_rs(h, s); },
+          [&](const PatchSurfaceHandle& h, const PatchSurfaceRS& s) {
+            renderers_.patch_surface_renderer_.set_object_rs(h, s);
+          },
           [&](const FillInSurfaceHandle& h, const FillInSurfaceRS& s) {
-            fill_in_surface_renderer_.set_object_rs(h, s);
+            renderers_.fill_in_surface_renderer_.set_object_rs(h, s);
+          },
+          [&](const ParamPrimitiveHandle& h, const ParamPrimitiveRS& s) {
+            renderers_.param_primitive_renderer_.set_object_rs(h, s);
           },
           [&](auto&&, auto&&) { util::Logger::warn("Detected handle and rendering state mismatch."); }},
       handle, state);
@@ -265,11 +281,12 @@ void OpenGLSceneRenderer::resize_viewport(eray::math::Vec2i win_size) {
 }
 
 void OpenGLSceneRenderer::update(Scene& scene) {
-  scene_objs_renderer_.update(scene);
-  curve_renderer_.update(scene);
-  patch_surface_renderer_.update(scene);
-  intersection_curves_renderer_.update(scene);
-  fill_in_surface_renderer_.update(scene);
+  renderers_.point_renderer_.update(scene);
+  renderers_.curve_renderer_.update(scene);
+  renderers_.patch_surface_renderer_.update(scene);
+  renderers_.intersection_curves_renderer_.update(scene);
+  renderers_.fill_in_surface_renderer_.update(scene);
+  renderers_.param_primitive_renderer_.update(scene);
 }
 
 TextureHandle OpenGLSceneRenderer::upload_texture(const std::vector<uint32_t>& texture, size_t size_x, size_t size_y) {
@@ -343,17 +360,17 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
     if (id & (1 << 31)) {
       auto helper_point_idx = id & ~(1 << 31);
 
-      if (auto result = this->curve_renderer_.find_helper_point_by_idx(static_cast<size_t>(helper_point_idx))) {
+      if (auto result = renderers_.curve_renderer_.find_helper_point_by_idx(static_cast<size_t>(helper_point_idx))) {
         return SampledHelperPoint{.c_handle = result->first, .helper_point_idx = result->second};
       }
       return std::nullopt;
     }
   }
 
-  auto handles = std::vector<SceneObjectHandle>();
+  auto handles = std::vector<PointObjectHandle>();
   for (auto id : ids) {
-    if (auto h = scene.arena<SceneObject>().handle_by_obj_id(static_cast<std::uint32_t>(id))) {
-      if (scene.arena<SceneObject>().exists(*h)) {
+    if (auto h = scene.arena<PointObject>().handle_by_obj_id(static_cast<std::uint32_t>(id))) {
+      if (scene.arena<PointObject>().exists(*h)) {
         handles.push_back(*h);
       }
     }
@@ -363,11 +380,12 @@ SamplingResult OpenGLSceneRenderer::sample_mouse_pick_box(Scene& scene, size_t x
 }
 
 void OpenGLSceneRenderer::clear() {
-  scene_objs_renderer_          = SceneObjectsRenderer::create();
-  fill_in_surface_renderer_     = FillInSurfaceRenderer::create();
-  patch_surface_renderer_       = PatchSurfaceRenderer::create();
-  curve_renderer_               = CurvesRenderer::create();
-  intersection_curves_renderer_ = ApproxCurvesRenderer::create();
+  renderers_.point_renderer_               = PointObjectRenderer::create();
+  renderers_.fill_in_surface_renderer_     = FillInSurfaceRenderer::create();
+  renderers_.patch_surface_renderer_       = PatchSurfaceRenderer::create();
+  renderers_.curve_renderer_               = CurvesRenderer::create();
+  renderers_.intersection_curves_renderer_ = ApproxCurvesRenderer::create();
+  renderers_.param_primitive_renderer_     = ParamPrimitiveRenderer::create();
   clear_debug();
 }
 
@@ -446,21 +464,21 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   shaders_.param->set_uniform("u_pMat", proj_mat);
   shaders_.param->bind();
   shaders_.param->set_uniform("u_fill", true);
-  scene_objs_renderer_.render_parameterized_surfaces_filled();
+  renderers_.param_primitive_renderer_.render_parameterized_surfaces_filled();
   fb.end_pick_render();
   shaders_.param->set_uniform("u_fill", false);
-  scene_objs_renderer_.render_parameterized_surfaces();
+  renderers_.param_primitive_renderer_.render_parameterized_surfaces();
 
   // Render polylines and control grids
   if (are_polylines_shown()) {
     shaders_.polyline->bind();
     shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
     shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
-    curve_renderer_.render_polylines();
-    patch_surface_renderer_.render_control_grids();
+    renderers_.curve_renderer_.render_polylines();
+    renderers_.patch_surface_renderer_.render_control_grids();
 
     shaders_.polyline->set_uniform("u_color", RendererColors::kVectors);
-    fill_in_surface_renderer_.render_control_grids();
+    renderers_.fill_in_surface_renderer_.render_control_grids();
   }
 
   // Render Curves
@@ -469,25 +487,25 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   shaders_.bezier->set_uniform("u_width", static_cast<float>(fb.width()));
   shaders_.bezier->set_uniform("u_height", static_cast<float>(fb.height()));
   shaders_.bezier->set_uniform("u_color", RendererColors::kNetColor);
-  curve_renderer_.render_curves();
+  renderers_.curve_renderer_.render_curves();
 
   // Render Patch Surface
   shaders_.bezier_surf->bind();
   shaders_.bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
   shaders_.bezier_surf->set_uniform("u_color", RendererColors::kNetColor);
   shaders_.bezier_surf->set_uniform("u_horizontal", true);
-  patch_surface_renderer_.render_surfaces();
+  renderers_.patch_surface_renderer_.render_surfaces();
   shaders_.bezier_surf->set_uniform("u_horizontal", false);
-  patch_surface_renderer_.render_surfaces();
+  renderers_.patch_surface_renderer_.render_surfaces();
 
   // Render Fill In Surface
   shaders_.rational_bezier_surf->bind();
   shaders_.rational_bezier_surf->set_uniform("u_pvMat", proj_mat * view_mat);
   shaders_.rational_bezier_surf->set_uniform("u_color", RendererColors::kNetColor);
   shaders_.rational_bezier_surf->set_uniform("u_horizontal", true);
-  fill_in_surface_renderer_.render_fill_in_surfaces();
+  renderers_.fill_in_surface_renderer_.render_fill_in_surfaces();
   shaders_.rational_bezier_surf->set_uniform("u_horizontal", false);
-  fill_in_surface_renderer_.render_fill_in_surfaces();
+  renderers_.fill_in_surface_renderer_.render_fill_in_surfaces();
 
   // Render grid
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
@@ -512,7 +530,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   shaders_.helper_points->set_uniform("u_aspectRatio", camera.aspect_ratio());
   shaders_.helper_points->set_uniform("u_textureSampler", 0);
   shaders_.helper_points->bind();
-  curve_renderer_.render_helper_points();
+  renderers_.curve_renderer_.render_helper_points();
   fb.end_pick_render();
 
   // Render control points
@@ -526,7 +544,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     shaders_.instanced_sprite->set_uniform("u_aspectRatio", camera.aspect_ratio());
     shaders_.instanced_sprite->set_uniform("u_textureSampler", 0);
     shaders_.instanced_sprite->bind();
-    scene_objs_renderer_.render_control_points();
+    renderers_.point_renderer_.render_control_points();
     fb.end_pick_render();
   }
 
@@ -552,7 +570,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   shaders_.polyline->bind();
   shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
   shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
-  intersection_curves_renderer_.render_curves();
+  renderers_.intersection_curves_renderer_.render_curves();
 
   // Render debug helpers
   ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));

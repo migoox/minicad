@@ -8,10 +8,10 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/curve.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <optional>
 #include <unordered_set>
 #include <variant>
@@ -20,20 +20,20 @@ namespace mini {
 
 namespace util = eray::util;
 
-SceneObject::SceneObject(SceneObjectHandle handle, Scene& scene)
-    : ObjectBase<SceneObject, SceneObjectVariant>(handle, scene) {
-  scene.renderer().push_object_rs_cmd(SceneObjectRSCommand(handle, SceneObjectRSCommand::Internal::AddObject{}));
+PointObject::PointObject(PointObjectHandle handle, Scene& scene)
+    : ObjectBase<PointObject, PointObjectVariant>(handle, scene) {
+  scene.renderer().push_object_rs_cmd(PointObjectRSCommand(handle, PointObjectRSCommand::Internal::AddObject{}));
 }
 
-bool SceneObject::can_be_deleted() const { return patch_surfaces_.empty(); }
+bool PointObject::can_be_deleted() const { return patch_surfaces_.empty(); }
 
-void SceneObject::on_delete() {
+void PointObject::on_delete() {
   if (!can_be_deleted()) {
     eray::util::Logger::err("Requested deletion of a scene object, however it cannot be deleted.");
     return;
   }
 
-  scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::Internal::DeleteObject{}));
+  scene().renderer().push_object_rs_cmd(PointObjectRSCommand(handle_, PointObjectRSCommand::Internal::DeleteObject{}));
 
   if (has_type<Point>()) {
     // Only points might be a part of the curve
@@ -52,8 +52,8 @@ void SceneObject::on_delete() {
   }
 }
 
-void SceneObject::update() {
-  scene().renderer().push_object_rs_cmd(SceneObjectRSCommand(handle_, SceneObjectRSCommand::UpdateObjectMembers{}));
+void PointObject::update() {
+  scene().renderer().push_object_rs_cmd(PointObjectRSCommand(handle_, PointObjectRSCommand::UpdateObjectMembers{}));
 
   // Only points might be a part of the point lists
   if (has_type<Point>()) {
@@ -86,7 +86,7 @@ void SceneObject::update() {
   }
 }
 
-void SceneObject::move_refs_to(SceneObject& obj) {
+void PointObject::move_refs_to(PointObject& obj) {
   for (const auto& c_h : curves_) {
     if (auto pl = scene().arena<Curve>().get_obj(c_h)) {
       if (auto result = pl.value()->points_.replace(handle(), obj); !result) {
@@ -137,13 +137,13 @@ void SceneObject::move_refs_to(SceneObject& obj) {
   fill_in_surfaces_.clear();
 }
 
-void SceneObject::clone_to(SceneObject& obj) const {
-  obj.transform = this->transform.clone_detached();
-  obj.name      = this->name + " Copy";
-  obj.object    = this->object;
+void PointObject::clone_to(PointObject& obj) const {
+  obj.transform_ = this->transform_.clone_detached();
+  obj.name       = this->name + " Copy";
+  obj.object     = this->object;
 
   scene_.get().renderer().push_object_rs_cmd(
-      SceneObjectRSCommand(obj.handle(), SceneObjectRSCommand::UpdateObjectMembers{}));
+      PointObjectRSCommand(obj.handle(), PointObjectRSCommand::UpdateObjectMembers{}));
 }
 
 }  // namespace mini

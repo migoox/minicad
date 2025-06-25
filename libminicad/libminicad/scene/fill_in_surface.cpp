@@ -3,8 +3,8 @@
 #include <liberay/util/container_extensions.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
-#include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/scene.hpp>
 
 namespace mini {
 
@@ -41,8 +41,8 @@ Triangle FillInSurface::SurfaceNeighborhood::get_triangle() {
 FillInSurface::FillInSurface(const FillInSurfaceHandle& handle, Scene& scene)
     : ObjectBase<FillInSurface, FillInSurfaceVariant>(handle, scene), neighborhood_([] {
         SurfaceNeighbor default_neighbor{
-            .boundaries = eray::util::make_filled_array<std::array<SceneObjectHandle, 4>, 2>(
-                eray::util::make_filled_array<SceneObjectHandle, 4>(SceneObjectHandle(0, 0, 0))),
+            .boundaries = eray::util::make_filled_array<std::array<PointObjectHandle, 4>, 2>(
+                eray::util::make_filled_array<PointObjectHandle, 4>(PointObjectHandle(0, 0, 0))),
             .handle = PatchSurfaceHandle(0, 0, 0)};
 
         return SurfaceNeighborhood(eray::util::make_filled_array<SurfaceNeighbor, kNeighbors>(default_neighbor));
@@ -52,7 +52,7 @@ std::expected<void, FillInSurface::InitError> FillInSurface::init(SurfaceNeighbo
   for (auto& n : nighborhood.neighbors) {
     for (const auto& b : n.boundaries) {
       for (const auto h : b) {
-        if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+        if (auto opt = scene().arena<PointObject>().get_obj(h)) {
           auto& obj = **opt;
           if (!obj.has_type<Point>()) {
             eray::util::Logger::err("Could not create a fill in surface. One of the scene objects is not a point.");
@@ -222,9 +222,9 @@ void FillInSurface::update() {
 
     for (auto b = 0U; const auto& boundary : handles) {
       for (auto i = 0U; const auto& p_h : boundary) {
-        if (auto opt = scene().arena<SceneObject>().get_obj(p_h)) {
+        if (auto opt = scene().arena<PointObject>().get_obj(p_h)) {
           const auto& obj = **opt;
-          points[b][i++]  = obj.transform.pos();
+          points[b][i++]  = obj.transform().pos();
         } else {
           eray::util::Logger::warn("Could not update the bezier points in fill in surface. ");
           return points;
@@ -439,7 +439,7 @@ void FillInSurface::on_delete() {
 
     for (const auto& b : n.boundaries) {
       for (const auto h : b) {
-        if (auto opt = scene().arena<SceneObject>().get_obj(h)) {
+        if (auto opt = scene().arena<PointObject>().get_obj(h)) {
           auto& obj = **opt;
           obj.fill_in_surfaces_.erase(handle());
         }
@@ -463,7 +463,7 @@ void FillInSurface::set_tess_level(int tesselation) {
 }
 
 std::expected<void, FillInSurface::ReplaceOperationError> FillInSurface::replace(
-    const SceneObjectHandle& old_point_handle, SceneObject& new_point) {
+    const PointObjectHandle& old_point_handle, PointObject& new_point) {
   if (!new_point.has_type<Point>()) {
     eray::util::Logger::err("Could not replace a point. New scene object is not a point.");
     return std::unexpected(ReplaceOperationError::NotAPoint);

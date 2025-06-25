@@ -35,10 +35,10 @@
 #include <libminicad/scene/approx_curve.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <libminicad/serialization/json/json.hpp>
 #include <memory>
 #include <minicad/app.hpp>
@@ -55,6 +55,9 @@
 #include <ranges>
 #include <tracy/Tracy.hpp>
 #include <variant>
+
+#include "libminicad/scene/param_primitive.hpp"
+#include "libminicad/scene/types.hpp"
 
 namespace mini {
 
@@ -106,24 +109,25 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   sr->add_billboard("cursor", cursor_img);
   sr->add_billboard("centroid", centroid_img);
 
-  return MiniCadApp(std::move(window), {
-                                           .proj_path                = std::nullopt,
-                                           .orbiting_camera_operator = OrbitingCameraOperator(),    //
-                                           .cursor                   = std::make_unique<Cursor>(),  //
-                                           .camera                   = std::move(camera),           //
-                                           .camera_gimbal            = std::move(gimbal),           //
-                                           .show_centroid            = false,                       //
-                                           .grid_on                  = true,                        //
-                                           .use_ortho                = false,                       //
-                                           .is_gizmo_used            = false,                       //
-                                           .ctrl_pressed             = false,                       //
-                                           .select_tool              = SelectTool(),                //
-                                           .scene                    = Scene(std::move(sr)),        //
-                                           .tool_state               = ToolState::Cursor,
-                                           .scene_obj_selection      = std::make_unique<SceneObjectsSelection>(),    //
-                                           .non_scene_obj_selection  = std::make_unique<NonSceneObjectSelection>(),  //
-                                           .helper_point_selection   = HelperPointSelection()                        //
-                                       });
+  return MiniCadApp(std::move(window),
+                    {
+                        .proj_path                   = std::nullopt,
+                        .orbiting_camera_operator    = OrbitingCameraOperator(),    //
+                        .cursor                      = std::make_unique<Cursor>(),  //
+                        .camera                      = std::move(camera),           //
+                        .camera_gimbal               = std::move(gimbal),           //
+                        .show_centroid               = false,                       //
+                        .grid_on                     = true,                        //
+                        .use_ortho                   = false,                       //
+                        .is_gizmo_used               = false,                       //
+                        .ctrl_pressed                = false,                       //
+                        .select_tool                 = SelectTool(),                //
+                        .scene                       = Scene(std::move(sr)),        //
+                        .tool_state                  = ToolState::Cursor,
+                        .transformable_selection     = std::make_unique<TransformableSelection>(),     //
+                        .non_transformable_selection = std::make_unique<NonTransformableSelection>(),  //
+                        .helper_point_selection      = HelperPointSelection()                          //
+                    });
 }
 
 MiniCadApp::MiniCadApp(std::unique_ptr<os::Window> window, Members&& m)
@@ -168,7 +172,7 @@ void MiniCadApp::gui_objects_list_window() {
   });
   ImGui::Begin("Objects");
   if (ImGui::Button(ICON_FA_CIRCLE " Point")) {
-    on_scene_object_added(Point{});
+    on_point_object_added(Point{});
   }
   ImGui::SameLine();
   if (ImGui::Button(ICON_FA_BEZIER_CURVE " Curve")) {
@@ -179,7 +183,7 @@ void MiniCadApp::gui_objects_list_window() {
   }
   ImGui::SameLine();
   if (ImGui::Button(ICON_FA_GLOBE " Param Surface")) {
-    on_scene_object_added(Torus{});
+    on_param_primitive_added(Torus{});
   }
 
   if (ImGui::BeginPopup("AddCurvePopup")) {
@@ -254,20 +258,20 @@ void MiniCadApp::gui_objects_list_window() {
     auto drop_target = [&](const CurveHandle& h) {
       if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPointDragAndDropPayloadType.c_str())) {
-          IM_ASSERT(payload->DataSize == sizeof(SceneObjectHandle));
-          auto point_handle = *static_cast<SceneObjectHandle*>(payload->Data);
+          IM_ASSERT(payload->DataSize == sizeof(PointObjectHandle));
+          auto point_handle = *static_cast<PointObjectHandle*>(payload->Data);
           m_.scene.push_back_point_to_curve(point_handle, h);
         }
         ImGui::EndDragDropTarget();
       }
     };
 
-    auto drop_source = [&](const SceneObjectHandle& h) {
-      if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+    auto drop_source = [&](const PointObjectHandle& h) {
+      if (auto opt = m_.scene.arena<PointObject>().get_obj(h)) {
         const auto& obj = **opt;
         if (obj.has_type<Point>()) {
           if (ImGui::BeginDragDropSource()) {
-            ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &h, sizeof(SceneObjectHandle));
+            ImGui::SetDragDropPayload(kPointDragAndDropPayloadType.c_str(), &h, sizeof(PointObjectHandle));
             ImGui::Text("%s", obj.name.c_str());
             ImGui::EndDragDropSource();
           }
@@ -283,25 +287,32 @@ void MiniCadApp::gui_objects_list_window() {
       ImGui::OpenPopup("SelectionPopup");
     };
 
-    auto draw_item_scene_obj = [&](const SceneObjectHandle& h) {
-      bool is_selected = m_.scene_obj_selection->contains(h);
+    auto draw_transformable_obj = [&](const TransformableObjectHandle& h) {
+      bool is_selected = m_.transformable_selection->contains(h);
 
-      using T = ERAY_HANDLE_OBJ(h);
-      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
-                                     on_popup);
+      auto draw_obj = [&](const auto& h) {
+        using T = ERAY_HANDLE_OBJ(h);
+        ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
+                                       on_popup);
+      };
+
+      std::visit(match{draw_obj}, h);
     };
 
-    auto draw_item_non_scene_obj = [&](const auto& h) {
-      bool is_selected = m_.non_scene_obj_selection->contains(h);
+    auto draw_item_non_transformable_obj = [&](const NonTransformableObjectHandle& h) {
+      bool is_selected = m_.non_transformable_selection->contains(h);
 
-      using T = ERAY_HANDLE_OBJ(h);
-      ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
-                                     on_popup);
+      auto draw_obj = [&](const auto& h) {
+        using T = ERAY_HANDLE_OBJ(h);
+        ImGui::mini::ObjectListItem<T>(m_.scene, h, is_selected, on_activate, on_deactivate, on_activate_single,
+                                       on_popup);
+      };
+      std::visit(match{draw_obj}, h);
     };
 
-    auto skip_point = [&](const SceneObjectHandle& h) {
+    auto skip_point = [&](const PointObjectHandle& h) {
       if (hide_points) {
-        if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+        if (auto opt = m_.scene.arena<PointObject>().get_obj(h)) {
           const auto& obj = **opt;
           if (obj.has_type<Point>()) {
             return true;
@@ -317,7 +328,7 @@ void MiniCadApp::gui_objects_list_window() {
         continue;
       }
 
-      std::visit(util::match{draw_item_scene_obj, draw_item_non_scene_obj}, handle);
+      std::visit(util::match{draw_transformable_obj, draw_item_non_transformable_obj}, handle);
       std::visit(util::match{drop_target, [](const auto&) {}}, handle);
       std::visit(util::match{drop_source, [](const auto&) {}}, handle);
     }
@@ -326,7 +337,7 @@ void MiniCadApp::gui_objects_list_window() {
   static std::optional<ObjectHandle> rename_handle = std::nullopt;
   bool open_rename_modal                           = false;
   if (ImGui::BeginPopup("SelectionPopup")) {
-    bool disabled = !m_.scene_obj_selection->is_points_only() || !m_.non_scene_obj_selection->is_empty();
+    bool disabled = !m_.transformable_selection->is_points_only() || !m_.non_transformable_selection->is_empty();
     if (disabled) {
       ImGui::BeginDisabled();
     }
@@ -419,14 +430,19 @@ void MiniCadApp::gui_objects_list_window() {
 
 void MiniCadApp::gui_transform_window() {
   ImGui::Begin(ICON_FA_UP_DOWN_LEFT_RIGHT " Transform");
-  if (m_.scene_obj_selection->is_single_selection()) {
-    if (auto opt = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
-      auto& obj = **opt;
-      ImGui::mini::Transform(obj.transform, [&]() { obj.update(); });
-    }
-  } else if (m_.scene_obj_selection->is_multi_selection()) {
-    ImGui::mini::Transform(m_.scene_obj_selection->transform,
-                           [&]() { m_.scene_obj_selection->update_transforms(m_.scene, *m_.cursor); });
+  if (m_.transformable_selection->is_single_selection()) {
+    auto draw_transform = [&](const auto& h) {
+      using T = ERAY_HANDLE_OBJ(h);
+      if (auto opt = m_.scene.arena<T>().get_obj(h)) {
+        CTransformableObject auto& obj = **opt;
+        ImGui::mini::Transform(obj.transform(), [&]() { obj.update(); });
+      }
+    };
+
+    std::visit(match{draw_transform}, m_.transformable_selection->first());
+  } else if (m_.transformable_selection->is_multi_selection()) {
+    ImGui::mini::Transform(m_.transformable_selection->transform,
+                           [&]() { m_.transformable_selection->update_transforms(m_.scene, *m_.cursor); });
   }
 
   ImGui::End();
@@ -488,14 +504,15 @@ void MiniCadApp::gui_object_window() {
           if (ImGui::Button("Add")) {
             on_point_created_in_point_list(h);
           }
+          auto selected_point = m_.transformable_selection->single_point();
+
           ImGui::SameLine();
-          bool disable =
-              !m_.scene_obj_selection->is_single_selection() || !curve.contains(m_.scene_obj_selection->first());
+          bool disable = !selected_point || !curve.contains(*selected_point);
           if (disable) {
             ImGui::BeginDisabled();
           }
           if (ImGui::Button("Remove")) {
-            m_.scene.remove_point_from_curve(m_.scene_obj_selection->first(), h);
+            m_.scene.remove_point_from_curve(*selected_point, h);
           }
           if (disable) {
             ImGui::EndDisabled();
@@ -503,7 +520,7 @@ void MiniCadApp::gui_object_window() {
 
           for (auto idx = 0U; const auto& p : curve.point_objects()) {
             ImGui::PushID(static_cast<int>(p.id()));
-            bool is_selected = m_.scene_obj_selection->contains(p.handle());
+            bool is_selected = m_.transformable_selection->contains(p.handle());
             if (ImGui::Selectable(p.name.c_str(), is_selected)) {
               is_selected ? on_selection_remove(p.handle()) : on_selection_add(p.handle());
             }
@@ -597,8 +614,32 @@ void MiniCadApp::gui_object_window() {
     }
   };
 
-  auto draw_scene_object = [&](const SceneObjectHandle& h) {
-    if (auto opt = m_.scene.arena<SceneObject>().get_obj(h)) {
+  auto draw_point_object = [&](const PointObjectHandle& h) {
+    if (auto opt = m_.scene.arena<PointObject>().get_obj(h)) {
+      auto& obj = **opt;
+
+      ImGui::Text("Name: %s", obj.name.c_str());
+      ImGui::SameLine();
+      static std::string object_name;
+      if (ImGui::Button("Rename")) {
+        ImGui::mini::OpenModal("Rename object");
+        object_name = obj.name;
+      }
+      if (ImGui::mini::RenameModal("Rename object", object_name)) {
+        obj.name = object_name;
+      }
+
+      std::visit(util::match{[&](auto& o) {
+                   ImGui::Text("Type: %s", o.type_name().c_str());
+                   ImGui::SameLine();
+                   ImGui::Text("ID: %d", obj.id());
+                 }},
+                 obj.object);
+    }
+  };
+
+  auto draw_param_primitive = [&](const ParamPrimitiveHandle& h) {
+    if (auto opt = m_.scene.arena<ParamPrimitive>().get_obj(h)) {
       auto& obj = **opt;
 
       ImGui::Text("Name: %s", obj.name.c_str());
@@ -634,9 +675,7 @@ void MiniCadApp::gui_object_window() {
         }
       };
 
-      auto draw_point = [&](Point& /*p*/) {};
-
-      std::visit(util::match{draw_point, draw_torus}, obj.object);
+      std::visit(match{draw_torus}, obj.object);
     }
   };
 
@@ -698,11 +737,12 @@ void MiniCadApp::gui_object_window() {
   };
 
   ImGui::Begin(ICON_FA_PEN " Object");
-  if (m_.non_scene_obj_selection->is_single_selection()) {  // non scene objects have priority
+  if (m_.non_transformable_selection->is_single_selection()) {  // non scene objects have priority
     std::visit(util::match{draw_curve, draw_patch, draw_fill_in_surface, draw_approx_curve},
-               m_.non_scene_obj_selection->first());
-  } else if (!m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_single_selection()) {
-    draw_scene_object(m_.scene_obj_selection->first());
+               m_.non_transformable_selection->first());
+  } else if (!m_.non_transformable_selection->is_single_selection() &&
+             m_.transformable_selection->is_single_selection()) {
+    std::visit(util::match{draw_point_object, draw_param_primitive}, m_.transformable_selection->first());
   }
   ImGui::End();
 }
@@ -779,7 +819,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     m_.camera_gimbal->set_local_pos(m_.cursor->transform.pos());
   }
   if (ImGui::Button("Look at origin")) {
-    m_.camera_gimbal->set_local_pos(m_.scene_obj_selection->centroid());
+    m_.camera_gimbal->set_local_pos(m_.transformable_selection->centroid());
   }
   ImGui::End();
 
@@ -867,11 +907,11 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         }
         ImGui::EndCombo();
       }
-      bool cursor_as_origin = m_.scene_obj_selection->is_using_custom_origin();
+      bool cursor_as_origin = m_.transformable_selection->is_using_custom_origin();
       if (ImGui::Checkbox("Use cursor as origin", &cursor_as_origin)) {
-        m_.scene_obj_selection->use_custom_origin(m_.scene, cursor_as_origin);
+        m_.transformable_selection->use_custom_origin(m_.scene, cursor_as_origin);
         if (cursor_as_origin) {
-          m_.scene_obj_selection->set_custom_origin(m_.scene, m_.cursor->transform.pos());
+          m_.transformable_selection->set_custom_origin(m_.scene, m_.cursor->transform.pos());
         }
       }
     }
@@ -900,14 +940,15 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::mini::gizmo::BeginFrame(ImGui::GetBackgroundDrawList());
     ImGui::mini::gizmo::SetRect(0, 0, math::Vec2f(window_->size()));
 
-    if (m_.scene_obj_selection->is_multi_selection() || m_.scene_obj_selection->is_using_custom_origin()) {
-      if (ImGui::mini::gizmo::Transform(m_.scene_obj_selection->transform, *m_.camera, mode, operation,
-                                        [&]() { m_.scene_obj_selection->update_transforms(m_.scene, *m_.cursor); })) {
+    if (m_.transformable_selection->is_multi_selection() || m_.transformable_selection->is_using_custom_origin()) {
+      if (ImGui::mini::gizmo::Transform(m_.transformable_selection->transform, *m_.camera, mode, operation, [&]() {
+            m_.transformable_selection->update_transforms(m_.scene, *m_.cursor);
+          })) {
         m_.select_tool.end_box_select();
       }
-    } else if (m_.scene_obj_selection->is_single_selection()) {
-      if (auto o = m_.scene.arena<SceneObject>().get_obj(m_.scene_obj_selection->first())) {
-        if (ImGui::mini::gizmo::Transform(o.value()->transform, *m_.camera, mode, operation,
+    } else if (auto point_handle = m_.transformable_selection->single_point()) {
+      if (auto o = m_.scene.arena<PointObject>().get_obj(*point_handle)) {
+        if (ImGui::mini::gizmo::Transform(o.value()->transform(), *m_.camera, mode, operation,
                                           [&]() { o.value()->update(); })) {
           m_.select_tool.end_box_select();
         }
@@ -933,8 +974,8 @@ void MiniCadApp::render(Application::Duration /* delta */) {
 
   m_.scene.renderer().show_grid(m_.grid_on);
   m_.scene.renderer().billboard("cursor").position   = m_.cursor->transform.pos();
-  m_.scene.renderer().billboard("centroid").show     = m_.scene_obj_selection->is_multi_selection();
-  m_.scene.renderer().billboard("centroid").position = m_.scene_obj_selection->centroid();
+  m_.scene.renderer().billboard("centroid").show     = m_.transformable_selection->is_multi_selection();
+  m_.scene.renderer().billboard("centroid").position = m_.transformable_selection->centroid();
   m_.scene.renderer().render(*m_.camera);
 }
 
@@ -948,15 +989,34 @@ void MiniCadApp::update(Duration delta) {
   m_.cursor->update(*m_.camera, math::Vec2f(window_->mouse_pos_ndc()));
 }
 
-bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
-  auto obj_handle = m_.scene.create_obj<SceneObject>(std::move(variant));
+bool MiniCadApp::on_param_primitive_added(ParamPrimitiveVariant variant) {
+  auto obj_handle = m_.scene.create_obj<ParamPrimitive>(std::move(variant));
   if (!obj_handle) {
     Logger::err("Could not add a new curve");
     return false;
   }
 
-  if (auto o = m_.scene.arena<SceneObject>().get_obj(*obj_handle)) {
-    o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+  if (auto o = m_.scene.arena<ParamPrimitive>().get_obj(*obj_handle)) {
+    o.value()->transform().set_local_pos(m_.cursor->transform.pos());
+    o.value()->update();
+    on_selection_clear();
+    on_selection_add(*obj_handle);
+    util::Logger::info("Created scene object \"{}\"", o.value()->name);
+    return true;
+  }
+
+  return false;
+}
+
+bool MiniCadApp::on_point_object_added(PointObjectVariant variant) {
+  auto obj_handle = m_.scene.create_obj<PointObject>(std::move(variant));
+  if (!obj_handle) {
+    Logger::err("Could not add a new curve");
+    return false;
+  }
+
+  if (auto o = m_.scene.arena<PointObject>().get_obj(*obj_handle)) {
+    o.value()->transform().set_local_pos(m_.cursor->transform.pos());
     o.value()->update();
     on_selection_clear();
     on_selection_add(*obj_handle);
@@ -968,15 +1028,15 @@ bool MiniCadApp::on_scene_object_added(SceneObjectVariant variant) {
 }
 
 bool MiniCadApp::on_point_created_in_point_list(const CurveHandle& handle) {
-  auto obj_handle = m_.scene.create_obj<SceneObject>(Point{});
+  auto obj_handle = m_.scene.create_obj<PointObject>(Point{});
   if (!obj_handle) {
     Logger::err("Could not add a new curve");
     return false;
   }
 
-  if (auto o = m_.scene.arena<SceneObject>().get_obj(*obj_handle)) {
+  if (auto o = m_.scene.arena<PointObject>().get_obj(*obj_handle)) {
     m_.scene.push_back_point_to_curve(*obj_handle, handle);
-    o.value()->transform.set_local_pos(m_.cursor->transform.pos());
+    o.value()->transform().set_local_pos(m_.cursor->transform.pos());
     o.value()->update();
     on_selection_add(handle);
     util::Logger::info("Created scene object \"{}\"", o.value()->name);
@@ -1005,7 +1065,7 @@ bool MiniCadApp::on_obj_deleted(const ObjectHandle& handle) {
 
 bool MiniCadApp::on_curve_added(CurveVariant variant) {
   if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
-    m_.non_scene_obj_selection->add(*handle);
+    m_.non_transformable_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
 
@@ -1024,12 +1084,12 @@ bool MiniCadApp::on_curve_added(CurveVariant variant) {
 
 bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
   if (auto handle = m_.scene.create_obj<Curve>(std::move(variant))) {
-    m_.non_scene_obj_selection->add(*handle);
+    m_.non_transformable_selection->add(*handle);
     if (auto o = m_.scene.arena<Curve>().get_obj(*handle)) {
       Logger::info("Created curve \"{}\"", o.value()->name);
 
-      if (m_.scene_obj_selection->is_points_only()) {
-        for (const auto& h : *m_.scene_obj_selection) {
+      if (m_.transformable_selection->is_points_only()) {
+        for (const auto& h : m_.transformable_selection->points()) {
           if (!o.value()->push_back(h)) {
             Logger::warn("Could not add scene object with id to curve\"{}\"", h.obj_id);
           }
@@ -1044,15 +1104,16 @@ bool MiniCadApp::on_curve_added_from_points_selection(CurveVariant variant) {
 }
 
 bool MiniCadApp::on_selection_merge() {
-  if (!m_.scene_obj_selection->is_points_only()) {
+  if (!m_.transformable_selection->is_points_only()) {
     return false;
   }
 
-  if (!m_.scene.merge_points(m_.scene_obj_selection->begin(), m_.scene_obj_selection->end())) {
+  auto points = m_.transformable_selection->points();
+  if (!m_.scene.merge_points(points.begin(), points.end())) {
     Logger::warn("Could not merge points");
     return false;
   }
-  m_.scene_obj_selection->clear(m_.scene);
+  m_.transformable_selection->clear(m_.scene);
   return true;
 }
 
@@ -1088,7 +1149,7 @@ bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant, const Be
 
   if (auto opt = m_.scene.create_obj_and_get<FillInSurface>(std::move(variant))) {
     auto& obj = **opt;
-    m_.non_scene_obj_selection->add(obj.handle());
+    m_.non_transformable_selection->add(obj.handle());
 
     if (!obj.init(std::move(neighborhood))) {
       Logger::err("Failed to create fill in surface \"{}\"", obj.name);
@@ -1104,7 +1165,7 @@ bool MiniCadApp::on_fill_in_surface_added(FillInSurfaceVariant variant, const Be
 
 bool MiniCadApp::on_patch_surface_added(PatchSurfaceVariant variant, const ImGui::mini::PatchSurfaceInfo& info) {
   if (auto handle = m_.scene.create_obj<PatchSurface>(std::move(variant))) {
-    m_.non_scene_obj_selection->add(*handle);
+    m_.non_transformable_selection->add(*handle);
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       Logger::info("Created patch surface \"{}\"", o.value()->name);
       if (!info.cylinder) {
@@ -1163,15 +1224,21 @@ bool MiniCadApp::on_points_reorder(const CurveHandle& handle, const std::optiona
 }
 
 bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
-  auto scene_obj = [&](const SceneObjectHandle& h) {
-    m_.scene_obj_selection->add(m_.scene, h);
+  auto point_obj = [&](const PointObjectHandle& h) {
+    m_.transformable_selection->add(m_.scene, h);
     m_.scene.renderer().push_object_rs_cmd(
-        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+        PointObjectRSCommand(h, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
   };
 
-  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->add(h); };
+  auto param_primitive = [&](const ParamPrimitiveHandle& h) {
+    m_.transformable_selection->add(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        ParamPrimitiveRSCommand(h, ParamPrimitiveRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+  };
 
-  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_scene_obj_selection->add(h); };
+  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_transformable_selection->add(h); };
+
+  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_transformable_selection->add(h); };
 
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
@@ -1180,24 +1247,31 @@ bool MiniCadApp::on_selection_add(const ObjectHandle& handle) {
       on_selection_add_many(handles.begin(), handles.end());
     }
 
-    m_.non_scene_obj_selection->add(h);
+    m_.non_transformable_selection->add(h);
   };
 
-  std::visit(util::match{scene_obj, fill_in_surface_obj, intersection_curve_obj, point_list_obj}, handle);
+  std::visit(util::match{point_obj, fill_in_surface_obj, intersection_curve_obj, point_list_obj, param_primitive},
+             handle);
 
   return true;
 }
 
 bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
-  auto scene_obj = [&](const SceneObjectHandle& h) {
-    m_.scene_obj_selection->remove(m_.scene, h);
+  auto point_obj = [&](const PointObjectHandle& h) {
+    m_.transformable_selection->remove(m_.scene, h);
     m_.scene.renderer().push_object_rs_cmd(
-        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+        PointObjectRSCommand(h, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
   };
 
-  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_scene_obj_selection->remove(h); };
+  auto param_primitive = [&](const ParamPrimitiveHandle& h) {
+    m_.transformable_selection->remove(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        ParamPrimitiveRSCommand(h, ParamPrimitiveRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+  };
 
-  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_scene_obj_selection->remove(h); };
+  auto fill_in_surface_obj = [&](const FillInSurfaceHandle& h) { m_.non_transformable_selection->remove(h); };
+
+  auto intersection_curve_obj = [&](const ApproxCurveHandle& h) { m_.non_transformable_selection->remove(h); };
 
   auto point_list_obj = [&](const auto& h) {
     using T = ERAY_HANDLE_OBJ(h);
@@ -1206,10 +1280,11 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
       on_selection_remove_many(handles.begin(), handles.end());
     }
 
-    m_.non_scene_obj_selection->remove(h);
+    m_.non_transformable_selection->remove(h);
   };
 
-  std::visit(util::match{scene_obj, fill_in_surface_obj, intersection_curve_obj, point_list_obj}, handle);
+  std::visit(eray::util::match{point_obj, param_primitive, fill_in_surface_obj, intersection_curve_obj, point_list_obj},
+             handle);
 
   return true;
 }
@@ -1217,35 +1292,50 @@ bool MiniCadApp::on_selection_remove(const ObjectHandle& handle) {
 bool MiniCadApp::on_selection_set_single(const ObjectHandle& handle) {
   on_selection_clear();
 
-  auto scene_obj = [&](const SceneObjectHandle& h) {
-    m_.scene_obj_selection->add(m_.scene, h);
+  auto point_obj = [&](const PointObjectHandle& h) {
+    m_.transformable_selection->add(m_.scene, h);
     m_.scene.renderer().push_object_rs_cmd(
-        SceneObjectRSCommand(h, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+        PointObjectRSCommand(h, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
   };
-  auto non_scene_obj = [&](const NonSceneObjectHandle& h) { m_.non_scene_obj_selection->add(h); };
+  auto param_primitive = [&](const ParamPrimitiveHandle& h) {
+    m_.transformable_selection->add(m_.scene, h);
+    m_.scene.renderer().push_object_rs_cmd(
+        ParamPrimitiveRSCommand(h, ParamPrimitiveRSCommand::UpdateObjectVisibility(VisibilityState::Selected)));
+  };
 
-  std::visit(util::match{scene_obj, non_scene_obj}, handle);
+  auto non_scene_obj = [&](const NonTransformableObjectHandle& h) { m_.non_transformable_selection->add(h); };
+
+  std::visit(util::match{point_obj, param_primitive, non_scene_obj}, handle);
 
   return true;
 }
 
 bool MiniCadApp::on_selection_clear() {
-  for (const auto& handle : *m_.scene_obj_selection) {
-    m_.scene.renderer().push_object_rs_cmd(
-        SceneObjectRSCommand(handle, SceneObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+  for (const auto& handle : *m_.transformable_selection) {
+    std::visit(eray::util::match{
+                   [&](const PointObjectHandle& h) {
+                     m_.scene.renderer().push_object_rs_cmd(PointObjectRSCommand(
+                         h, PointObjectRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+                   },
+                   [&](const ParamPrimitiveHandle& h) {
+                     m_.scene.renderer().push_object_rs_cmd(ParamPrimitiveRSCommand(
+                         h, ParamPrimitiveRSCommand::UpdateObjectVisibility(VisibilityState::Visible)));
+                   },
+               },
+               handle);
   }
-  m_.scene_obj_selection->clear(m_.scene);
-  m_.non_scene_obj_selection->clear();
+  m_.transformable_selection->clear(m_.scene);
+  m_.non_transformable_selection->clear();
   m_.helper_point_selection.clear();
   return true;
 }
 
 bool MiniCadApp::on_selection_deleted() {
   auto result = false;
-  for (const auto& handle : *m_.scene_obj_selection) {
-    result = on_obj_deleted(handle) || result;
+  for (const auto& handle : *m_.transformable_selection) {
+    std::visit(util::match{[&](const auto& h) { result = on_obj_deleted(h) || result; }}, handle);
   }
-  for (const auto& handle : *m_.non_scene_obj_selection) {
+  for (const auto& handle : *m_.non_transformable_selection) {
     std::visit(util::match{[&](const auto& h) { result = on_obj_deleted(h) || result; }}, handle);
   }
   on_selection_clear();
@@ -1450,7 +1540,7 @@ bool MiniCadApp::on_fill_in_surface_from_selection() {
     }
   };
 
-  for (const auto& handle : *m_.non_scene_obj_selection) {
+  for (const auto& handle : *m_.non_transformable_selection) {
     std::visit(util::match{bezier_surfaces_extractor, [](const auto&) {}}, handle);
   }
 
@@ -1470,12 +1560,13 @@ bool MiniCadApp::on_fill_in_surface_from_selection() {
 }
 
 std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() const {
-  if (m_.non_scene_obj_selection->is_single_selection() && m_.scene_obj_selection->is_empty()) {
+  if (m_.non_transformable_selection->is_single_selection() && m_.transformable_selection->is_empty()) {
     return std::visit(match{[](const CObjectHandle auto& h) -> ObjectHandle { return h; }},
-                      m_.non_scene_obj_selection->first());
+                      m_.non_transformable_selection->first());
   }
-  if (m_.non_scene_obj_selection->is_empty() && m_.scene_obj_selection->is_single_selection()) {
-    return m_.scene_obj_selection->first();
+  if (m_.non_transformable_selection->is_empty() && m_.transformable_selection->is_single_selection()) {
+    return std::visit(match{[](const CObjectHandle auto& h) -> ObjectHandle { return h; }},
+                      m_.transformable_selection->first());
   }
   return std::nullopt;
 }
@@ -1483,7 +1574,7 @@ std::optional<ObjectHandle> MiniCadApp::get_single_handle_selection() const {
 bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_handle,
                                                    const ImGui::mini::PatchSurfaceInfo& info) {
   if (auto handle = m_.scene.create_obj<PatchSurface>(BPatches{})) {
-    m_.non_scene_obj_selection->add(*handle);
+    m_.non_transformable_selection->add(*handle);
     if (auto o = m_.scene.arena<PatchSurface>().get_obj(*handle)) {
       auto starter = CylinderPatchSurfaceStarter{
           .radius = info.r,
@@ -1503,11 +1594,11 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
 }
 
 bool MiniCadApp::on_find_intersection() {
-  if (m_.non_scene_obj_selection->is_multi_selection()) {
+  if (m_.non_transformable_selection->is_multi_selection()) {
     auto first  = PatchSurfaceHandle(0, 0, 0);
     auto second = PatchSurfaceHandle(0, 0, 0);
     auto count  = 0U;
-    for (const auto& h : *m_.non_scene_obj_selection) {
+    for (const auto& h : *m_.non_transformable_selection) {
       std::visit(util::match{[&](const PatchSurfaceHandle& handle) {
                                if (count > 0) {
                                  second = handle;
@@ -1556,7 +1647,7 @@ bool MiniCadApp::on_natural_spline_from_approx_curve(const ApproxCurveHandle& ha
     }
     auto& spline = **spline_opt;
 
-    auto point_handles_opt = m_.scene.create_many_objs<SceneObject>(Point{}, count);
+    auto point_handles_opt = m_.scene.create_many_objs<PointObject>(Point{}, count);
     if (!point_handles_opt) {
       util::Logger::err("Could not create a natural spline from approx curve. Could not create point objects.");
       return false;
@@ -1566,8 +1657,8 @@ bool MiniCadApp::on_natural_spline_from_approx_curve(const ApproxCurveHandle& ha
     const auto& point_handles = *point_handles_opt;
 
     for (auto i = 0U; i < count; ++i) {
-      auto& p_obj = **m_.scene.arena<SceneObject>().get_obj(point_handles[i]);
-      p_obj.transform.set_local_pos(points[i]);
+      auto& p_obj = **m_.scene.arena<PointObject>().get_obj(point_handles[i]);
+      p_obj.transform().set_local_pos(points[i]);
       p_obj.update();
       if (!spline.push_back(p_obj.handle())) {
         util::Logger::err("Failed to append a point to a curve.");

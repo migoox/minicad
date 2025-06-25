@@ -1,7 +1,11 @@
 #include <liberay/math/vec_fwd.hpp>
+#include <liberay/util/object_handle.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/types.hpp>
 #include <minicad/selection/selection.hpp>
 #include <optional>
 #include <variant>
@@ -10,7 +14,7 @@ namespace mini {
 
 using Vec3f = eray::math::Vec3f;
 
-void SceneObjectsSelection::remove(Scene& scene, const SceneObjectHandle& handle) {
+void TransformableSelection::remove(Scene& scene, const TransformableObjectHandle& handle) {
   auto f = objs_.find(handle);
   if (f == objs_.end()) {
     return;
@@ -19,19 +23,12 @@ void SceneObjectsSelection::remove(Scene& scene, const SceneObjectHandle& handle
 
   objs_.erase(objs_.find(handle));
   update_centroid(scene);
-  update_is_points_only_selection(scene);
+  update_is_points_only_selection();
 }
 
-void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
+void TransformableSelection::add(Scene& scene, const TransformableObjectHandle& handle) {
   if (points_only_ || objs_.empty()) {
-    bool is_point = false;
-    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
-      is_point = std::holds_alternative<Point>(o.value()->object);
-    } else {
-      return;
-    }
-
-    points_only_ = is_point;
+    points_only_ = std::holds_alternative<PointObjectHandle>(handle);
   }
 
   detach_all(scene);
@@ -40,7 +37,7 @@ void SceneObjectsSelection::add(Scene& scene, const SceneObjectHandle& handle) {
   update_centroid(scene);
 }
 
-void SceneObjectsSelection::clear(Scene& scene) {
+void TransformableSelection::clear(Scene& scene) {
   points_only_ = false;
   detach_all(scene);
 
@@ -48,7 +45,7 @@ void SceneObjectsSelection::clear(Scene& scene) {
   transform.reset_local(eray::math::Vec3f::filled(0.F));
 }
 
-void SceneObjectsSelection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
+void TransformableSelection::set_custom_origin(Scene& scene, eray::math::Vec3f vec) {
   if (use_custom_origin_) {
     detach_all(scene);
     transform.reset_local(vec);
@@ -57,7 +54,7 @@ void SceneObjectsSelection::set_custom_origin(Scene& scene, eray::math::Vec3f ve
   custom_origin_ = vec;
 }
 
-void SceneObjectsSelection::use_custom_origin(Scene& scene, bool use_custom_origin) {
+void TransformableSelection::use_custom_origin(Scene& scene, bool use_custom_origin) {
   if (use_custom_origin == use_custom_origin_) {
     return;
   }
@@ -70,7 +67,7 @@ void SceneObjectsSelection::use_custom_origin(Scene& scene, bool use_custom_orig
   }
 }
 
-void SceneObjectsSelection::update_transforms(Scene& scene, Cursor& cursor) {
+void TransformableSelection::update_transforms(Scene& scene, Cursor& cursor) {
   if (use_custom_origin_) {
     update_centroid(scene);
     cursor.transform.set_local_pos(transform.pos());
@@ -79,39 +76,57 @@ void SceneObjectsSelection::update_transforms(Scene& scene, Cursor& cursor) {
     centroid_ = transform.pos();
   }
 
-  for (const auto& handle : objs_) {
-    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
-      o.value()->update();
+  auto obj_update = [&](const auto& handle) {
+    using T = ERAY_HANDLE_OBJ(handle);
+    if (auto opt = scene.arena<T>().get_obj(handle)) {
+      CObject auto& obj = **opt;
+      obj.update();
     }
+  };
+
+  for (const auto& handle : objs_) {
+    std::visit(eray::util::match{obj_update}, handle);
   }
 
   if (transform_dirty_) {
     return;
   }
 
+  auto obj_set_parent = [&](const auto& handle) {
+    using T = ERAY_HANDLE_OBJ(handle);
+    if (auto opt = scene.arena<T>().get_obj(handle)) {
+      CTransformableObject auto& obj = **opt;
+      obj.update();
+    }
+  };
+
   transform_dirty_ = true;
   for (const auto& handle : objs_) {
-    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
-      o.value()->transform.set_parent(transform);
-    }
+    std::visit(eray::util::match{obj_set_parent}, handle);
   }
 }
 
-void SceneObjectsSelection::detach_all(Scene& scene) {
+void TransformableSelection::detach_all(Scene& scene) {
+  auto detach_from_parent = [&](const auto& handle) {
+    using T = ERAY_HANDLE_OBJ(handle);
+    if (auto opt = scene.arena<T>().get_obj(handle)) {
+      CTransformableObject auto& obj = **opt;
+      obj.transform().detach_from_parent();
+      obj.update();
+    }
+  };
+
   if (!transform_dirty_) {
     return;
   }
   transform_dirty_ = false;
 
   for (const auto& handle : objs_) {
-    if (auto o = scene.arena<SceneObject>().get_obj(handle)) {
-      o.value()->transform.detach_from_parent();
-      o.value()->update();
-    }
+    std::visit(eray::util::match{detach_from_parent}, handle);
   }
 }
 
-void SceneObjectsSelection::update_centroid(Scene& scene) {
+void TransformableSelection::update_centroid(Scene& scene) {
   centroid_ = eray::math::Vec3f::filled(0.F);
   if (is_empty()) {
     if (!use_custom_origin_) {
@@ -120,12 +135,17 @@ void SceneObjectsSelection::update_centroid(Scene& scene) {
     return;
   }
 
-  int count = 0;
-  for (const auto& obj : objs_) {
-    if (auto o = scene.arena<SceneObject>().get_obj(obj)) {
-      centroid_ += o.value()->transform.pos();
+  int count            = 0;
+  auto update_centroid = [&](const auto& handle) {
+    using T = ERAY_HANDLE_OBJ(handle);
+    if (auto opt = scene.arena<T>().get_obj(handle)) {
+      CTransformableObject auto& obj = **opt;
+      centroid_ += obj.transform().pos();
       count++;
     }
+  };
+  for (const auto& obj : objs_) {
+    std::visit(eray::util::match{update_centroid}, obj);
   }
 
   centroid_ /= static_cast<float>(count);
@@ -134,14 +154,13 @@ void SceneObjectsSelection::update_centroid(Scene& scene) {
   }
 }
 
-void SceneObjectsSelection::update_is_points_only_selection(Scene& scene) {
+void TransformableSelection::update_is_points_only_selection() {
   points_only_ = true;
+
   for (const auto& h : objs_) {
-    if (auto o = scene.arena<SceneObject>().get_obj(h)) {
-      if (!std::holds_alternative<Point>(o.value()->object)) {
-        points_only_ = false;
-        return;
-      }
+    if (!std::holds_alternative<PointObjectHandle>(h)) {
+      points_only_ = false;
+      return;
     }
   }
 }

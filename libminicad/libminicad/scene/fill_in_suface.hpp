@@ -49,7 +49,7 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   static constexpr size_t kPatchPointsCount = 20U;
   static constexpr int kDefaultTessLevel    = 4;
 
-  using Boundary = std::array<SceneObjectHandle, 4>;
+  using Boundary = std::array<PointObjectHandle, 4>;
   struct SurfaceNeighbor {
     std::array<Boundary, 2> boundaries;  // row-major, rows = 4, columns = 2
     PatchSurfaceHandle handle;
@@ -88,10 +88,10 @@ class FillInSurface : public ObjectBase<FillInSurface, FillInSurfaceVariant> {
   void clone_to(FillInSurface& obj) const;
 
  private:
-  friend SceneObject;
+  friend PointObject;
 
   enum class ReplaceOperationError : uint8_t { NotAPoint = 0 };
-  std::expected<void, ReplaceOperationError> replace(const SceneObjectHandle& old_point_handle, SceneObject& new_point);
+  std::expected<void, ReplaceOperationError> replace(const PointObjectHandle& old_point_handle, PointObject& new_point);
 
  private:
   bool points_dirty_ = false;

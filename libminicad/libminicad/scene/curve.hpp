@@ -14,9 +14,9 @@ namespace mini {
 struct Polyline {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Polyline"; }
-  void on_point_update(Curve&, const SceneObject&, const Point&) {}
-  void on_point_add(Curve&, const SceneObject&, const Point&) {}
-  void on_point_remove(Curve&, const SceneObject&, const Point&) {}
+  void on_point_update(Curve&, const PointObject&, const Point&) {}
+  void on_point_add(Curve&, const PointObject&, const Point&) {}
+  void on_point_remove(Curve&, const PointObject&, const Point&) {}
   void on_curve_reorder(Curve&) {}
   std::generator<eray::math::Vec3f> bezier3_points(ref<const Curve> base) const;
   size_t bezier3_points_count(ref<const Curve> base) const;
@@ -25,9 +25,9 @@ struct Polyline {
 struct MultisegmentBezierCurve {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Multisegment C0 Bezier Curve"; }
-  void on_point_update(Curve&, const SceneObject&, const Point&) {}
-  void on_point_add(Curve&, const SceneObject&, const Point&) {}
-  void on_point_remove(Curve&, const SceneObject&, const Point&) {}
+  void on_point_update(Curve&, const PointObject&, const Point&) {}
+  void on_point_add(Curve&, const PointObject&, const Point&) {}
+  void on_point_remove(Curve&, const PointObject&, const Point&) {}
   void on_curve_reorder(Curve&) {}
   std::generator<eray::math::Vec3f> bezier3_points(ref<const Curve> base) const;
   size_t bezier3_points_count(ref<const Curve> base) const;
@@ -57,7 +57,7 @@ struct BSplineCurve {
    * @brief Updates the Bernstein points (scene point objects) basing on the de Boor points.
    *
    */
-  void update_bernstein_points(const Curve& base, const SceneObjectHandle& handle);
+  void update_bernstein_points(const Curve& base, const PointObjectHandle& handle);
 
   const std::vector<eray::math::Vec3f>& bernstein_points() const { return bezier_points_; }
 
@@ -73,9 +73,9 @@ struct BSplineCurve {
 
   bool contains(size_t idx) { return bezier_points_.size() > idx; }
 
-  void on_point_update(Curve& base, const SceneObject&, const Point&);
-  void on_point_add(Curve& base, const SceneObject&, const Point&);
-  void on_point_remove(Curve& base, const SceneObject&, const Point&);
+  void on_point_update(Curve& base, const PointObject&, const Point&);
+  void on_point_add(Curve& base, const PointObject&, const Point&);
+  void on_point_remove(Curve& base, const PointObject&, const Point&);
   void on_curve_reorder(Curve& base);
   std::generator<eray::math::Vec3f> bezier3_points(ref<const Curve> base) const;
   std::generator<eray::math::Vec3f> unique_bezier3_points(ref<const Curve> base) const;
@@ -120,9 +120,9 @@ class NaturalSplineCurve {
   const std::vector<Segment>& segments() const { return segments_; }
   const std::vector<eray::math::Vec3f>& unique_points() const { return unique_points_; }
 
-  void on_point_update(Curve& base, const SceneObject&, const Point&) { update(base); }
-  void on_point_add(Curve& base, const SceneObject&, const Point&) { update(base); }
-  void on_point_remove(Curve& base, const SceneObject&, const Point&) { update(base); }
+  void on_point_update(Curve& base, const PointObject&, const Point&) { update(base); }
+  void on_point_add(Curve& base, const PointObject&, const Point&) { update(base); }
+  void on_point_remove(Curve& base, const PointObject&, const Point&) { update(base); }
   void on_curve_reorder(Curve& base) { update(base); }
   std::generator<eray::math::Vec3f> bezier3_points(ref<const Curve> base) const;
   size_t bezier3_points_count(ref<const Curve> base) const;
@@ -136,7 +136,7 @@ class NaturalSplineCurve {
 };
 
 template <typename T>
-concept CCurveType = requires(T t, Curve& base, ref<const Curve> base_ref, const SceneObject& point_obj,
+concept CCurveType = requires(T t, Curve& base, ref<const Curve> base_ref, const PointObject& point_obj,
                               const Point& point, float tparam) {
   { T::type_name() } -> std::same_as<zstring_view>;
   { t.on_point_update(base, point_obj, point) } -> std::same_as<void>;
@@ -173,8 +173,8 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
     InvalidHandle = 2,
   };
 
-  std::expected<void, SceneObjectError> push_back(const SceneObjectHandle& handle);
-  std::expected<void, SceneObjectError> remove(const SceneObjectHandle& handle);
+  std::expected<void, SceneObjectError> push_back(const PointObjectHandle& handle);
+  std::expected<void, SceneObjectError> remove(const PointObjectHandle& handle);
   std::expected<void, SceneObjectError> move_before(size_t dest_idx, size_t source_idx);
   std::expected<void, SceneObjectError> move_after(size_t dest_idx, size_t source_idx);
 
@@ -203,7 +203,7 @@ class Curve : public ObjectBase<Curve, CurveVariant>, public PointListObjectBase
 
  private:
   friend Scene;
-  friend SceneObject;
+  friend PointObject;
 
   std::vector<eray::math::Vec3f> bezier3_points_;
   bool bezier_dirty_;

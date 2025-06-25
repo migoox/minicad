@@ -2,9 +2,9 @@
 #include <liberay/util/container_extensions.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/algorithm/hole_finder.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <unordered_map>
 
 namespace mini {
@@ -127,8 +127,8 @@ BezierHole3Finder::PatchEdgeInfo::create(const Scene& scene, const PatchEdgeInte
     if (const auto& patch_opt = obj.patch_control_point_handles(pinfo.patch_coords)) {
       const auto& patch = *patch_opt;
 
-      auto boundary = eray::util::make_filled_array<std::array<SceneObjectHandle, PatchSurface::kPatchSize>, 2>(
-          eray::util::make_filled_array<SceneObjectHandle, PatchSurface::kPatchSize>(SceneObjectHandle(0, 0, 0))  //
+      auto boundary = eray::util::make_filled_array<std::array<PointObjectHandle, PatchSurface::kPatchSize>, 2>(
+          eray::util::make_filled_array<PointObjectHandle, PatchSurface::kPatchSize>(PointObjectHandle(0, 0, 0))  //
       );
 
       if (pinfo.boundary_dir == PatchEdgeInternalInfo::BoundaryDirection::Up) {

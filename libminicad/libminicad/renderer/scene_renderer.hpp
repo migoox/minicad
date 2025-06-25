@@ -3,14 +3,12 @@
 #include <expected>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/res/image.hpp>
+#include <liberay/util/object_handle.hpp>
 #include <liberay/util/zstring_view.hpp>
 #include <libminicad/camera/camera.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/renderer/rendering_state.hpp>
-#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/handles.hpp>
-
-#include "liberay/util/object_handle.hpp"
 
 namespace mini {
 
@@ -20,7 +18,7 @@ struct SampledHelperPoint {
 };
 
 struct SampledSceneObjects {
-  std::vector<SceneObjectHandle> handles;
+  std::vector<PointObjectHandle> handles;
 };
 
 struct RendererColors {

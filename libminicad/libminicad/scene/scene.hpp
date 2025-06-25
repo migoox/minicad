@@ -14,8 +14,9 @@
 #include <libminicad/scene/arena.hpp>
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
-#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/param_primitive.hpp>
+#include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/triangle.hpp>
 #include <memory>
 #include <vector>
@@ -47,8 +48,8 @@ class Scene {
     return std::get<Arena<TObject>>(arenas_);
   }
 
-  bool push_back_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
-  bool remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle);
+  bool push_back_point_to_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle);
+  bool remove_point_from_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle);
 
   /**
    * @brief Replaces all provided points with it's mean point. All the references are updated.
@@ -57,8 +58,8 @@ class Scene {
    * @param begin
    * @param end
    */
-  template <eray::util::Iterator<SceneObjectHandle> It>
-  std::expected<eray::util::Handle<SceneObject>, PointsMergeError> merge_points(const It& begin, const It& end) {
+  template <eray::util::Iterator<PointObjectHandle> It>
+  std::expected<eray::util::Handle<PointObject>, PointsMergeError> merge_points(const It& begin, const It& end) {
     auto count = std::ranges::distance(begin, end);
     if (count <= 1) {
       eray::util::Logger::warn("Could not merge points. Not enough points provided.");
@@ -67,7 +68,7 @@ class Scene {
 
     auto new_pos = eray::math::Vec3f::filled(0.F);
 
-    auto opt = create_obj_and_get<SceneObject>(Point{});
+    auto opt = create_obj_and_get<PointObject>(Point{});
     if (!opt) {
       eray::util::Logger::err("Could not merge points. New point could not be created.");
       return std::unexpected(PointsMergeError::NewPointCreationError);
@@ -75,19 +76,19 @@ class Scene {
     auto& obj = **opt;
 
     for (const auto& handle : std::ranges::subrange(begin, end)) {
-      if (auto opt_old = arena<SceneObject>().get_obj(handle)) {
+      if (auto opt_old = arena<PointObject>().get_obj(handle)) {
         auto& obj_old = **opt_old;
         if (obj_old.template has_type<Point>()) {
           obj_old.move_refs_to(obj);
-          new_pos += obj_old.transform.pos();
+          new_pos += obj_old.transform().pos();
           remove_from_order(obj_old.order_idx_);
-          arena<SceneObject>().delete_obj(handle);
+          arena<PointObject>().delete_obj(handle);
         }
       }
     }
 
     new_pos = new_pos / static_cast<float>(count);
-    obj.transform.set_local_pos(new_pos);
+    obj.transform().set_local_pos(new_pos);
     obj.update();
 
     return obj.handle();
@@ -193,7 +194,9 @@ class Scene {
   static std::uint32_t next_signature_;
   std::uint32_t signature_;
 
-  std::tuple<Arena<SceneObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>, Arena<ApproxCurve>> arenas_;
+  std::tuple<Arena<PointObject>, Arena<Curve>, Arena<PatchSurface>, Arena<FillInSurface>, Arena<ApproxCurve>,
+             Arena<ParamPrimitive>>
+      arenas_;
 
   std::vector<ObjectHandle> objects_order_;
 

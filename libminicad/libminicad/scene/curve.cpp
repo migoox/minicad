@@ -32,14 +32,14 @@ void Curve::clone_to(Curve& obj) const {
   obj.name   = this->name + " Copy";
   obj.object = this->object;
 
-  auto handles = scene_.get().create_many_objs<SceneObject>(Point{}, this->points_.size_unique());
+  auto handles = scene_.get().create_many_objs<PointObject>(Point{}, this->points_.size_unique());
   if (!handles) {
     util::Logger::err("Could not copy curve. Points could not be created.");
     return;
   }
 
   for (const auto& h : *handles) {
-    if (auto opt = scene_.get().arena<SceneObject>().get_obj(h)) {
+    if (auto opt = scene_.get().arena<PointObject>().get_obj(h)) {
       auto& p_obj = **opt;
       p_obj.curves_.insert(obj.handle());
     }
@@ -48,8 +48,8 @@ void Curve::clone_to(Curve& obj) const {
   obj.points_      = this->points_;
   auto old_handles = this->points_.unique_point_handles();
   for (const auto& h : old_handles) {
-    if (auto opt1 = scene().arena<SceneObject>().get_obj(h)) {
-      if (auto opt2 = scene_.get().arena<SceneObject>().get_obj(handles->back())) {
+    if (auto opt1 = scene().arena<PointObject>().get_obj(h)) {
+      if (auto opt2 = scene_.get().arena<PointObject>().get_obj(handles->back())) {
         const auto& obj1 = **opt1;
         auto& obj2       = **opt2;
 
@@ -65,8 +65,8 @@ void Curve::clone_to(Curve& obj) const {
   obj.update();
 }
 
-std::expected<void, Curve::SceneObjectError> Curve::push_back(const SceneObjectHandle& handle) {
-  if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
+std::expected<void, Curve::SceneObjectError> Curve::push_back(const PointObjectHandle& handle) {
+  if (auto o = scene().arena<PointObject>().get_obj(handle)) {
     auto& obj = *o.value();
 
     if (std::holds_alternative<Point>(obj.object)) {
@@ -112,12 +112,12 @@ std::expected<void, Curve::SceneObjectError> Curve::move_before(size_t dest_idx,
   return {};
 }
 
-std::expected<void, Curve::SceneObjectError> Curve::remove(const SceneObjectHandle& handle) {
+std::expected<void, Curve::SceneObjectError> Curve::remove(const PointObjectHandle& handle) {
   if (!points_.contains(handle)) {
     return std::unexpected(SceneObjectError::NotFound);
   }
 
-  if (auto o = scene().arena<SceneObject>().get_obj(handle)) {
+  if (auto o = scene().arena<PointObject>().get_obj(handle)) {
     auto& obj = *o.value();
     if (obj.has_type<Point>()) {
       auto result = points_.remove(obj);
@@ -242,7 +242,7 @@ void BSplineCurve::reset_bernstein_points(const Curve& base) {
   }
 
   auto de_boor_points = base.point_objects() |
-                        std::views::transform([](const SceneObject& s) { return s.transform.pos(); }) |
+                        std::views::transform([](const PointObject& s) { return s.transform().pos(); }) |
                         std::views::adjacent<3>;
 
   bezier_points_.clear();
@@ -263,10 +263,10 @@ void BSplineCurve::update_bernstein_segment(const Curve& base, int cp_idx) {
     return;
   }
 
-  auto p0 = de_boor_points[cp_idx].transform.pos();
-  auto p1 = de_boor_points[cp_idx + 1].transform.pos();
-  auto p2 = de_boor_points[cp_idx + 2].transform.pos();
-  auto p3 = de_boor_points[cp_idx + 3].transform.pos();
+  auto p0 = de_boor_points[cp_idx].transform().pos();
+  auto p1 = de_boor_points[cp_idx + 1].transform().pos();
+  auto p2 = de_boor_points[cp_idx + 2].transform().pos();
+  auto p3 = de_boor_points[cp_idx + 3].transform().pos();
 
   auto cp_idx_u                    = static_cast<size_t>(cp_idx);
   bezier_points_[3 * cp_idx_u]     = (p0 + 4 * p1 + p2) / 6.0;
@@ -275,7 +275,7 @@ void BSplineCurve::update_bernstein_segment(const Curve& base, int cp_idx) {
   bezier_points_[3 * cp_idx_u + 3] = (p1 + 4 * p2 + p3) / 6.0;
 }
 
-void BSplineCurve::update_bernstein_points(const Curve& base, const SceneObjectHandle& handle) {
+void BSplineCurve::update_bernstein_points(const Curve& base, const PointObjectHandle& handle) {
   if (auto o = base.point_idx(handle)) {
     auto cp_idx = static_cast<int>(o.value());
     update_bernstein_segment(base, cp_idx - 2);
@@ -308,10 +308,10 @@ void BSplineCurve::set_bernstein_point(Curve& base, size_t idx, const eray::math
   const auto& bp2 = bezier_points_[3 * cp_idx + 2];
   const auto& bp3 = bezier_points_[3 * cp_idx + 3];
 
-  p0.transform.set_local_pos(6 * bp0 - 7 * bp1 + 2 * bp2);
-  p1.transform.set_local_pos(2 * bp1 - bp2);
-  p2.transform.set_local_pos(-bp1 + 2 * bp2);
-  p3.transform.set_local_pos(2 * bp1 - 7 * bp2 + 6 * bp3);
+  p0.transform().set_local_pos(6 * bp0 - 7 * bp1 + 2 * bp2);
+  p1.transform().set_local_pos(2 * bp1 - bp2);
+  p2.transform().set_local_pos(-bp1 + 2 * bp2);
+  p3.transform().set_local_pos(2 * bp1 - 7 * bp2 + 6 * bp3);
 
   p0.update();
   p1.update();
@@ -325,17 +325,17 @@ void BSplineCurve::set_bernstein_point(Curve& base, size_t idx, const eray::math
   update_bernstein_segment(base, cp_idx_int + 2);
 }
 
-void BSplineCurve::on_point_update(Curve& base, const SceneObject& point, const Point&) {
+void BSplineCurve::on_point_update(Curve& base, const PointObject& point, const Point&) {
   update_bernstein_points(base, point.handle());
   base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-void BSplineCurve::on_point_add(Curve& base, const SceneObject&, const Point&) {
+void BSplineCurve::on_point_add(Curve& base, const PointObject&, const Point&) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }
 
-void BSplineCurve::on_point_remove(Curve& base, const SceneObject&, const Point&) {
+void BSplineCurve::on_point_remove(Curve& base, const PointObject&, const Point&) {
   reset_bernstein_points(base);
   base.scene().renderer().push_object_rs_cmd(CurveRSCommand(base.handle(), CurveRSCommand::UpdateHelperPoints{}));
 }

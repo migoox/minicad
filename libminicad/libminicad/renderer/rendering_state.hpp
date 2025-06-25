@@ -6,6 +6,9 @@
 
 namespace mini {
 
+// ---------------------------------------------------------------------------------------------------------------------
+// - Billboard ---------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 struct BillboardRS {
   eray::math::Vec3f position = eray::math::Vec3f::zeros();
   float scale                = 0.04F;
@@ -13,22 +16,22 @@ struct BillboardRS {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - SceneObject -------------------------------------------------------------------------------------------------------
+// - PointObject -------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
-
-struct PointRS {};
-
-struct ParameterizedSurfaceRS {};
-
-using SceneObjectVariantRS = std::variant<PointRS, ParameterizedSurfaceRS>;
-
-struct SceneObjectRS {
-  explicit SceneObjectRS(SceneObjectVariantRS&& variant   = PointRS{},
-                         VisibilityState visibility_state = VisibilityState::Visible)
-      : visibility(visibility_state), variant(std::move(variant)) {}
+struct PointObjectRS {
+  explicit PointObjectRS(VisibilityState visibility_state = VisibilityState::Visible) : visibility(visibility_state) {}
 
   VisibilityState visibility;
-  SceneObjectVariantRS variant;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - ParamPrimitive ----------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+struct ParamPrimitiveRS {
+  explicit ParamPrimitiveRS(VisibilityState visibility_state = VisibilityState::Visible)
+      : visibility(visibility_state) {}
+
+  VisibilityState visibility;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -77,6 +80,6 @@ struct ApproxCurveRS {};
 // - Generic ObjectRS --------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-using ObjectRS = std::variant<SceneObjectRS, CurveRS, PatchSurfaceRS, FillInSurfaceRS, ApproxCurveRS>;
+using ObjectRS = std::variant<PointObjectRS, CurveRS, PatchSurfaceRS, FillInSurfaceRS, ApproxCurveRS, ParamPrimitiveRS>;
 
 }  // namespace mini

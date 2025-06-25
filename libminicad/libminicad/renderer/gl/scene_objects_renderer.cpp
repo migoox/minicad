@@ -6,38 +6,24 @@
 #include <libminicad/renderer/rendering_state.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <variant>
 
 namespace mini::gl {
 
 namespace util = eray::util;
-namespace math = eray::math;
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::AddObject&) {
-  if (auto o = scene.arena<SceneObject>().get_obj(cmd_ctx.handle)) {
-    std::visit(eray::util::match{
-                   [&](const Point&) {
-                     renderer.rs_.emplace(cmd_ctx.handle, SceneObjectRS(PointRS{}));
+void PointObjectRSCommandHandler::operator()(const PointObjectRSCommand::Internal::AddObject&) {
+  if (auto o = scene.arena<PointObject>().get_obj(cmd_ctx.handle)) {
+    renderer.rs_.emplace(cmd_ctx.handle, PointObjectRS());
 
-                     auto i   = cmd_ctx.handle.obj_id;
-                     auto ind = static_cast<GLuint>(renderer.m_.transferred_points_buff.size());
-                     renderer.m_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-                     renderer.m_.transferred_point_ind.insert({cmd_ctx.handle, ind});
-                     renderer.m_.transferred_points_buff.push_back(cmd_ctx.handle);
-                   },  //
-                   [&](const Torus&) {
-                     renderer.rs_.emplace(cmd_ctx.handle, SceneObjectRS(ParameterizedSurfaceRS{}));
-
-                     auto ind = renderer.m_.transferred_torus_buff.size();
-                     renderer.m_.transferred_torus_ind.insert({cmd_ctx.handle, ind});
-                     renderer.m_.transferred_torus_buff.push_back(cmd_ctx.handle);
-                   }  //
-               },
-               o.value()->object);
+    auto i   = cmd_ctx.handle.obj_id;
+    auto ind = static_cast<GLuint>(renderer.m_.transferred_points_buff.size());
+    renderer.m_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
+    renderer.m_.transferred_point_ind.insert({cmd_ctx.handle, ind});
+    renderer.m_.transferred_points_buff.push_back(cmd_ctx.handle);
   }
 }
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectMembers&) {
+void PointObjectRSCommandHandler::operator()(const PointObjectRSCommand::UpdateObjectMembers&) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
     util::Logger::warn(
@@ -45,31 +31,13 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
     return;
   }
 
-  if (auto o = scene.arena<SceneObject>().get_obj(cmd_ctx.handle)) {
-    std::visit(
-        util::match{[&](const Point&) {
-                      auto p = o.value()->transform.pos();
-                      renderer.m_.points_vao.vbo().set_attribute_value(handle.obj_id, "pos", p.raw_ptr());
-                    },
-                    [&](const Torus& t) {
-                      auto ind  = static_cast<GLuint>(renderer.m_.transferred_torus_ind.at(handle));
-                      auto mat  = o.value()->transform.local_to_world_matrix();
-                      auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-                      auto tess = t.tess_level;
-                      auto id   = static_cast<int>(handle.obj_id);
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
-                      renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-                    }},
-        o.value()->object);
+  if (auto o = scene.arena<PointObject>().get_obj(cmd_ctx.handle)) {
+    auto p = o.value()->transform().pos();
+    renderer.m_.points_vao.vbo().set_attribute_value(handle.obj_id, "pos", p.raw_ptr());
   }
 }
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateObjectVisibility& cmd) {
+void PointObjectRSCommandHandler::operator()(const PointObjectRSCommand::UpdateObjectVisibility& cmd) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
     util::Logger::warn(
@@ -81,81 +49,31 @@ void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::UpdateO
 
   obj_rs.visibility = cmd.new_visibility_state;
   auto vs           = static_cast<int>(obj_rs.visibility);
-  std::visit(util::match{                       //
-                         [&](const PointRS&) {  //
-                           renderer.m_.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
-                         },
-                         [&](const ParameterizedSurfaceRS&) {
-                           auto ind = static_cast<GLuint>(renderer.m_.transferred_torus_ind.at(handle));
-                           renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "state", &vs);
-                         }},
-             obj_rs.variant);
+  renderer.m_.points_vao.vbo().set_attribute_value(handle.obj_id, "state", &vs);
 }
 
-void SceneObjectRSCommandHandler::operator()(const SceneObjectRSCommand::Internal::DeleteObject&) {
+void PointObjectRSCommandHandler::operator()(const PointObjectRSCommand::Internal::DeleteObject&) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {
     util::Logger::warn("OpenGL Renderer received update DeleteObject command but there is no rendering state created");
     return;
   }
 
-  auto& obj_rs = renderer.rs_.at(handle);
-  std::visit(
-      util::match{
-          [&](const PointRS&) {
-            if (renderer.m_.transferred_points_buff.size() - 1 == renderer.m_.transferred_point_ind.at(handle)) {
-              renderer.m_.transferred_points_buff.pop_back();
-              renderer.m_.transferred_point_ind.erase(handle);
-              return;
-            }
+  if (renderer.m_.transferred_points_buff.size() - 1 == renderer.m_.transferred_point_ind.at(handle)) {
+    renderer.m_.transferred_points_buff.pop_back();
+    renderer.m_.transferred_point_ind.erase(handle);
+    return;
+  }
 
-            auto ind = static_cast<GLuint>(renderer.m_.transferred_point_ind.at(handle));
-            renderer.m_.transferred_point_ind.erase(handle);
-            renderer.m_.transferred_points_buff[ind] =
-                renderer.m_.transferred_points_buff[renderer.m_.transferred_points_buff.size() - 1];
-            renderer.m_.transferred_point_ind[renderer.m_.transferred_points_buff[ind]] = ind;
-            renderer.m_.transferred_points_buff.pop_back();
+  auto ind = static_cast<GLuint>(renderer.m_.transferred_point_ind.at(handle));
+  renderer.m_.transferred_point_ind.erase(handle);
+  renderer.m_.transferred_points_buff[ind] =
+      renderer.m_.transferred_points_buff[renderer.m_.transferred_points_buff.size() - 1];
+  renderer.m_.transferred_point_ind[renderer.m_.transferred_points_buff[ind]] = ind;
+  renderer.m_.transferred_points_buff.pop_back();
 
-            auto i = renderer.m_.transferred_points_buff[ind].obj_id;
-            renderer.m_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
-          },
-          [&](const ParameterizedSurfaceRS&) {
-            if (renderer.m_.transferred_torus_buff.size() - 1 == renderer.m_.transferred_torus_ind.at(handle)) {
-              renderer.m_.transferred_torus_buff.pop_back();
-              renderer.m_.transferred_torus_ind.erase(handle);
-              return;
-            }
-
-            auto ind = static_cast<GLuint>(renderer.m_.transferred_torus_ind[handle]);
-            renderer.m_.transferred_torus_ind.erase(handle);
-            renderer.m_.transferred_torus_buff[ind] =
-                renderer.m_.transferred_torus_buff[renderer.m_.transferred_torus_buff.size() - 1];
-            renderer.m_.transferred_torus_ind[renderer.m_.transferred_torus_buff[ind]] = ind;
-            renderer.m_.transferred_torus_buff.pop_back();
-            auto id = static_cast<int>(handle.obj_id);
-
-            if (auto o2 = scene.arena<SceneObject>().get_obj(renderer.m_.transferred_torus_buff[ind])) {
-              auto mat = o2.value()->transform.local_to_world_matrix();
-              std::visit(
-                  eray::util::match{
-                      [&](const Point&) {},
-                      [&](const Torus& t) {
-                        auto r    = math::Vec2f(t.minor_radius, t.major_radius);
-                        auto tess = t.tess_level;
-                        renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
-                        renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
-                      },
-                  },
-                  o2.value()->object);
-              renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
-              renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
-              renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
-              renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat3", mat[3].raw_ptr());
-              renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "id", &id);
-            }
-          }},
-      obj_rs.variant);
-
+  auto i = renderer.m_.transferred_points_buff[ind].obj_id;
+  renderer.m_.points_vao.ebo().sub_buffer_data(ind, std::span<uint32_t>(&i, 1));
   renderer.rs_.erase(handle);
 }
 
@@ -226,40 +144,21 @@ eray::driver::gl::VertexArray create_points_vao() {
 
 }  // namespace
 
-SceneObjectsRenderer SceneObjectsRenderer::create() {
-  return SceneObjectsRenderer(Members{
+PointObjectRenderer PointObjectRenderer::create() {
+  return PointObjectRenderer(Members{
       .points_vao              = create_points_vao(),  //
-      .torus_vao               = create_torus_vao(),   //
       .transferred_points_buff = {},
       .transferred_point_ind   = {},
-      .transferred_torus_buff  = {},
-      .transferred_torus_ind   = {},
   });
 }
 
-SceneObjectsRenderer::SceneObjectsRenderer(Members&& members) : m_(std::move(members)) {}
+PointObjectRenderer::PointObjectRenderer(Members&& members) : m_(std::move(members)) {}
 
-void SceneObjectsRenderer::update_impl(Scene& /*scene*/) {}
+void PointObjectRenderer::update_impl(Scene& /*scene*/) {}
 
-void SceneObjectsRenderer::render_control_points() const {
+void PointObjectRenderer::render_control_points() const {
   m_.points_vao.bind();
   ERAY_GL_CALL(glDrawElements(GL_POINTS, m_.transferred_points_buff.size(), GL_UNSIGNED_INT, nullptr));
-}
-
-void SceneObjectsRenderer::render_parameterized_surfaces() const {
-  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
-  m_.torus_vao.bind();
-  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(m_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
-                          static_cast<GLsizei>(m_.transferred_torus_buff.size()));
-}
-
-void SceneObjectsRenderer::render_parameterized_surfaces_filled() const {
-  ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
-  ERAY_GL_CALL(glDepthMask(GL_FALSE));
-  m_.torus_vao.bind();
-  glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(m_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
-                          static_cast<GLsizei>(m_.transferred_torus_buff.size()));
-  ERAY_GL_CALL(glDepthMask(GL_TRUE));
 }
 
 }  // namespace mini::gl

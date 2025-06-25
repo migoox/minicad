@@ -8,8 +8,9 @@
 #include <liberay/util/ruleof.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <liberay/util/zstring_view.hpp>
-#include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/point_list.hpp>
+#include <libminicad/scene/types.hpp>
 #include <optional>
 #include <ranges>
 #include <unordered_set>
@@ -109,14 +110,14 @@ class PointListObjectBase {
   auto point_handles() const { return points_.point_handles(); }
 
   auto points() const {
-    return point_objects() | std::views::transform([](const auto& s) { return s.transform.pos(); });
+    return point_objects() | std::views::transform([](const auto& s) { return s.transform().pos(); });
   }
 
-  bool contains(const SceneObjectHandle& handle) const { return points_.contains(handle); }
+  bool contains(const PointObjectHandle& handle) const { return points_.contains(handle); }
 
-  OptionalObserverPtr<SceneObject> point(const SceneObjectHandle& handle) { return points_.point_first(handle); }
+  OptionalObserverPtr<PointObject> point(const PointObjectHandle& handle) { return points_.point_first(handle); }
 
-  std::optional<size_t> point_idx(const SceneObjectHandle& handle) const { return points_.point_first_idx(handle); }
+  std::optional<size_t> point_idx(const PointObjectHandle& handle) const { return points_.point_first_idx(handle); }
 
   size_t points_count() const { return points_.size(); }
 
@@ -131,52 +132,35 @@ class PointListObjectBase {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - SceneObjectType ---------------------------------------------------------------------------------------------------
+// - PointObjectType ---------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
 class Point {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Point"; }
 };
-
-class Torus {
- public:
-  [[nodiscard]] static zstring_view type_name() noexcept { return "Torus"; }
-
- public:
-  float minor_radius           = 1.F;
-  float major_radius           = 2.F;
-  eray::math::Vec2i tess_level = eray::math::Vec2i(16, 16);
-};
-
-template <typename T>
-concept CSceneObjectType = requires {
-  { T::type_name() } -> std::same_as<zstring_view>;
-};
-
-using SceneObjectVariant = std::variant<Point, Torus>;
-MINI_VALIDATE_VARIANT_TYPES(SceneObjectVariant, CSceneObjectType);
+using PointObjectVariant = std::variant<Point>;
 
 // ---------------------------------------------------------------------------------------------------------------------
-// - SceneObject -------------------------------------------------------------------------------------------------------
+// - PointObject -------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
+class PointObject : public ObjectBase<PointObject, PointObjectVariant> {
  public:
-  SceneObject() = delete;
-  SceneObject(SceneObjectHandle handle, Scene& scene);
+  PointObject() = delete;
+  PointObject(PointObjectHandle handle, Scene& scene);
 
-  ERAY_DEFAULT_MOVE(SceneObject)
-  ERAY_DELETE_COPY(SceneObject)
+  ERAY_DEFAULT_MOVE(PointObject)
+  ERAY_DELETE_COPY(PointObject)
 
   void update();
   void on_delete();
   bool can_be_deleted() const;
 
-  void clone_to(SceneObject& obj) const;
+  void clone_to(PointObject& obj) const;
 
- public:
-  eray::math::Transform3f transform;
+  eray::math::Transform3f& transform() { return transform_; }
+  const eray::math::Transform3f& transform() const { return transform_; }
 
  private:
   friend Scene;
@@ -184,12 +168,15 @@ class SceneObject : public ObjectBase<SceneObject, SceneObjectVariant> {
   friend PatchSurface;
   friend FillInSurface;
 
-  void move_refs_to(SceneObject& obj);
+  void move_refs_to(PointObject& obj);
 
  private:
+  eray::math::Transform3f transform_;
   std::unordered_set<CurveHandle> curves_;
   std::unordered_set<PatchSurfaceHandle> patch_surfaces_;
   std::unordered_set<FillInSurfaceHandle> fill_in_surfaces_;
 };
+
+static_assert(CTransformableObject<PointObject>);
 
 }  // namespace mini

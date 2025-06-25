@@ -1,7 +1,6 @@
 #pragma once
 
 #include <libminicad/renderer/visibility_state.hpp>
-#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/handles.hpp>
 
 namespace mini {
@@ -41,7 +40,7 @@ constexpr auto kRSCommandPriorityComparer = [](auto&& arg_x, auto&& arg_y) {
 // - SceneObjectRSCommand ----------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-struct SceneObjectRSCommand {
+struct PointObjectRSCommand {
   struct Internal {
     struct AddObject {};
     struct DeleteObject {};
@@ -58,20 +57,60 @@ struct SceneObjectRSCommand {
   using CommandVariant =
       std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility>;
 
-  explicit SceneObjectRSCommand(SceneObjectHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
-  SceneObjectRSCommand() = delete;
+  explicit PointObjectRSCommand(PointObjectHandle _handle, CommandVariant _cmd) : handle(_handle), variant(_cmd) {}
+  PointObjectRSCommand() = delete;
 
-  SceneObjectHandle handle;
+  PointObjectHandle handle;
   CommandVariant variant;
 };
 
 template <>
-struct RSCommandPriority<SceneObjectRSCommand::Internal::AddObject> {
+struct RSCommandPriority<PointObjectRSCommand::Internal::AddObject> {
   static constexpr int kValue = ImmediatePriority::kValue;
 };
 
 template <>
-struct RSCommandPriority<SceneObjectRSCommand::Internal::DeleteObject> {
+struct RSCommandPriority<PointObjectRSCommand::Internal::DeleteObject> {
+  static constexpr int kValue = DeferredPriority::kValue;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// - ParamPrimitiveRSCommand -------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct ParamPrimitiveRSCommand {
+  struct Internal {
+    struct AddObject {};
+    struct DeleteObject {};
+    struct UpdateTrimmingTextures {};
+  };
+
+  struct UpdateObjectVisibility {
+    explicit UpdateObjectVisibility(VisibilityState vs) : new_visibility_state(vs) {}
+
+    VisibilityState new_visibility_state;
+  };
+
+  struct UpdateObjectMembers {};
+
+  using CommandVariant =
+      std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility>;
+
+  explicit ParamPrimitiveRSCommand(ParamPrimitiveHandle _handle, CommandVariant _cmd)
+      : handle(_handle), variant(_cmd) {}
+  ParamPrimitiveRSCommand() = delete;
+
+  ParamPrimitiveHandle handle;
+  CommandVariant variant;
+};
+
+template <>
+struct RSCommandPriority<ParamPrimitiveRSCommand::Internal::AddObject> {
+  static constexpr int kValue = ImmediatePriority::kValue;
+};
+
+template <>
+struct RSCommandPriority<ParamPrimitiveRSCommand::Internal::DeleteObject> {
   static constexpr int kValue = DeferredPriority::kValue;
 };
 
@@ -278,7 +317,7 @@ struct RSCommandPriority<ApproxCurveRSCommand::Internal::DeleteObject> {
 // - Generic RSCommand -------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-using RSCommand = std::variant<SceneObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand,
-                               ApproxCurveRSCommand>;
+using RSCommand = std::variant<PointObjectRSCommand, CurveRSCommand, PatchSurfaceRSCommand, FillInSurfaceRSCommand,
+                               ApproxCurveRSCommand, ParamPrimitiveRSCommand>;
 
 }  // namespace mini

@@ -105,10 +105,10 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
     OutOfBounds = 0,
   };
 
-  [[nodiscard]] std::expected<std::array<std::array<SceneObjectHandle, kPatchSize>, kPatchSize>, GetterError>
+  [[nodiscard]] std::expected<std::array<std::array<PointObjectHandle, kPatchSize>, kPatchSize>, GetterError>
   patch_control_point_handles(eray::math::Vec2u patch_coords) const;
 
-  [[nodiscard]] std::array<std::array<SceneObjectHandle, kPatchSize>, kPatchSize> unsafe_patch_control_point_handles(
+  [[nodiscard]] std::array<std::array<PointObjectHandle, kPatchSize>, kPatchSize> unsafe_patch_control_point_handles(
       eray::math::Vec2u patch_coords) const;
 
   auto patches_control_point_handles() const {
@@ -135,7 +135,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   void init_cylinder_from_curve(const CurveHandle& handle, CylinderPatchSurfaceStarter starter, eray::math::Vec2u dim);
   void init_from_starter(const PatchSurfaceStarter& starter, eray::math::Vec2u dim);
   std::expected<void, InitError> init_from_points(eray::math::Vec2u points_dim,
-                                                  const std::vector<SceneObjectHandle>& points);
+                                                  const std::vector<PointObjectHandle>& points);
 
   void update();
   void on_delete();
@@ -185,7 +185,7 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
   std::pair<eray::math::Vec2f, eray::math::Vec2u> find_bezier3_patch_and_param(float u, float v) const;
 
  private:
-  friend SceneObject;
+  friend PointObject;
   friend Point;
   friend BezierPatches;
   friend BPatches;

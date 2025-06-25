@@ -1,14 +1,14 @@
 #include <expected>
 #include <liberay/util/logger.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/point_list.hpp>
 #include <libminicad/scene/scene.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <unordered_map>
 #include <unordered_set>
 
 namespace mini {
 
-std::expected<void, PointList::OperationError> PointList::push_back(SceneObject& obj) {
+std::expected<void, PointList::OperationError> PointList::push_back(PointObject& obj) {
   if (!obj.has_type<Point>()) {
     eray::util::Logger::err("Could not push back a scene object as it's not a point");
     return std::unexpected(OperationError::NotAPoint);
@@ -32,10 +32,10 @@ std::expected<void, PointList::OperationError> PointList::push_back(SceneObject&
   return {};
 }
 
-void PointList::unsafe_set(Scene& scene, const std::vector<SceneObjectHandle>& handles) {
+void PointList::unsafe_set(Scene& scene, const std::vector<PointObjectHandle>& handles) {
   clear();
   for (const auto& handle : handles) {
-    auto& obj = *scene.arena<SceneObject>().unsafe_get_obj(handle);
+    auto& obj = *scene.arena<PointObject>().unsafe_get_obj(handle);
     if (!push_back(obj)) {
       eray::util::Logger::err("Could not push back");
     }
@@ -47,7 +47,7 @@ void PointList::clear() {
   points_map_.clear();
 }
 
-std::expected<void, PointList::OperationError> PointList::remove(SceneObject& obj) {
+std::expected<void, PointList::OperationError> PointList::remove(PointObject& obj) {
   auto it = points_map_.find(obj.handle());
   if (it == points_map_.end()) {
     return std::unexpected(OperationError::NotFound);
@@ -78,7 +78,7 @@ std::expected<bool, PointList::OperationError> PointList::move_before(size_t des
     return false;
   }
 
-  SceneObject& obj_ref = points_[source_idx].get();
+  PointObject& obj_ref = points_[source_idx].get();
   points_.erase(points_.begin() + static_cast<int>(source_idx));
   if (source_idx < dest_idx && dest_idx > 0) {
     dest_idx--;
@@ -98,7 +98,7 @@ std::expected<bool, PointList::OperationError> PointList::move_after(size_t dest
     return false;
   }
 
-  SceneObject& obj_ref = points_[source_idx].get();
+  PointObject& obj_ref = points_[source_idx].get();
   points_.erase(points_.begin() + static_cast<int>(source_idx));
   size_t insert_pos = dest_idx + 1;
   if (source_idx > dest_idx && insert_pos > 0) {
@@ -111,13 +111,13 @@ std::expected<bool, PointList::OperationError> PointList::move_after(size_t dest
   return true;
 }
 
-OptionalObserverPtr<SceneObject> PointList::point_first(const SceneObjectHandle& handle) {
+OptionalObserverPtr<PointObject> PointList::point_first(const PointObjectHandle& handle) {
   auto it = points_map_.find(handle);
   if (it == points_map_.end()) {
     return std::nullopt;
   }
 
-  return OptionalObserverPtr<SceneObject>(points_[*it->second.begin()].get());
+  return OptionalObserverPtr<PointObject>(points_[*it->second.begin()].get());
 }
 
 void PointList::update_indices() {
@@ -130,13 +130,13 @@ void PointList::update_indices() {
   }
 }
 
-std::expected<void, PointList::OperationError> PointList::replace(const SceneObject& old_point,
-                                                                  SceneObject& new_point) {
+std::expected<void, PointList::OperationError> PointList::replace(const PointObject& old_point,
+                                                                  PointObject& new_point) {
   return replace(old_point.handle(), new_point);
 }
 
-std::expected<void, PointList::OperationError> PointList::replace(const SceneObjectHandle& old_point_handle,
-                                                                  SceneObject& new_point) {
+std::expected<void, PointList::OperationError> PointList::replace(const PointObjectHandle& old_point_handle,
+                                                                  PointObject& new_point) {
   if (!new_point.has_type<Point>()) {
     eray::util::Logger::err("Could not replace a point. New scene object is not a point.");
     return std::unexpected(OperationError::NotAPoint);
@@ -168,13 +168,13 @@ std::expected<void, PointList::OperationError> PointList::replace(const SceneObj
   return {};
 }
 
-SceneObject& PointList::unsafe_by_idx(size_t idx) { return points_.at(idx).get(); }
+PointObject& PointList::unsafe_by_idx(size_t idx) { return points_.at(idx).get(); }
 
-const SceneObject& PointList::unsafe_by_idx(size_t idx) const { return points_.at(idx).get(); }
+const PointObject& PointList::unsafe_by_idx(size_t idx) const { return points_.at(idx).get(); }
 
-void PointList::push_back_many(Scene& scene, const std::vector<SceneObjectHandle>& handles) {
+void PointList::push_back_many(Scene& scene, const std::vector<PointObjectHandle>& handles) {
   for (const auto& h : handles) {
-    if (auto o = scene.arena<SceneObject>().get_obj(h)) {
+    if (auto o = scene.arena<PointObject>().get_obj(h)) {
       auto& obj = *o.value();
       if (!obj.has_type<Point>()) {
         continue;
@@ -187,7 +187,7 @@ void PointList::push_back_many(Scene& scene, const std::vector<SceneObjectHandle
   }
 }
 
-void PointList::remove_many(const std::vector<SceneObjectHandle>& handles) {
+void PointList::remove_many(const std::vector<PointObjectHandle>& handles) {
   for (const auto& h : handles) {
     auto it = points_map_.find(h);
     if (it == points_map_.end()) {

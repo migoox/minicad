@@ -54,7 +54,7 @@ class BezierHole3Finder {
     static std::expected<PatchEdgeInfo, CreationError> create(const Scene& scene, const PatchEdgeInternalInfo& pinfo);
 
     PatchSurfaceHandle patch_surface_handle_;
-    std::array<std::array<SceneObjectHandle, 4>, 2> boundary_;  // row-major, rows = 4, columns = 2
+    std::array<std::array<PointObjectHandle, 4>, 2> boundary_;  // row-major, rows = 4, columns = 2
   };
 
   using BezierHole = std::array<PatchEdgeInfo, 3>;

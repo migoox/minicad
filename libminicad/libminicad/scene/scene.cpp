@@ -3,9 +3,9 @@
 #include <liberay/util/panic.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -17,16 +17,16 @@ std::uint32_t Scene::next_signature_ = 0;
 
 Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
     : renderer_(std::move(renderer)), signature_(next_signature_++) {
-  arena<SceneObject>().init(kMaxObjects, signature_);
+  arena<PointObject>().init(kMaxObjects, signature_);
   arena<Curve>().init(kMaxObjects, signature_);
   arena<PatchSurface>().init(kMaxObjects, signature_);
   arena<FillInSurface>().init(kMaxObjects, signature_);
   arena<ApproxCurve>().init(kMaxObjects, signature_);
 }
 
-bool Scene::push_back_point_to_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle) {
+bool Scene::push_back_point_to_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle) {
   if (auto c = arena<Curve>().get_obj(c_handle)) {
-    if (auto p = arena<SceneObject>().get_obj(p_handle)) {
+    if (auto p = arena<PointObject>().get_obj(p_handle)) {
       if (p.value()->has_type<Point>()) {
         return c.value()->push_back(p_handle).has_value();
       }
@@ -35,9 +35,9 @@ bool Scene::push_back_point_to_curve(const SceneObjectHandle& p_handle, const Cu
   return false;
 }
 
-bool Scene::remove_point_from_curve(const SceneObjectHandle& p_handle, const CurveHandle& c_handle) {
+bool Scene::remove_point_from_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle) {
   if (auto c = arena<Curve>().get_obj(c_handle)) {
-    if (auto p = arena<SceneObject>().get_obj(p_handle)) {
+    if (auto p = arena<PointObject>().get_obj(p_handle)) {
       if (p.value()->has_type<Point>()) {
         return c.value()->remove(p_handle).has_value();
       }
