@@ -22,6 +22,7 @@ Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
   arena<PatchSurface>().init(kMaxObjects, signature_);
   arena<FillInSurface>().init(kMaxObjects, signature_);
   arena<ApproxCurve>().init(kMaxObjects, signature_);
+  arena<ParamPrimitive>().init(kMaxObjects, signature_);
 }
 
 bool Scene::push_back_point_to_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle) {

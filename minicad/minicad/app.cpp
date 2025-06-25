@@ -36,9 +36,11 @@
 #include <libminicad/scene/curve.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/param_primitive.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/types.hpp>
 #include <libminicad/serialization/json/json.hpp>
 #include <memory>
 #include <minicad/app.hpp>
@@ -55,9 +57,6 @@
 #include <ranges>
 #include <tracy/Tracy.hpp>
 #include <variant>
-
-#include "libminicad/scene/param_primitive.hpp"
-#include "libminicad/scene/types.hpp"
 
 namespace mini {
 
@@ -992,7 +991,7 @@ void MiniCadApp::update(Duration delta) {
 bool MiniCadApp::on_param_primitive_added(ParamPrimitiveVariant variant) {
   auto obj_handle = m_.scene.create_obj<ParamPrimitive>(std::move(variant));
   if (!obj_handle) {
-    Logger::err("Could not add a new curve");
+    Logger::err("Could not add a param primitive");
     return false;
   }
 

@@ -22,6 +22,10 @@ void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::I
   }
 }
 
+void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures&) {
+  // TODO(migoox): trimming support
+}
+
 void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::UpdateObjectMembers&) {
   const auto& handle = cmd_ctx.handle;
   if (!renderer.rs_.contains(handle)) {

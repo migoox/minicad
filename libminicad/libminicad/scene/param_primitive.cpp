@@ -2,6 +2,8 @@
 #include <libminicad/scene/param_primitive.hpp>
 #include <libminicad/scene/scene.hpp>
 
+#include "libminicad/renderer/rendering_command.hpp"
+
 namespace mini {
 
 ParamPrimitive::ParamPrimitive(ParamPrimitiveHandle handle, Scene& scene)
@@ -11,13 +13,15 @@ ParamPrimitive::ParamPrimitive(ParamPrimitiveHandle handle, Scene& scene)
       txt_handle_(TextureHandle(0, 0, 0)) {
   txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt(), trimming_manager_.width(),
                                                        trimming_manager_.height());
-  // TODO(migoox): push rs command
+  scene_.get().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::AddObject{}));
 }
 
 void ParamPrimitive::update() {}
 
 void ParamPrimitive::on_delete() {
-  // TODO(migoox): push rs command
+  scene_.get().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::DeleteObject{}));
 }
 
 bool ParamPrimitive::can_be_deleted() const { return true; }
@@ -52,7 +56,8 @@ void ParamPrimitive::update_trimming_txt() {
   trimming_manager_.update_final_txt();
   scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt(), trimming_manager_.width(),
                                       trimming_manager_.height());
-  // TODO(migoox): push rs command
+  scene_.get().renderer().push_object_rs_cmd(
+      ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures{}));
 }
 
 }  // namespace mini

@@ -96,7 +96,7 @@ void TransformableSelection::update_transforms(Scene& scene, Cursor& cursor) {
     using T = ERAY_HANDLE_OBJ(handle);
     if (auto opt = scene.arena<T>().get_obj(handle)) {
       CTransformableObject auto& obj = **opt;
-      obj.update();
+      obj.transform().set_parent(transform);
     }
   };
 

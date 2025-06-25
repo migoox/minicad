@@ -93,8 +93,8 @@ struct ParamPrimitiveRSCommand {
 
   struct UpdateObjectMembers {};
 
-  using CommandVariant =
-      std::variant<Internal::DeleteObject, Internal::AddObject, UpdateObjectMembers, UpdateObjectVisibility>;
+  using CommandVariant = std::variant<Internal::DeleteObject, Internal::AddObject, Internal::UpdateTrimmingTextures,
+                                      UpdateObjectMembers, UpdateObjectVisibility>;
 
   explicit ParamPrimitiveRSCommand(ParamPrimitiveHandle _handle, CommandVariant _cmd)
       : handle(_handle), variant(_cmd) {}

@@ -15,6 +15,7 @@ struct ParamPrimitiveRSCommandHandler {
       : cmd_ctx(_cmd_ctx), renderer(_rs), scene(_scene) {}
 
   void operator()(const ParamPrimitiveRSCommand::Internal::AddObject&);
+  void operator()(const ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures&);
   void operator()(const ParamPrimitiveRSCommand::UpdateObjectMembers&);
   void operator()(const ParamPrimitiveRSCommand::UpdateObjectVisibility&);
   void operator()(const ParamPrimitiveRSCommand::Internal::DeleteObject&);
