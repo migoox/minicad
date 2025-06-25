@@ -1644,7 +1644,7 @@ bool MiniCadApp::on_find_intersection() {
 
       CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
       CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
-      auto curve                          = IntersectionFinder::find_intersections(obj1, obj2);
+      auto curve                          = IntersectionFinder::find_intersections(m_.scene.renderer(), obj1, obj2);
       if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
         auto& obj = **opt;
         obj.set_points(curve->points);

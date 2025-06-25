@@ -244,11 +244,12 @@ eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(const eray::mat
   return result;
 }
 
-eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f& start, ParamSurface& ps1,
-                                                        ParamSurface& ps2, int iters, bool reverse) {
+eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, const eray::math::Vec4f& start,
+                                                        ParamSurface& ps1, ParamSurface& ps2, const int iters,
+                                                        const bool reverse) {
   constexpr auto kLearningRate = 0.1F;
 
-  auto d = 0.1F;
+  const auto d = accuracy;
 
   auto result = start;
   auto p0     = ps1.eval(result.x, result.y);
@@ -280,6 +281,7 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
       auto delta = kLearningRate * ((*inv) * b);
       result     = result + delta;
     } else {
+      eray::util::Logger::err("Non-singular matrix encountered during newton steps");
       return result;
     }
   }
@@ -287,7 +289,8 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const eray::math::Vec4f&
   return result;
 }
 
-std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2) {
+std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2,
+                                                                                float accuracy) {
   auto err_func_eval = [&](const eray::math::Vec4f& p) {
     auto diff = s1.eval(p.x, p.y) - s2.eval(p.z, p.w);
     auto res  = eray::math::dot(diff, diff);
@@ -328,6 +331,8 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       start_point = new_result;
     }
   }
+  eray::util::Logger::info("Start point found with the gradient descent method: {}, Error: {}", start_point,
+                           err_func.eval(start_point));
 
   {
     auto new_result = newton_start_point_refiner(start_point, s1, s2, 5, err_func);
@@ -337,6 +342,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     eray::util::Logger::info("Refined start point with newton method: {}, Error: {}", start_point,
                              err_func.eval(start_point));
   }
+
+  s1.temp_rend.get().debug_point(s1.eval(start_point.x, start_point.y));
+  s2.temp_rend.get().debug_point(s2.eval(start_point.z, start_point.w));
 
   if (err_func.eval(start_point) > kThreshold) {
     return std::nullopt;
@@ -362,46 +370,113 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   curve.push_point(start_point, s1);
 
-  auto is_out_of_unit = [](const math::Vec4f& v) {
-    return v.x < 0.F || v.x > 1.F ||  //
-           v.y < 0.F || v.y > 1.F ||  //
-           v.z < 0.F || v.z > 1.F ||  //
-           v.w < 0.F || v.w > 1.F;
+  auto is_out_of_unit = [&](const math::Vec4f& v) {
+    return (!s1.wrap && (v.x < 0.F || v.x > 1.F ||    //
+                         v.y < 0.F || v.y > 1.F)) ||  //
+           (!s2.wrap && (v.z < 0.F || v.z > 1.F ||    //
+                         v.w < 0.F || v.w > 1.F));
   };
 
-  auto next_point = start_point;
-  for (auto i = 0U; i < 10000; ++i) {
-    next_point   = newton_next_point(next_point, s1, s2, 100);
-    auto refined = newton_start_point_refiner(next_point, s1, s2, 4, err_func);
-    if (err_func.eval(refined) < err_func.eval(next_point)) {
-      next_point = refined;
+  auto is_nan = [&](math::Vec4f& p) {
+    return std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || std::isnan(p.w);
+  };
+
+  auto refine_point = [&](math::Vec4f& p) {
+    auto refined = newton_start_point_refiner(p, s1, s2, 4, err_func);
+    if (err_func.eval(refined) < err_func.eval(p)) {
+      p = refined;
     }
-    // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
+  };
+
+  auto wrap_if_allowed = [&](math::Vec4f& p) {
+    if (s1.wrap) {
+      p.x = wrap_to_unit_interval(p.x);
+      p.y = wrap_to_unit_interval(p.y);
+    }
+    if (s2.wrap) {
+      p.z = wrap_to_unit_interval(p.z);
+      p.w = wrap_to_unit_interval(p.w);
+    }
+  };
+
+  auto detect_closure = [&](math::Vec4f& first, math::Vec4f& second, math::Vec4f& start) {
+    auto f = s1.eval(first.x, first.y);
+    auto s = s1.eval(second.x, second.y);
+    auto p = s1.eval(start.x, start.y);
+
+    auto v1 = p - f;
+    auto v2 = p - s;
+
+    const auto& [p0_dx, p0_dy] = s1.evald(start.x, start.y);
+    const auto& [q0_dz, q0_dw] = s2.evald(start.z, start.w);
+
+    auto p0n = math::cross(p0_dx, p0_dy);
+    auto q0n = math::cross(q0_dz, q0_dw);
+    auto t0  = math::normalize(math::cross(p0n, q0n));
+
+    if ((math::dot(t0, v1) > 0) != (math::dot(t0, v2) > 0)) {  // the sign differs => there might be a closure
+      if (math::distance(f, p) < 2.F * accuracy || math::distance(s, p) < 2.F * accuracy) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  auto next_point       = start_point;
+  auto end_point        = start_point;
+  bool closure_detected = false;
+  for (auto i = 0U; i < 10000; ++i) {
+    auto prev_point = next_point;
+    next_point      = newton_next_point(accuracy, next_point, s1, s2, 8);
+    if (is_nan(next_point)) {
+      eray::util::Logger::err("NaN encountered");
+      break;
+    }
+    refine_point(next_point);
+    wrap_if_allowed(next_point);
     if (is_out_of_unit(next_point)) {
+      eray::util::Logger::info("Out of unit circle: {}, Error: {}", next_point, err_func.eval(next_point));
+      break;
+    }
+    if (detect_closure(prev_point, next_point, end_point)) {
+      eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
+      closure_detected = true;
+      curve.push_point(end_point, s1);
       break;
     }
     curve.push_point(next_point, s1);
   }
 
-  curve.reverse();
-
-  next_point = start_point;
-  for (auto i = 0U; i < 10000; ++i) {
-    next_point   = newton_next_point(next_point, s1, s2, 4, true);
-    auto refined = newton_start_point_refiner(next_point, s1, s2, 4, err_func);
-    if (err_func.eval(refined) < err_func.eval(next_point)) {
-      next_point = refined;
+  if (!closure_detected) {
+    curve.reverse();
+    end_point  = next_point;
+    next_point = start_point;
+    for (auto i = 0U; i < 10000; ++i) {
+      auto prev_point = next_point;
+      next_point      = newton_next_point(accuracy, next_point, s1, s2, 8, true);
+      if (is_nan(next_point)) {
+        eray::util::Logger::err("NaN encountered");
+        break;
+      }
+      refine_point(next_point);
+      wrap_if_allowed(next_point);
+      if (is_out_of_unit(next_point)) {
+        eray::util::Logger::info("Out of unit circle: {}, Error: {}", next_point, err_func.eval(next_point));
+        break;
+      }
+      if (detect_closure(next_point, prev_point, end_point)) {
+        eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
+        curve.push_point(end_point, s1);
+        break;
+      }
+      curve.push_point(next_point, s1);
     }
-    // eray::util::Logger::info("Next point: {}, Error: {}", next_point, err_func(next_point));
-    if (is_out_of_unit(next_point)) {
-      break;
-    }
-    curve.push_point(next_point, s1);
   }
 
-  auto fix_border_closure = [](eray::math::Vec2f& p) {
-    static constexpr auto kBorderTolerance = 0.1F;
-    auto result                            = false;
+  static constexpr auto kBorderTolerance = 0.01F;
+  auto fix_border_closure                = [](eray::math::Vec2f& p) {
+    auto result = false;
 
     if (p.x < kBorderTolerance) {
       p.x    = 0.F;
@@ -424,16 +499,10 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     return result;
   };
 
-  if (math::distance(curve.points.front(), curve.points.back()) < 0.1F) {
-    curve.points.push_back(curve.points.front());
-    curve.param_space1.params.push_back(curve.param_space1.params.front());
-    curve.param_space2.params.push_back(curve.param_space2.params.front());
-  } else {
-    fix_border_closure(curve.param_space1.params.front());
-    fix_border_closure(curve.param_space1.params.back());
-    fix_border_closure(curve.param_space2.params.front());
-    fix_border_closure(curve.param_space2.params.back());
-  }
+  fix_border_closure(curve.param_space1.params.front());
+  fix_border_closure(curve.param_space1.params.back());
+  fix_border_closure(curve.param_space2.params.front());
+  fix_border_closure(curve.param_space2.params.back());
 
   curve.fill_textures();
 

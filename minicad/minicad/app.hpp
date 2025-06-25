@@ -21,6 +21,7 @@
 #include <libminicad/renderer/visibility_state.hpp>
 #include <libminicad/scene/fill_in_suface.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/param_primitive.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <memory>
@@ -29,8 +30,6 @@
 #include <minicad/imgui/modals.hpp>
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
-
-#include "libminicad/scene/param_primitive.hpp"
 
 namespace mini {
 

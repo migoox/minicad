@@ -1,6 +1,7 @@
 #pragma once
 
 #include <liberay/math/vec_fwd.hpp>
+#include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/types.hpp>
 #include <optional>
@@ -12,6 +13,8 @@ class PatchSurface;
 class IntersectionFinder {
  public:
   struct ParamSurface {
+    ref<ISceneRenderer> temp_rend;
+    bool wrap = false;
     std::function<eray::math::Vec3f(float, float)> eval;
     std::function<std::pair<eray::math::Vec3f, eray::math::Vec3f>(float, float)> evald;
   };
@@ -51,7 +54,8 @@ class IntersectionFinder {
    * @return std::optional<Result>
    */
   template <CParametricSurfaceObject T1, CParametricSurfaceObject T2>
-  [[nodiscard]] static std::optional<Curve> find_intersections(T1& ps1, T2& ps2) {
+  [[nodiscard]] static std::optional<Curve> find_intersections(ISceneRenderer& renderer, T1& ps1, T2& ps2,
+                                                               float accuracy = 0.1F) {
     auto bb1 = ps1.aabb_bounding_box();
     auto bb2 = ps2.aabb_bounding_box();
     if (!aabb_intersects(bb1, bb2)) {
@@ -64,19 +68,33 @@ class IntersectionFinder {
     auto eval2  = [&](float u, float v) { return ps2.evaluate(u, v); };
     auto evald2 = [&](float u, float v) { return ps2.evaluate_derivatives(u, v); };
 
+    auto wrap1 = false;
+    auto wrap2 = false;
+
+    if constexpr (std::is_same_v<T1, ParamPrimitive>) {
+      wrap1 = true;
+    }
+    if constexpr (std::is_same_v<T2, ParamPrimitive>) {
+      wrap2 = true;
+    }
+
     auto s1 = ParamSurface{
-        .eval  = std::move(eval1),
-        .evald = std::move(evald2),
+        .temp_rend = renderer,
+        .wrap      = wrap1,
+        .eval      = std::move(eval1),
+        .evald     = std::move(evald1),
     };
     auto s2 = ParamSurface{
-        .eval  = std::move(eval2),
-        .evald = std::move(evald2),
+        .temp_rend = renderer,
+        .wrap      = wrap2,
+        .eval      = std::move(eval2),
+        .evald     = std::move(evald2),
     };
 
-    return find_intersections(s1, s2);
+    return find_intersections(s1, s2, accuracy);
   }
 
-  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2);
+  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2, float accuracy = 0.1F);
 
   static constexpr auto kThreshold = 0.001F;
 
@@ -94,8 +112,8 @@ class IntersectionFinder {
   static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, ParamSurface& ps1,
                                                       ParamSurface& ps2, int iters, const ErrorFunc& err_func);
 
-  static eray::math::Vec4f newton_next_point(const eray::math::Vec4f& start, ParamSurface& ps1, ParamSurface& ps2,
-                                             int iters, bool reverse = false);
+  static eray::math::Vec4f newton_next_point(float accuracy, const eray::math::Vec4f& start, ParamSurface& ps1,
+                                             ParamSurface& ps2, int iters, bool reverse = false);
 };
 
 }  // namespace mini
