@@ -574,7 +574,7 @@ eray::math::Mat4f Curve::frenet_frame(float t) {
   auto binormal = math::normalize(math::cross(val_dt, val_dtt));
   auto normal   = math::normalize(math::cross(binormal, tangent));
 
-  return math::Mat4f{math::Vec4f(tangent, 1.F), math::Vec4f(normal, 1.F), math::Vec4f(binormal, 1.F),
+  return math::Mat4f{math::Vec4f(tangent, 0.F), math::Vec4f(normal, 0.F), math::Vec4f(binormal, 0.F),
                      math::Vec4f(val, 1.F)};
 }
 

@@ -9,6 +9,8 @@
 #include <libminicad/scene/trimming.hpp>
 #include <vector>
 
+#include "liberay/math/mat_fwd.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -751,6 +753,11 @@ void PatchSurface::update_trimming_txt() {
                                       trimming_manager_.height());
   scene().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures{}));
+}
+
+eray::math::Mat4f PatchSurface::frenet_frame(float u, float v) {
+  eray::util::Logger::err("Frenet frame not implemented!");
+  return math::Mat4f::identity();
 }
 
 }  // namespace mini

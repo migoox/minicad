@@ -2,14 +2,23 @@
 
 #include <liberay/math/mat_fwd.hpp>
 #include <liberay/math/vec_fwd.hpp>
+#include <liberay/util/variant_match.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/trimming.hpp>
 #include <libminicad/scene/types.hpp>
+
+#include "liberay/math/transform3_fwd.hpp"
 
 namespace mini {
 class Torus {
  public:
   [[nodiscard]] static zstring_view type_name() noexcept { return "Torus"; }
+
+  eray::math::Mat4f frenet_frame(const eray::math::Transform3f& transform, float u, float v) const;
+  eray::math::Vec3f evaluate(const eray::math::Transform3f& transform, float u, float v) const;
+  std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(const eray::math::Transform3f& transform,
+                                                                       float u, float v) const;
+  std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box(const eray::math::Transform3f& transform) const;
 
  public:
   float minor_radius           = 1.F;
@@ -18,8 +27,14 @@ class Torus {
 };
 
 template <typename T>
-concept CParamPrimitiveType = requires {
+concept CParamPrimitiveType = requires(T t, float param1, float param2, const eray::math::Transform3f& transform) {
   { T::type_name() } -> std::same_as<zstring_view>;
+  { t.frenet_frame(transform, param1, param1) } -> std::same_as<eray::math::Mat4f>;
+  { t.evaluate(transform, param1, param2) } -> std::same_as<eray::math::Vec3f>;
+  {
+    t.evaluate_derivatives(transform, param1, param2)
+  } -> std::same_as<std::pair<eray::math::Vec3f, eray::math::Vec3f>>;
+  { t.aabb_bounding_box(transform) } -> std::same_as<std::pair<eray::math::Vec3f, eray::math::Vec3f>>;
 };
 
 using ParamPrimitiveVariant = std::variant<Torus>;
