@@ -79,51 +79,6 @@ void PointObjectRSCommandHandler::operator()(const PointObjectRSCommand::Interna
 
 namespace {
 
-eray::driver::gl::VertexArrays create_torus_vao(float width = 1.F, float height = 1.F) {
-  float vertices[] = {
-      0.5F * width,  0.5F * height,   //
-      -0.5F * width, 0.5F * height,   //
-      0.5F * width,  -0.5F * height,  //
-      -0.5F * width, -0.5F * height,  //
-  };
-
-  unsigned int indices[] = {
-      0, 1, 2, 3  //
-  };
-
-  auto vbo_layout = eray::driver::gl::VertexBuffer::Layout();
-  vbo_layout.add_attribute<float>("patchPos", 0, 2);
-  auto vbo = eray::driver::gl::VertexBuffer::create(std::move(vbo_layout));
-  vbo.buffer_data<float>(vertices, eray::driver::gl::DataUsage::StaticDraw);
-
-  auto mat_vbo_layout = eray::driver::gl::VertexBuffer::Layout();
-  mat_vbo_layout.add_attribute<float>("radii", 1, 2);
-  mat_vbo_layout.add_attribute<int>("tessLevel", 2, 2);
-  mat_vbo_layout.add_attribute<float>("worldMat", 3, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat1", 4, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat2", 5, 4);
-  mat_vbo_layout.add_attribute<float>("worldMat3", 6, 4);
-  mat_vbo_layout.add_attribute<int>("id", 7, 1);
-  mat_vbo_layout.add_attribute<int>("state", 8, 1);
-  auto mat_vbo = eray::driver::gl::VertexBuffer::create(std::move(mat_vbo_layout));
-
-  auto data = std::vector<float>(21 * Scene::kMaxObjects, 0.F);
-  mat_vbo.buffer_data(std::span<float>{data}, eray::driver::gl::DataUsage::StaticDraw);
-
-  auto ebo = eray::driver::gl::ElementBuffer::create();
-  ebo.buffer_data(indices, eray::driver::gl::DataUsage::StaticDraw);
-
-  auto m = std::unordered_map<zstring_view, eray::driver::gl::VertexBuffer>();
-  m.emplace("base", std::move(vbo));
-  m.emplace("matrices", std::move(mat_vbo));
-  auto vao = eray::driver::gl::VertexArrays::create(std::move(m), std::move(ebo));
-
-  vao.set_binding_divisor("base", 0);
-  vao.set_binding_divisor("matrices", 1);
-
-  return vao;
-}
-
 eray::driver::gl::VertexArray create_points_vao() {
   auto points  = std::array<float, 3 * Scene::kMaxObjects>();
   auto indices = std::array<uint32_t, Scene::kMaxObjects>();

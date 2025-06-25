@@ -339,9 +339,7 @@ void OpenGLSceneRenderer::delete_texture(const TextureHandle& texture) {
 void OpenGLSceneRenderer::draw_imgui_texture_image(const TextureHandle& texture, size_t size_x, size_t size_y) {
   auto txt_it = global_rs_.textures.find(texture);
   if (txt_it != global_rs_.textures.end()) {
-    // NOLINTBEGIN
     ImGui::Image((ImTextureID)(intptr_t)texture.obj_id, ImVec2(size_x, size_y), ImVec2(0, 1), ImVec2(1, 0));
-    // NOLINTEND
   }
 }
 
