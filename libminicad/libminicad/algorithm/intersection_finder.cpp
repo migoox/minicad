@@ -347,7 +347,7 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
 }
 
 eray::math::Vec4f IntersectionFinder::find_init_point(ParamSurface& s1, ParamSurface& s2, eray::math::Vec3f init) {
-  const auto sectors = 10;
+  const auto sectors = 20;
   auto min_dist      = std::numeric_limits<float>::max();
   auto result        = eray::math::Vec4f();
 
