@@ -96,7 +96,7 @@ class IntersectionFinder {
 
   static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2, float accuracy = 0.1F);
 
-  static constexpr auto kThreshold = 0.001F;
+  static constexpr auto kIntersectionThreshold = 0.1F;
 
  private:
   struct ErrorFunc {

@@ -324,21 +324,45 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   auto err_func = ErrorFunc{.eval = err_func_eval, .grad = err_func_grad};
 
-  static constexpr auto kLearningRate  = 0.01F;
-  static constexpr auto kTolerance     = 0.001F;
-  static constexpr auto kMaxIterations = 200;
-  static constexpr auto kTrials        = 10;
+  auto is_out_of_unit = [&](const math::Vec4f& v) {
+    return (!s1.wrap && (v.x < 0.F || v.x > 1.F ||    //
+                         v.y < 0.F || v.y > 1.F)) ||  //
+           (!s2.wrap && (v.z < 0.F || v.z > 1.F ||    //
+                         v.w < 0.F || v.w > 1.F));
+  };
+
+  auto wrap_if_allowed = [&](math::Vec4f& p) {
+    if (s1.wrap) {
+      p.x = wrap_to_unit_interval(p.x);
+      p.y = wrap_to_unit_interval(p.y);
+    }
+    if (s2.wrap) {
+      p.z = wrap_to_unit_interval(p.z);
+      p.w = wrap_to_unit_interval(p.w);
+    }
+  };
+
+  static constexpr auto kGradDescLearningRate  = 0.01F;
+  static constexpr auto kGradDescTolerance     = 0.00001F;
+  static constexpr auto kGradDescMaxIterations = 400;
+  static constexpr auto kGradDescTrials        = 100;
 
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<float> dist(0.0F, 1.0F);
   auto random_vec4 = [&]() { return math::Vec4f(dist(gen), dist(gen), dist(gen), dist(gen)); };
 
-  auto start_point = gradient_descent(math::Vec4f::filled(0.5F), kLearningRate, kTolerance, kMaxIterations, err_func);
-  for (auto i = 0; i < kTrials; ++i) {
-    auto new_result = gradient_descent(random_vec4(), kLearningRate, kTolerance, kMaxIterations, err_func);
+  auto start_point = gradient_descent(math::Vec4f::filled(0.5F), kGradDescLearningRate, kGradDescTolerance,
+                                      kGradDescMaxIterations, err_func);
+  for (auto i = 0; i < kGradDescTrials; ++i) {
+    auto new_result =
+        gradient_descent(random_vec4(), kGradDescLearningRate, kGradDescTolerance, kGradDescMaxIterations, err_func);
 
-    new_result = math::clamp(new_result, 0.F, 1.F);
+    wrap_if_allowed(new_result);
+    if (is_out_of_unit(new_result)) {
+      new_result = math::clamp(new_result, 0.F, 1.F);
+    }
+
     if (err_func.eval(start_point) > err_func.eval(new_result)) {
       start_point = new_result;
     }
@@ -347,7 +371,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
                            err_func.eval(start_point));
 
   {
-    auto new_result = newton_start_point_refiner(start_point, s1, s2, 8, err_func);
+    auto new_result = newton_start_point_refiner(start_point, s1, s2, 100, err_func);
+    wrap_if_allowed(new_result);
+    new_result = math::clamp(new_result, 0.F, 1.F);
     if (err_func.eval(new_result) < err_func.eval(start_point)) {
       start_point = new_result;
     }
@@ -356,7 +382,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   }
 
   {
-    auto new_result = newton_next_point(accuracy, start_point, s1, s2, 8, err_func);
+    auto new_result = newton_next_point(accuracy, start_point, s1, s2, 100, err_func);
+    wrap_if_allowed(new_result);
+    new_result = math::clamp(new_result, 0.F, 1.F);
     if (err_func.eval(new_result) < err_func.eval(start_point)) {
       start_point = new_result;
     }
@@ -364,7 +392,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
                              err_func.eval(start_point));
   }
 
-  if (err_func.eval(start_point) > kThreshold) {
+  if (err_func.eval(start_point) > kIntersectionThreshold) {
+    eray::util::Logger::info("start point: {}, Error: {} does not satisfy the threshold {}", start_point,
+                             err_func.eval(start_point), kIntersectionThreshold);
     return std::nullopt;
   }
 
@@ -388,13 +418,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   curve.push_point(start_point, s1, s2);
 
-  auto is_out_of_unit = [&](const math::Vec4f& v) {
-    return (!s1.wrap && (v.x < 0.F || v.x > 1.F ||    //
-                         v.y < 0.F || v.y > 1.F)) ||  //
-           (!s2.wrap && (v.z < 0.F || v.z > 1.F ||    //
-                         v.w < 0.F || v.w > 1.F));
-  };
-
   auto is_nan = [&](math::Vec4f& p) {
     return std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || std::isnan(p.w);
   };
@@ -403,17 +426,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     auto refined = newton_start_point_refiner(p, s1, s2, 4, err_func);
     if (err_func.eval(refined) < err_func.eval(p)) {
       p = refined;
-    }
-  };
-
-  auto wrap_if_allowed = [&](math::Vec4f& p) {
-    if (s1.wrap) {
-      p.x = wrap_to_unit_interval(p.x);
-      p.y = wrap_to_unit_interval(p.y);
-    }
-    if (s2.wrap) {
-      p.z = wrap_to_unit_interval(p.z);
-      p.w = wrap_to_unit_interval(p.w);
     }
   };
 
@@ -465,7 +477,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       curve.push_point(end_point, s1, s2);
       break;
     }
-    if (err_func.eval(next_point) > kTolerance) {
+    if (err_func.eval(next_point) > kGradDescTolerance) {
       break;
     }
     curve.push_point(next_point, s1, s2);
@@ -496,7 +508,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
         closure_detected = true;
         break;
       }
-      if (err_func.eval(next_point) > kTolerance) {
+      if (err_func.eval(next_point) > kGradDescTolerance) {
         break;
       }
       curve.push_point(next_point, s1, s2);
