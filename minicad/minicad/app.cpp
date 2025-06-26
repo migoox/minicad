@@ -1652,7 +1652,7 @@ bool MiniCadApp::on_find_intersection() {
 
       CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
       CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
-      auto curve                          = IntersectionFinder::find_intersections(m_.scene.renderer(), obj1, obj2);
+      auto curve                          = IntersectionFinder::find_intersection(m_.scene.renderer(), obj1, obj2);
       if (!curve) {
         util::Logger::info("No intersection found");
         return;
@@ -1670,6 +1670,25 @@ bool MiniCadApp::on_find_intersection() {
     };
 
     std::visit(match{unsafe_param_obj_extractor}, first, second);
+  } else if (count == 1) {
+    auto unsafe_param_obj_extractor = [&](const auto& handle) {
+      using T = ERAY_HANDLE_OBJ(handle);
+
+      CParametricSurfaceObject auto& obj = **m_.scene.arena<T>().get_obj(handle);
+
+      auto curve = IntersectionFinder::find_self_intersection(m_.scene.renderer(), obj);
+      if (!curve) {
+        util::Logger::info("No intersection found");
+        return;
+      }
+      if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+        auto& c_obj = **opt;
+        c_obj.set_points(curve->points);
+        util::Logger::info("Created new approx curve from intersection points");
+      }
+    };
+
+    std::visit(match{unsafe_param_obj_extractor}, first);
   }
 
   return false;

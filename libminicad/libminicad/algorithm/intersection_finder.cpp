@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <liberay/math/mat.hpp>
 #include <liberay/math/vec.hpp>
 #include <liberay/math/vec_fwd.hpp>
@@ -344,9 +345,14 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
 }
 
 std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2,
-                                                                                float accuracy) {
+                                                                                float accuracy,
+                                                                                bool self_intersection) {
   fix_wrap_flags(s1);
   fix_wrap_flags(s2);
+
+  auto is_nan = [&](math::Vec4f& p) {
+    return std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || std::isnan(p.w);
+  };
 
   auto err_func_eval = [&](const eray::math::Vec4f& p) {
     auto diff = s1.eval(p.x, p.y) - s2.eval(p.z, p.w);
@@ -391,26 +397,86 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     }
   };
 
+  auto self_intersection_test = [&](math::Vec4f& p) {
+    auto dist = math::distance(math::Vec2f(p.x, p.y), math::Vec2f(p.z, p.w));
+    return dist > kSelfIntersectionTolerance;
+  };
+
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<float> dist(0.0F, 1.0F);
   auto random_vec4 = [&]() { return math::Vec4f(dist(gen), dist(gen), dist(gen), dist(gen)); };
 
-  auto start_point = gradient_descent(math::Vec4f::filled(0.5F), kGradDescLearningRate, kGradDescTolerance,
-                                      kGradDescMaxIterations, err_func);
-  for (auto i = 0; i < kGradDescTrials; ++i) {
-    auto new_result =
-        gradient_descent(random_vec4(), kGradDescLearningRate, kGradDescTolerance, kGradDescMaxIterations, err_func);
+  auto gradient_descent_init_points = std::vector<math::Vec4f>();
+  if (self_intersection) {
+    const auto sectors = 5;
+    gradient_descent_init_points.reserve(sectors * sectors * sectors * sectors);
+    for (auto i = 0; i < sectors; ++i) {
+      for (auto j = 0; j < sectors; ++j) {
+        auto x = static_cast<float>(i) / static_cast<float>(10);
+        auto y = static_cast<float>(j) / static_cast<float>(10);
 
-    wrap_if_allowed(new_result);
-    if (is_out_of_unit(new_result)) {
-      new_result = math::clamp(new_result, 0.F, 1.F);
+        for (auto ii = 0; ii < sectors; ++ii) {
+          for (auto jj = 0; jj < sectors; ++jj) {
+            auto z = static_cast<float>(ii) / static_cast<float>(10);
+            auto w = static_cast<float>(jj) / static_cast<float>(10);
+
+            gradient_descent_init_points.emplace_back(x, y, z, w);
+          }
+        }
+      }
     }
-
-    if (err_func.eval(start_point) > err_func.eval(new_result)) {
-      start_point = new_result;
+  } else {
+    gradient_descent_init_points.reserve(kGradDescTrials);
+    for (auto i = 0; i < kGradDescTrials; ++i) {
+      gradient_descent_init_points.push_back(random_vec4());
     }
   }
+
+  auto start_point = gradient_descent(math::Vec4f::filled(0.5F), kGradDescLearningRate, kGradDescTolerance,
+                                      kGradDescMaxIterations, err_func);
+  auto found       = true;
+  if (self_intersection) {
+    found = false;
+  }
+  for (const auto& init : gradient_descent_init_points) {
+    auto new_result =
+        gradient_descent(init, kGradDescLearningRate, kGradDescTolerance, kGradDescMaxIterations, err_func);
+
+    if (is_nan(new_result)) {
+      continue;
+    }
+
+    if (self_intersection) {
+      float dist_new = math::distance(math::Vec2f(new_result.x, new_result.y), math::Vec2f(new_result.z, new_result.w));
+      float dist_start =
+          math::distance(math::Vec2f(start_point.x, start_point.y), math::Vec2f(start_point.z, start_point.w));
+
+      if (dist_start < dist_new) {
+        wrap_if_allowed(new_result);
+        if (is_out_of_unit(new_result)) {
+          new_result = math::clamp(new_result, 0.F, 1.F);
+        }
+        start_point = new_result;
+        found       = true;
+      }
+    } else {
+      wrap_if_allowed(new_result);
+      if (is_out_of_unit(new_result)) {
+        new_result = math::clamp(new_result, 0.F, 1.F);
+      }
+      if (err_func.eval(start_point) > err_func.eval(new_result)) {
+        start_point = new_result;
+        found       = true;
+      }
+    }
+  }
+
+  if (!found || (self_intersection && !self_intersection_test(start_point))) {
+    eray::util::Logger::info("No start point found");
+    return std::nullopt;
+  }
+
   eray::util::Logger::info("Start point found with the gradient descent method: {}, Error: {}", start_point,
                            err_func.eval(start_point));
 
@@ -420,9 +486,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     new_result = math::clamp(new_result, 0.F, 1.F);
     if (err_func.eval(new_result) < err_func.eval(start_point)) {
       start_point = new_result;
+      eray::util::Logger::info("Refined start point with newton refiner: {}, Error: {}", start_point,
+                               err_func.eval(start_point));
     }
-    eray::util::Logger::info("Refined start point with newton refiner: {}, Error: {}", start_point,
-                             err_func.eval(start_point));
   }
 
   {
@@ -431,9 +497,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     new_result = math::clamp(new_result, 0.F, 1.F);
     if (err_func.eval(new_result) < err_func.eval(start_point)) {
       start_point = new_result;
+      eray::util::Logger::info("Refined start point with newton step: {}, Error: {}", start_point,
+                               err_func.eval(start_point));
     }
-    eray::util::Logger::info("Refined start point with newton step: {}, Error: {}", start_point,
-                             err_func.eval(start_point));
   }
 
   if (err_func.eval(start_point) > kIntersectionThreshold) {
@@ -461,10 +527,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   };
 
   curve.push_point(start_point, s1, s2);
-
-  auto is_nan = [&](math::Vec4f& p) {
-    return std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || std::isnan(p.w);
-  };
 
   auto refine_point = [&](math::Vec4f& p) {
     auto refined = newton_start_point_refiner(p, s1, s2, 4, err_func);

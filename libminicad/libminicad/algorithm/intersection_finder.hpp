@@ -47,6 +47,36 @@ class IntersectionFinder {
     void flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y);
   };
 
+  template <CParametricSurfaceObject T>
+  [[nodiscard]] static std::optional<Curve> find_self_intersection(ISceneRenderer& renderer, T& ps,
+                                                                   float accuracy = 0.1F) {
+    auto eval  = [&](float u, float v) { return ps.evaluate(u, v); };
+    auto evald = [&](float u, float v) { return ps.evaluate_derivatives(u, v); };
+
+    auto wrap = false;
+
+    if constexpr (std::is_same_v<T, ParamPrimitive>) {
+      wrap = true;
+    }
+
+    auto s1 = ParamSurface{
+        .temp_rend = renderer,
+        .wrap_u    = wrap,
+        .wrap_v    = wrap,
+        .eval      = std::move(eval),
+        .evald     = std::move(evald),
+    };
+    auto s2 = ParamSurface{
+        .temp_rend = renderer,
+        .wrap_u    = wrap,
+        .wrap_v    = wrap,
+        .eval      = std::move(eval),
+        .evald     = std::move(evald),
+    };
+
+    return find_intersections(s1, s2, accuracy, true);
+  }
+
   /**
    * @brief Finds intersection between two parametric surfaces. Returns nullopt if no intersections are found.
    *
@@ -55,8 +85,8 @@ class IntersectionFinder {
    * @return std::optional<Result>
    */
   template <CParametricSurfaceObject T1, CParametricSurfaceObject T2>
-  [[nodiscard]] static std::optional<Curve> find_intersections(ISceneRenderer& renderer, T1& ps1, T2& ps2,
-                                                               float accuracy = 0.1F) {
+  [[nodiscard]] static std::optional<Curve> find_intersection(ISceneRenderer& renderer, T1& ps1, T2& ps2,
+                                                              float accuracy = 0.1F) {
     auto bb1 = ps1.aabb_bounding_box();
     auto bb2 = ps2.aabb_bounding_box();
     if (!aabb_intersects(bb1, bb2)) {
@@ -94,21 +124,24 @@ class IntersectionFinder {
         .evald     = std::move(evald2),
     };
 
-    return find_intersections(s1, s2, accuracy);
+    return find_intersections(s1, s2, accuracy, false);
   }
 
-  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2, float accuracy = 0.1F);
+  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2, float accuracy = 0.1F,
+                                                 bool self_intersection = false);
 
   static constexpr auto kIntersectionThreshold = 0.1F;
 
   static constexpr auto kGradDescLearningRate  = 0.01F;
   static constexpr auto kGradDescTolerance     = 0.00001F;
   static constexpr auto kGradDescMaxIterations = 400;
-  static constexpr auto kGradDescTrials        = 100;
+  static constexpr auto kGradDescTrials        = 300;
 
   static constexpr auto kBorderTolerance = 0.01F;
 
   static constexpr auto kWrappingTolerance = 0.01F;
+
+  static constexpr auto kSelfIntersectionTolerance = 0.1F;
 
  private:
   struct ErrorFunc {
