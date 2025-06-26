@@ -413,13 +413,13 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     gradient_descent_init_points.reserve(sectors * sectors * sectors * sectors);
     for (auto i = 0; i < sectors; ++i) {
       for (auto j = 0; j < sectors; ++j) {
-        auto x = static_cast<float>(i) / static_cast<float>(10);
-        auto y = static_cast<float>(j) / static_cast<float>(10);
+        auto x = static_cast<float>(i) / static_cast<float>(sectors);
+        auto y = static_cast<float>(j) / static_cast<float>(sectors);
 
         for (auto ii = 0; ii < sectors; ++ii) {
           for (auto jj = 0; jj < sectors; ++jj) {
-            auto z = static_cast<float>(ii) / static_cast<float>(10);
-            auto w = static_cast<float>(jj) / static_cast<float>(10);
+            auto z = static_cast<float>(ii) / static_cast<float>(sectors);
+            auto w = static_cast<float>(jj) / static_cast<float>(sectors);
 
             gradient_descent_init_points.emplace_back(x, y, z, w);
           }
@@ -501,6 +501,9 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
                                err_func.eval(start_point));
     }
   }
+
+  s1.temp_rend.get().debug_point(s1.eval(start_point.x, start_point.y));
+  s1.temp_rend.get().debug_point(s2.eval(start_point.z, start_point.w));
 
   if (err_func.eval(start_point) > kIntersectionThreshold) {
     eray::util::Logger::info("start point: {}, Error: {} does not satisfy the threshold {}", start_point,
