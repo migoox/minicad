@@ -14,7 +14,8 @@ class IntersectionFinder {
  public:
   struct ParamSurface {
     ref<ISceneRenderer> temp_rend;
-    bool wrap = false;
+    bool wrap_u = false;
+    bool wrap_v = false;
     std::function<eray::math::Vec3f(float, float)> eval;
     std::function<std::pair<eray::math::Vec3f, eray::math::Vec3f>(float, float)> evald;
   };
@@ -80,13 +81,15 @@ class IntersectionFinder {
 
     auto s1 = ParamSurface{
         .temp_rend = renderer,
-        .wrap      = wrap1,
+        .wrap_u    = wrap1,
+        .wrap_v    = wrap1,
         .eval      = std::move(eval1),
         .evald     = std::move(evald1),
     };
     auto s2 = ParamSurface{
         .temp_rend = renderer,
-        .wrap      = wrap2,
+        .wrap_u    = wrap2,
+        .wrap_v    = wrap2,
         .eval      = std::move(eval2),
         .evald     = std::move(evald2),
     };
@@ -105,11 +108,15 @@ class IntersectionFinder {
 
   static constexpr auto kBorderTolerance = 0.01F;
 
+  static constexpr auto kWrappingTolerance = 0.01F;
+
  private:
   struct ErrorFunc {
     std::function<float(const eray::math::Vec4f&)> eval;
     std::function<eray::math::Vec4f(const eray::math::Vec4f&)> grad;
   };
+
+  static void fix_wrap_flags(ParamSurface& s);
 
   static bool aabb_intersects(const std::pair<eray::math::Vec3f, eray::math::Vec3f>& a,
                               const std::pair<eray::math::Vec3f, eray::math::Vec3f>& b);

@@ -22,15 +22,57 @@ static constexpr float wrap_to_unit_interval(float x) noexcept {
   return frac_part < 0.0F ? frac_part + 1.0F : frac_part;
 }
 
+void IntersectionFinder::fix_wrap_flags(ParamSurface& s) {
+  if (!s.wrap_u) {
+    auto wrap_u        = true;
+    const auto samples = 50;
+    for (int i = 0; i <= samples; ++i) {
+      auto left  = s.eval(0.F, static_cast<float>(i) / static_cast<float>(samples));
+      auto right = s.eval(1.F, static_cast<float>(i) / static_cast<float>(samples));
+
+      if (math::distance(left, right) > kWrappingTolerance) {
+        wrap_u = false;
+        break;
+      }
+    }
+    if (wrap_u) {
+      eray::util::Logger::info("Successfully detected that the object's uv might be wrapped along u coord.");
+    }
+    s.wrap_u = wrap_u;
+  }
+
+  if (!s.wrap_v) {
+    auto wrap_v        = true;
+    const auto samples = 50;
+    for (int i = 0; i <= samples; ++i) {
+      auto left  = s.eval(static_cast<float>(i) / static_cast<float>(samples), 0.F);
+      auto right = s.eval(static_cast<float>(i) / static_cast<float>(samples), 1.F);
+
+      if (math::distance(left, right) > kWrappingTolerance) {
+        wrap_v = false;
+        break;
+      }
+    }
+    if (wrap_v) {
+      eray::util::Logger::info("Successfully detected that the object's uv might be wrapped along v coord.");
+    }
+    s.wrap_v = wrap_v;
+  }
+}
+
 void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, ParamSurface& s1, ParamSurface& s2) {
   auto uv = params;
 
-  if (s1.wrap) {
+  if (s1.wrap_u) {
     uv.x = wrap_to_unit_interval(uv.x);
+  }
+  if (s1.wrap_v) {
     uv.y = wrap_to_unit_interval(uv.y);
   }
-  if (s2.wrap) {
+  if (s2.wrap_u) {
     uv.z = wrap_to_unit_interval(uv.z);
+  }
+  if (s2.wrap_v) {
     uv.w = wrap_to_unit_interval(uv.w);
   }
 
@@ -257,7 +299,7 @@ eray::math::Vec4f IntersectionFinder::newton_start_point_refiner(const eray::mat
 
 eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, const eray::math::Vec4f& start,
                                                         ParamSurface& ps1, ParamSurface& ps2, const int iters,
-                                                        ErrorFunc& err_func, const bool reverse) {
+                                                        ErrorFunc& /*err_func*/, const bool reverse) {
   constexpr auto kLearningRate = 0.1F;
 
   const auto d = accuracy;
@@ -303,6 +345,9 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
 
 std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2,
                                                                                 float accuracy) {
+  fix_wrap_flags(s1);
+  fix_wrap_flags(s2);
+
   auto err_func_eval = [&](const eray::math::Vec4f& p) {
     auto diff = s1.eval(p.x, p.y) - s2.eval(p.z, p.w);
     auto res  = eray::math::dot(diff, diff);
@@ -325,19 +370,23 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   auto err_func = ErrorFunc{.eval = err_func_eval, .grad = err_func_grad};
 
   auto is_out_of_unit = [&](const math::Vec4f& v) {
-    return (!s1.wrap && (v.x < 0.F || v.x > 1.F ||    //
-                         v.y < 0.F || v.y > 1.F)) ||  //
-           (!s2.wrap && (v.z < 0.F || v.z > 1.F ||    //
-                         v.w < 0.F || v.w > 1.F));
+    return (!s1.wrap_u && (v.x < 0.F || v.x > 1.F)) ||  //
+           (!s1.wrap_v && (v.y < 0.F || v.y > 1.F)) ||  //
+           (!s2.wrap_u && (v.z < 0.F || v.z > 1.F)) ||  //
+           (!s2.wrap_v && (v.w < 0.F || v.w > 1.F));
   };
 
   auto wrap_if_allowed = [&](math::Vec4f& p) {
-    if (s1.wrap) {
+    if (s1.wrap_u) {
       p.x = wrap_to_unit_interval(p.x);
+    }
+    if (s1.wrap_v) {
       p.y = wrap_to_unit_interval(p.y);
     }
-    if (s2.wrap) {
+    if (s2.wrap_u) {
       p.z = wrap_to_unit_interval(p.z);
+    }
+    if (s2.wrap_v) {
       p.w = wrap_to_unit_interval(p.w);
     }
   };
