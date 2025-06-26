@@ -354,14 +354,20 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
   const auto& [p0_dx, p0_dy] = ps1.evald(result.x, result.y);
   const auto& [q0_dz, q0_dw] = ps2.evald(result.z, result.w);
 
-  auto p0n = math::cross(p0_dx, p0_dy);
-  auto q0n = math::cross(q0_dz, q0_dw);
+  auto p0n = math::normalize(math::cross(p0_dx, p0_dy));
+  auto q0n = math::normalize(math::cross(q0_dz, q0_dw));
 
-  auto t0 = math::normalize(math::cross(p0n, q0n));
-
-  if (reverse) {
-    t0 = -t0;
+  auto t0 = math::cross(p0n, q0n);
+  ps1.temp_rend.get().debug_line(p0, p0 + p0n);
+  ps1.temp_rend.get().debug_line(p0, p0 + q0n);
+  if (t0.length() < 0.1F) {
+    t0 = p0_dy;
+  } else {
+    if (reverse) {
+      t0 = -t0;
+    }
   }
+  t0 = math::normalize(t0);
 
   for (auto i = 0; i < iters; ++i) {
     auto p = ps1.eval(result.x, result.y);
@@ -380,8 +386,8 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
       result     = result + delta;
 
     } else {
-      eray::util::Logger::err("Non-singular matrix encountered while performing a newton step");
-      return result;
+      //   eray::util::Logger::err("Non-singular matrix encountered while performing a newton step");
+      return result + kLearningRate;
     }
   }
 
@@ -556,15 +562,11 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
                            err_func.eval(start_point));
 
   if (!self_intersection && init) {
-    eray::util::Logger::info("dupa, {}", *init);
     start_point = find_init_point(s1, s2, *init);
     wrap_if_allowed(start_point);
     if (is_out_of_unit(start_point)) {
       start_point = math::clamp(start_point, 0.F, 1.F);
     }
-    eray::util::Logger::info("dupa, {}", start_point);
-    s1.temp_rend.get().debug_point(s1.eval(start_point.x, start_point.y));
-    s1.temp_rend.get().debug_point(s2.eval(start_point.z, start_point.w));
   }
 
   {
@@ -652,7 +654,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   for (auto i = 0U; i < 10000; ++i) {
     auto prev_point = next_point;
     next_point      = newton_next_point(accuracy, next_point, s1, s2, 100, err_func);
-    // s1.temp_rend.get().debug_point(s1.eval(next_point.x, next_point.y));
     if (is_nan(next_point)) {
       eray::util::Logger::err("NaN encountered");
       break;
@@ -683,7 +684,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     for (auto i = 0U; i < 10000; ++i) {
       auto prev_point = next_point;
       next_point      = newton_next_point(accuracy, next_point, s1, s2, 100, err_func, true);
-      //   s1.temp_rend.get().debug_point(s1.eval(next_point.x, next_point.y));
       if (is_nan(next_point)) {
         eray::util::Logger::err("NaN encountered");
         break;
@@ -740,10 +740,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   }
 
   curve.fill_textures(s1, s2);
-
-  for (const auto& p : curve.points) {
-    s1.temp_rend.get().debug_point(p);
-  }
 
   return curve;
 }
