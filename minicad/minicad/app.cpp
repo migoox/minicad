@@ -757,8 +757,16 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
   ImGui::Begin("MiNI CAD");
   {
+    static bool use_cursor = false;
+    static auto err        = 0.1F;
+    ImGui::Checkbox("Use Cursor", &use_cursor);
+    ImGui::InputFloat("Err", &err);
     if (ImGui::Button("Find Intersection")) {
-      on_find_intersection();
+      if (use_cursor) {
+        on_find_intersection(m_.cursor->transform.pos(), err);
+      } else {
+        on_find_intersection(std::nullopt, err);
+      }
     }
 
 #ifndef NDEBUG
@@ -1612,7 +1620,7 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
   return false;
 }
 
-bool MiniCadApp::on_find_intersection() {
+bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy) {
   ParametricSurfaceHandle first  = PatchSurfaceHandle(0, 0, 0);
   ParametricSurfaceHandle second = PatchSurfaceHandle(0, 0, 0);
 
@@ -1652,7 +1660,7 @@ bool MiniCadApp::on_find_intersection() {
 
       CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
       CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
-      auto curve                          = IntersectionFinder::find_intersection(m_.scene.renderer(), obj1, obj2);
+      auto curve = IntersectionFinder::find_intersection(m_.scene.renderer(), obj1, obj2, init_point, accuracy);
       if (!curve) {
         util::Logger::info("No intersection found");
         return;
@@ -1676,7 +1684,7 @@ bool MiniCadApp::on_find_intersection() {
 
       CParametricSurfaceObject auto& obj = **m_.scene.arena<T>().get_obj(handle);
 
-      auto curve = IntersectionFinder::find_self_intersection(m_.scene.renderer(), obj);
+      auto curve = IntersectionFinder::find_self_intersection(m_.scene.renderer(), obj, init_point, accuracy);
       if (!curve) {
         util::Logger::info("No intersection found");
         return;

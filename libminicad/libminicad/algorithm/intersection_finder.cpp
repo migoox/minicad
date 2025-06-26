@@ -8,6 +8,7 @@
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <limits>
 #include <optional>
 #include <random>
 #include <ranges>
@@ -315,6 +316,7 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
   auto q0n = math::cross(q0_dz, q0_dw);
 
   auto t0 = math::normalize(math::cross(p0n, q0n));
+
   if (reverse) {
     t0 = -t0;
   }
@@ -344,7 +346,38 @@ eray::math::Vec4f IntersectionFinder::newton_next_point(const float accuracy, co
   return result;
 }
 
+eray::math::Vec4f IntersectionFinder::find_init_point(ParamSurface& s1, ParamSurface& s2, eray::math::Vec3f init) {
+  const auto sectors = 10;
+  auto min_dist      = std::numeric_limits<float>::max();
+  auto result        = eray::math::Vec4f();
+
+  for (auto i = 0; i < sectors; ++i) {
+    for (auto j = 0; j < sectors; ++j) {
+      auto x = static_cast<float>(i) / static_cast<float>(sectors);
+      auto y = static_cast<float>(j) / static_cast<float>(sectors);
+
+      for (auto ii = 0; ii < sectors; ++ii) {
+        for (auto jj = 0; jj < sectors; ++jj) {
+          auto z = static_cast<float>(ii) / static_cast<float>(sectors);
+          auto w = static_cast<float>(jj) / static_cast<float>(sectors);
+
+          auto p1   = s1.eval(x, y);
+          auto p2   = s2.eval(z, w);
+          auto dist = math::distance(p1, init) + math::distance(p2, init);
+          if (dist < min_dist) {
+            min_dist = dist;
+            result   = eray::math::Vec4f(x, y, z, w);
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(ParamSurface& s1, ParamSurface& s2,
+                                                                                std::optional<eray::math::Vec3f> init,
                                                                                 float accuracy,
                                                                                 bool self_intersection) {
   fix_wrap_flags(s1);
@@ -480,6 +513,18 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   eray::util::Logger::info("Start point found with the gradient descent method: {}, Error: {}", start_point,
                            err_func.eval(start_point));
 
+  if (!self_intersection && init) {
+    eray::util::Logger::info("dupa, {}", *init);
+    start_point = find_init_point(s1, s2, *init);
+    wrap_if_allowed(start_point);
+    if (is_out_of_unit(start_point)) {
+      start_point = math::clamp(start_point, 0.F, 1.F);
+    }
+    eray::util::Logger::info("dupa, {}", start_point);
+    s1.temp_rend.get().debug_point(s1.eval(start_point.x, start_point.y));
+    s1.temp_rend.get().debug_point(s2.eval(start_point.z, start_point.w));
+  }
+
   {
     auto new_result = newton_start_point_refiner(start_point, s1, s2, 100, err_func);
     wrap_if_allowed(new_result);
@@ -501,9 +546,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
                                err_func.eval(start_point));
     }
   }
-
-  s1.temp_rend.get().debug_point(s1.eval(start_point.x, start_point.y));
-  s1.temp_rend.get().debug_point(s2.eval(start_point.z, start_point.w));
 
   if (err_func.eval(start_point) > kIntersectionThreshold) {
     eray::util::Logger::info("start point: {}, Error: {} does not satisfy the threshold {}", start_point,

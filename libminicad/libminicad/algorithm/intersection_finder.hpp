@@ -49,7 +49,8 @@ class IntersectionFinder {
 
   template <CParametricSurfaceObject T>
   [[nodiscard]] static std::optional<Curve> find_self_intersection(ISceneRenderer& renderer, T& ps,
-                                                                   float accuracy = 0.1F) {
+                                                                   std::optional<eray::math::Vec3f> init = std::nullopt,
+                                                                   float accuracy                        = 0.1F) {
     auto eval  = [&](float u, float v) { return ps.evaluate(u, v); };
     auto evald = [&](float u, float v) { return ps.evaluate_derivatives(u, v); };
 
@@ -74,7 +75,7 @@ class IntersectionFinder {
         .evald     = std::move(evald),
     };
 
-    return find_intersections(s1, s2, accuracy, true);
+    return find_intersections(s1, s2, init, accuracy, true);
   }
 
   /**
@@ -86,7 +87,8 @@ class IntersectionFinder {
    */
   template <CParametricSurfaceObject T1, CParametricSurfaceObject T2>
   [[nodiscard]] static std::optional<Curve> find_intersection(ISceneRenderer& renderer, T1& ps1, T2& ps2,
-                                                              float accuracy = 0.1F) {
+                                                              std::optional<eray::math::Vec3f> init = std::nullopt,
+                                                              float accuracy                        = 0.1F) {
     auto bb1 = ps1.aabb_bounding_box();
     auto bb2 = ps2.aabb_bounding_box();
     if (!aabb_intersects(bb1, bb2)) {
@@ -124,10 +126,11 @@ class IntersectionFinder {
         .evald     = std::move(evald2),
     };
 
-    return find_intersections(s1, s2, accuracy, false);
+    return find_intersections(s1, s2, init, accuracy, false);
   }
 
-  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2, float accuracy = 0.1F,
+  static std::optional<Curve> find_intersections(ParamSurface& s1, ParamSurface& s2,
+                                                 std::optional<eray::math::Vec3f> init, float accuracy = 0.1F,
                                                  bool self_intersection = false);
 
   static constexpr auto kIntersectionThreshold = 0.1F;
@@ -148,6 +151,8 @@ class IntersectionFinder {
     std::function<float(const eray::math::Vec4f&)> eval;
     std::function<eray::math::Vec4f(const eray::math::Vec4f&)> grad;
   };
+
+  static eray::math::Vec4f find_init_point(ParamSurface& s1, ParamSurface& s2, eray::math::Vec3f init);
 
   static void fix_wrap_flags(ParamSurface& s);
 
