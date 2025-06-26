@@ -113,7 +113,7 @@ class IntersectionFinder {
                                                       ParamSurface& ps2, int iters, const ErrorFunc& err_func);
 
   static eray::math::Vec4f newton_next_point(float accuracy, const eray::math::Vec4f& start, ParamSurface& ps1,
-                                             ParamSurface& ps2, int iters, bool reverse = false);
+                                             ParamSurface& ps2, int iters, ErrorFunc& err_func, bool reverse = false);
 };
 
 }  // namespace mini

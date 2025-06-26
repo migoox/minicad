@@ -566,7 +566,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
   ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
   shaders_.polyline->bind();
   shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
-  shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
+  shaders_.polyline->set_uniform("u_color", RendererColors::kApproxCurve);
   renderers_.intersection_curves_renderer_.render_curves();
 
   // Render debug helpers
@@ -586,7 +586,7 @@ void OpenGLSceneRenderer::render_internal(eray::driver::gl::ViewportFramebuffer&
     ERAY_GL_CALL(glDisable(GL_DEPTH_TEST));
     shaders_.polyline->bind();
     shaders_.polyline->set_uniform("u_pvMat", proj_mat * view_mat);
-    shaders_.polyline->set_uniform("u_color", RendererColors::kPolylinesColor);
+    shaders_.polyline->set_uniform("u_color", RendererColors::kDebugLines);
     global_rs_.debug_lines.sync();
     global_rs_.debug_lines.bind();
     ERAY_GL_CALL(glDrawArrays(GL_LINES, 0, global_rs_.debug_lines.vertex_count()));
