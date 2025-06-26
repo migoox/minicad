@@ -453,7 +453,8 @@ void MiniCadApp::gui_object_window() {
 
   auto draw_trimming = [&](CParametricSurfaceObject auto& obj) {
     ImGui::Text("Trimming texture");
-    m_.scene.renderer().draw_imgui_texture_image(obj.txt_handle(), 128, 128);
+    m_.scene.renderer().draw_imgui_texture_image(obj.txt_handle(), IntersectionFinder::Curve::kTxtSize,
+                                                 IntersectionFinder::Curve::kTxtSize);
 
     bool update_txt = false;
     for (auto idx = 0; auto& o : obj.trimming_manager().data()) {
@@ -468,7 +469,9 @@ void MiniCadApp::gui_object_window() {
         obj.trimming_manager().mark_dirty();
       }
 
-      m_.scene.renderer().draw_imgui_texture_image(o.get_current_trimming_variant_txt(), 128, 128);
+      m_.scene.renderer().draw_imgui_texture_image(o.get_current_trimming_variant_txt(),
+                                                   IntersectionFinder::Curve::kTxtSize,
+                                                   IntersectionFinder::Curve::kTxtSize);
 
       ImGui::PopID();
     }

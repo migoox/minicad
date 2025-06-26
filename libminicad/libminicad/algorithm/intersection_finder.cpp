@@ -98,11 +98,35 @@ void IntersectionFinder::Curve::reverse() {
   std::ranges::reverse(param_space2.params);
 }
 
-void IntersectionFinder::Curve::fill_textures() {
+void IntersectionFinder::Curve::fill_textures(ParamSurface& s1, ParamSurface& s2) {
   draw_curve(param_space1.curve_txt, param_space1.params);
   draw_curve(param_space2.curve_txt, param_space2.params);
-  fill_trimming_txts(param_space1.curve_txt, param_space1.trimming_txt1, param_space1.trimming_txt2);
-  fill_trimming_txts(param_space2.curve_txt, param_space2.trimming_txt1, param_space2.trimming_txt2);
+  fill_trimming_txts(param_space1.curve_txt, param_space1.trimming_txt1, param_space1.trimming_txt2, s1);
+  fill_trimming_txts(param_space2.curve_txt, param_space2.trimming_txt1, param_space2.trimming_txt2, s2);
+}
+
+static eray::math::Vec2f project_to_closest_border(const eray::math::Vec2f& point) {
+  float dist_left   = point.x;
+  float dist_right  = 1.0F - point.x;
+  float dist_top    = 1.0F - point.y;
+  float dist_bottom = point.y;
+
+  float min_dist = dist_left;
+  math::Vec2f projected(0.0F, point.y);  // Assume left border
+
+  if (dist_right < min_dist) {
+    min_dist  = dist_right;
+    projected = math::Vec2f{1.0F, point.y};
+  }
+  if (dist_bottom < min_dist) {
+    min_dist  = dist_bottom;
+    projected = math::Vec2f{point.x, 0.0F};
+  }
+  if (dist_top < min_dist) {
+    projected = math::Vec2f{point.x, 1.0F};
+  }
+
+  return projected;
 }
 
 void IntersectionFinder::Curve::draw_curve(std::vector<uint32_t>& txt,
@@ -112,13 +136,29 @@ void IntersectionFinder::Curve::draw_curve(std::vector<uint32_t>& txt,
 
   auto wins = params_surface | std::views::adjacent<2>;
   for (const auto& [p0, p1] : wins) {
-    line_dda(txt, static_cast<int>(p0.x * kSize), static_cast<int>(p0.y * kSize), static_cast<int>(p1.x * kSize),
-             static_cast<int>(p1.y * kSize));
+    auto first = p0;
+    auto end   = p1;
+    if (math::distance(p0, p1) > 0.2F) {
+      end = project_to_closest_border(p0);
+    }
+    line_dda(txt, static_cast<int>(first.x * kSize), static_cast<int>(first.y * kSize), static_cast<int>(end.x * kSize),
+             static_cast<int>(end.y * kSize));
+  }
+
+  if (math::distance(params_surface.front(), params_surface.back()) > 0.1F) {
+    auto first = params_surface.back();
+    auto end   = project_to_closest_border(first);
+
+    if (math::distance(first, end) > 0.2F) {
+      end = project_to_closest_border(end);
+    }
+    line_dda(txt, static_cast<int>(first.x * kSize), static_cast<int>(first.y * kSize), static_cast<int>(end.x * kSize),
+             static_cast<int>(end.y * kSize));
   }
 }
 
 void IntersectionFinder::Curve::fill_trimming_txts(const std::vector<uint32_t>& curve_txt, std::vector<uint32_t>& txt1,
-                                                   std::vector<uint32_t>& txt2) {
+                                                   std::vector<uint32_t>& txt2, ParamSurface& s) {
   txt1.reserve(curve_txt.size());
   txt2.reserve(curve_txt.size());
   std::ranges::copy(curve_txt, std::back_inserter(txt1));
@@ -134,18 +174,20 @@ void IntersectionFinder::Curve::fill_trimming_txts(const std::vector<uint32_t>& 
     }
   }
 
-  flood_fill(txt1, start_idx % kTxtSize, start_idx / kTxtSize);
-  start_idx = 0U;
-  for (auto i = 0U; i < kTxtSize * kTxtSize; ++i) {
-    if (txt1[i] == kWhite) {
-      start_idx = i;
-      break;
-    }
+  if (curve_txt[kTxtSize / 2 * kTxtSize + kTxtSize / 2] == kWhite) {
+    start_idx = kTxtSize / 2 * kTxtSize + kTxtSize / 2;
   }
 
-  flood_fill(txt2, start_idx % kTxtSize, start_idx / kTxtSize);
-}
+  flood_fill(txt1, start_idx % kTxtSize, start_idx / kTxtSize);
 
+  for (auto i = 0U; i < kTxtSize * kTxtSize; ++i) {
+    if (txt1[i] == kWhite) {
+      txt2[i] = 0xFF000000;
+    } else {
+      txt2[i] = kWhite;
+    }
+  }
+}
 void IntersectionFinder::Curve::flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y) {
   static constexpr uint32_t kBlack = 0xFF000000;
 
@@ -697,7 +739,11 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     fix_border_closure(curve.param_space2.params.back());
   }
 
-  curve.fill_textures();
+  curve.fill_textures(s1, s2);
+
+  for (const auto& p : curve.points) {
+    s1.temp_rend.get().debug_point(p);
+  }
 
   return curve;
 }

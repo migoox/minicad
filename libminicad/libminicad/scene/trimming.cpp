@@ -1,19 +1,57 @@
 #include <liberay/util/panic.hpp>
 #include <libminicad/scene/trimming.hpp>
+#include <vector>
 
 namespace mini {
 
 ParamSpaceTrimmingData ParamSpaceTrimmingData::from_intersection_curve(
     ISceneRenderer& renderer, const IntersectionFinder::ParamSpace& param_space) {
+  auto trimming_txt_vis = std::vector<uint32_t>();
+
+  trimming_txt_vis.resize(IntersectionFinder::Curve::kTxtSize * IntersectionFinder::Curve::kTxtSize, 0xFFFFFFFF);
+  for (auto j = 0U; j < IntersectionFinder::Curve::kTxtSize; ++j) {
+    for (auto i = 0U; i < IntersectionFinder::Curve::kTxtSize; ++i) {
+      auto idx = j * IntersectionFinder::Curve::kTxtSize + i;
+
+      if (param_space.trimming_txt1[idx] == 0xFF000000) {
+        trimming_txt_vis[idx] = 0xFF000000;
+      } else {
+        trimming_txt_vis[idx] = 0xFFFFFFFF;
+      }
+
+      if (param_space.curve_txt[idx] == 0xFF000000) {
+        trimming_txt_vis[idx] = 0xFF0000FF;
+      }
+    }
+  }
+  auto th1 = renderer.upload_texture(trimming_txt_vis, IntersectionFinder::Curve::kTxtSize,
+                                     IntersectionFinder::Curve::kTxtSize);
+
+  for (auto j = 0U; j < IntersectionFinder::Curve::kTxtSize; ++j) {
+    for (auto i = 0U; i < IntersectionFinder::Curve::kTxtSize; ++i) {
+      auto idx = j * IntersectionFinder::Curve::kTxtSize + i;
+
+      if (param_space.trimming_txt2[idx] == 0xFF000000) {
+        trimming_txt_vis[idx] = 0xFF000000;
+      } else {
+        trimming_txt_vis[idx] = 0xFFFFFFFF;
+      }
+
+      if (param_space.curve_txt[idx] == 0xFF000000) {
+        trimming_txt_vis[idx] = 0xFF0000FF;
+      }
+    }
+  }
+  auto th2 = renderer.upload_texture(trimming_txt_vis, IntersectionFinder::Curve::kTxtSize,
+                                     IntersectionFinder::Curve::kTxtSize);
+
   return ParamSpaceTrimmingData{
       .curve_txt = renderer.upload_texture(param_space.curve_txt, IntersectionFinder::Curve::kTxtSize,
                                            IntersectionFinder::Curve::kTxtSize),
       .trimming_variant_txt =
           {
-              renderer.upload_texture(param_space.trimming_txt1, IntersectionFinder::Curve::kTxtSize,
-                                      IntersectionFinder::Curve::kTxtSize),
-              renderer.upload_texture(param_space.trimming_txt2, IntersectionFinder::Curve::kTxtSize,
-                                      IntersectionFinder::Curve::kTxtSize),
+              th1,
+              th2,
           },
       .trimming_variant_txt_data =
           {

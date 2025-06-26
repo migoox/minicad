@@ -35,15 +35,15 @@ class IntersectionFinder {
     void push_point(const eray::math::Vec4f& params, ParamSurface& s1, ParamSurface& s2);
     void reverse();
 
-    void fill_textures();
+    void fill_textures(ParamSurface& s1, ParamSurface& s2);
 
-    static constexpr auto kTxtSize = 512;
+    static constexpr auto kTxtSize = 128;
 
    private:
     void draw_curve(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
     void line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1);
     void fill_trimming_txts(const std::vector<uint32_t>& curve_txt, std::vector<uint32_t>& txt1,
-                            std::vector<uint32_t>& txt2);
+                            std::vector<uint32_t>& txt2, ParamSurface& s);
     void flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y);
   };
 
@@ -54,23 +54,21 @@ class IntersectionFinder {
     auto eval  = [&](float u, float v) { return ps.evaluate(u, v); };
     auto evald = [&](float u, float v) { return ps.evaluate_derivatives(u, v); };
 
-    auto wrap = false;
-
     if constexpr (std::is_same_v<T, ParamPrimitive>) {
-      wrap = true;
+      return std::nullopt;
     }
 
     auto s1 = ParamSurface{
         .temp_rend = renderer,
-        .wrap_u    = wrap,
-        .wrap_v    = wrap,
+        .wrap_u    = false,
+        .wrap_v    = false,
         .eval      = std::move(eval),
         .evald     = std::move(evald),
     };
     auto s2 = ParamSurface{
         .temp_rend = renderer,
-        .wrap_u    = wrap,
-        .wrap_v    = wrap,
+        .wrap_u    = false,
+        .wrap_v    = false,
         .eval      = std::move(eval),
         .evald     = std::move(evald),
     };
@@ -140,7 +138,7 @@ class IntersectionFinder {
   static constexpr auto kGradDescMaxIterations = 400;
   static constexpr auto kGradDescTrials        = 300;
 
-  static constexpr auto kBorderTolerance = 0.01F;
+  static constexpr auto kBorderTolerance = 0.05F;
 
   static constexpr auto kWrappingTolerance = 0.01F;
 
