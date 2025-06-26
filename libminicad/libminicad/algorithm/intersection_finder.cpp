@@ -342,11 +342,6 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     }
   };
 
-  static constexpr auto kGradDescLearningRate  = 0.01F;
-  static constexpr auto kGradDescTolerance     = 0.00001F;
-  static constexpr auto kGradDescMaxIterations = 400;
-  static constexpr auto kGradDescTrials        = 100;
-
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<float> dist(0.0F, 1.0F);
@@ -516,8 +511,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   }
 
   if (!closure_detected) {
-    static constexpr auto kBorderTolerance = 0.01F;
-    auto fix_border_closure                = [](eray::math::Vec2f& p) {
+    auto fix_border_closure = [](eray::math::Vec2f& p) {
       auto result = false;
 
       if (p.x < kBorderTolerance) {

@@ -98,6 +98,13 @@ class IntersectionFinder {
 
   static constexpr auto kIntersectionThreshold = 0.1F;
 
+  static constexpr auto kGradDescLearningRate  = 0.01F;
+  static constexpr auto kGradDescTolerance     = 0.00001F;
+  static constexpr auto kGradDescMaxIterations = 400;
+  static constexpr auto kGradDescTrials        = 100;
+
+  static constexpr auto kBorderTolerance = 0.01F;
+
  private:
   struct ErrorFunc {
     std::function<float(const eray::math::Vec4f&)> eval;
