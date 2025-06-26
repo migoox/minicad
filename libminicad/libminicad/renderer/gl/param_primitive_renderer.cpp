@@ -62,7 +62,7 @@ void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::U
       auto mat  = obj.transform().local_to_world_matrix();
       auto r    = math::Vec2f(t.minor_radius, t.major_radius);
       auto tess = t.tess_level;
-      auto id   = static_cast<int>(handle.obj_id);
+      auto id   = static_cast<int>(renderer.m_.textures_manager.get_id(obj));
       renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "radii", r.raw_ptr());
       renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "tessLevel", tess.raw_ptr());
       renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
@@ -112,7 +112,7 @@ void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::I
       renderer.m_.transferred_torus_buff[renderer.m_.transferred_torus_buff.size() - 1];
   renderer.m_.transferred_torus_ind[renderer.m_.transferred_torus_buff[ind]] = ind;
   renderer.m_.transferred_torus_buff.pop_back();
-  auto id = static_cast<int>(handle.obj_id);
+  renderer.m_.textures_manager.remove(handle);
 
   if (auto o2 = scene.arena<ParamPrimitive>().get_obj(renderer.m_.transferred_torus_buff[ind])) {
     auto mat = o2.value()->transform().local_to_world_matrix();
@@ -126,6 +126,8 @@ void ParamPrimitiveRSCommandHandler::operator()(const ParamPrimitiveRSCommand::I
             },
         },
         o2.value()->object);
+
+    auto id = static_cast<int>(renderer.m_.textures_manager.get_id(*o2.value()));
     renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat", mat[0].raw_ptr());
     renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat1", mat[1].raw_ptr());
     renderer.m_.torus_vao.vbo("matrices").set_attribute_value(ind, "worldMat2", mat[2].raw_ptr());
@@ -203,6 +205,8 @@ ParamPrimitiveRenderer::ParamPrimitiveRenderer(Members&& members) : m_(std::move
 void ParamPrimitiveRenderer::update_impl(Scene& /*scene*/) {}
 
 void ParamPrimitiveRenderer::render_parameterized_surfaces() const {
+  ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+  m_.textures_manager.txt_array().bind();
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
   m_.torus_vao.bind();
   glDrawElementsInstanced(GL_PATCHES, static_cast<GLsizei>(m_.torus_vao.ebo().count()), GL_UNSIGNED_INT, nullptr,
@@ -210,6 +214,8 @@ void ParamPrimitiveRenderer::render_parameterized_surfaces() const {
 }
 
 void ParamPrimitiveRenderer::render_parameterized_surfaces_filled() const {
+  ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
+  m_.textures_manager.txt_array().bind();
   ERAY_GL_CALL(glPolygonMode(GL_FRONT_AND_BACK, GL_FILL));
   ERAY_GL_CALL(glDepthMask(GL_FALSE));
   m_.torus_vao.bind();

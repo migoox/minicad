@@ -14,12 +14,17 @@ in TCS_OUT {
 
 flat out int state;
 
+patch in int id;
+out vec3 texCoords;
+
 #define PI 3.14159265359
 
 void main() {
     // get patch coordinate
     float u = gl_TessCoord.x;
     float v = gl_TessCoord.y;
+
+    texCoords = vec3(u,v,id);
 
     float x = u * 2 * PI;
     float y = v * 2 * PI;

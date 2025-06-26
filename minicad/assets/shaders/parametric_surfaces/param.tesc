@@ -7,6 +7,7 @@ in VS_OUT {
     vec2 radii;
     ivec2 tess_level;
     int state;
+    int tex_id;
 } tcs_in[];
 
 out TCS_OUT {
@@ -14,6 +15,8 @@ out TCS_OUT {
     vec2 radii;
     int state;
 } tcs_out[];
+
+patch out int id;
 
 void main()
 {
@@ -27,6 +30,7 @@ void main()
     // invocation zero controls tessellation levels for the entire patch
     if (gl_InvocationID == 0)
     {
+        id = tcs_in[gl_InvocationID].tex_id;
         gl_TessLevelOuter[0] = tessLevelY;
         gl_TessLevelOuter[1] = tessLevelX;
         gl_TessLevelOuter[2] = tessLevelY;

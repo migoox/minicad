@@ -13,6 +13,7 @@ out VS_OUT {
     vec2 radii;
     ivec2 tess_level;
     int state;
+    int tex_id;
 } vs_out;
 
 void main() {
@@ -20,6 +21,7 @@ void main() {
         // turn off the visibility
         gl_Position = vec4(FLT_MAX);
         vs_out.tess_level = ivec2(0, 0);
+        vs_out.tex_id = a_id;
     }
     else {
         gl_Position = vec4(a_PatchPos, 0.0, 1.0);
@@ -27,5 +29,6 @@ void main() {
         vs_out.radii = a_radii;
         vs_out.tess_level = a_tess_level;
         vs_out.state = a_state;
+        vs_out.tex_id = a_id;
     }
 }
