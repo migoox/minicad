@@ -16,10 +16,36 @@ namespace mini {
 
 namespace math = eray::math;
 
-void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, ParamSurface& surface) {
-  param_space1.params.emplace_back(params.x, params.y);
-  param_space2.params.emplace_back(params.z, params.w);
-  points.push_back(surface.eval(params.x, params.y));
+static constexpr float wrap_to_unit_interval(float x) noexcept {
+  float int_part        = 0.F;
+  const float frac_part = std::modf(x, &int_part);
+  return frac_part < 0.0F ? frac_part + 1.0F : frac_part;
+}
+
+void IntersectionFinder::Curve::push_point(const eray::math::Vec4f& params, ParamSurface& s1, ParamSurface& s2) {
+  auto uv = params;
+
+  if (s1.wrap) {
+    uv.x = wrap_to_unit_interval(uv.x);
+    uv.y = wrap_to_unit_interval(uv.y);
+  }
+  if (s2.wrap) {
+    uv.z = wrap_to_unit_interval(uv.z);
+    uv.w = wrap_to_unit_interval(uv.w);
+  }
+
+  if (uv.x > 1.F || uv.x < 0.F || uv.y < 0.F || uv.y > 1.F) {
+    uv = eray::math::clamp(uv, 0.F, 1.F);
+    points.push_back(s1.eval(uv.x, uv.y));
+  } else if (uv.z > 1.F || uv.z < 0.F || uv.w < 0.F || uv.w > 1.F) {
+    uv = eray::math::clamp(uv, 0.F, 1.F);
+    points.push_back(s2.eval(uv.z, uv.w));
+  } else {
+    points.push_back((s1.eval(uv.x, uv.y) + s2.eval(uv.z, uv.w)) / 2.F);
+  }
+
+  param_space1.params.emplace_back(uv.x, uv.y);
+  param_space2.params.emplace_back(uv.z, uv.w);
 }
 
 void IntersectionFinder::Curve::reverse() {
@@ -151,17 +177,6 @@ bool IntersectionFinder::aabb_intersects(const std::pair<eray::math::Vec3f, eray
   }
 
   return true;
-}
-
-static constexpr float wrap_to_unit_interval(float x) noexcept {
-  float int_part        = 0.F;
-  const float frac_part = std::modf(x, &int_part);
-  return frac_part < 0.0F ? frac_part + 1.0F : frac_part;
-}
-
-static constexpr math::Vec4f wrap_to_unit_interval(const math::Vec4f& v) noexcept {
-  return math::Vec4f(wrap_to_unit_interval(v.x), wrap_to_unit_interval(v.y), wrap_to_unit_interval(v.z),
-                     wrap_to_unit_interval(v.w));
 }
 
 eray::math::Vec4f IntersectionFinder::gradient_descent(const eray::math::Vec4f& init, const float learning_rate,
@@ -371,7 +386,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
           }  //
   };
 
-  curve.push_point(start_point, s1);
+  curve.push_point(start_point, s1, s2);
 
   auto is_out_of_unit = [&](const math::Vec4f& v) {
     return (!s1.wrap && (v.x < 0.F || v.x > 1.F ||    //
@@ -432,6 +447,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
   for (auto i = 0U; i < 10000; ++i) {
     auto prev_point = next_point;
     next_point      = newton_next_point(accuracy, next_point, s1, s2, 100, err_func);
+    // s1.temp_rend.get().debug_point(s1.eval(next_point.x, next_point.y));
     if (is_nan(next_point)) {
       eray::util::Logger::err("NaN encountered");
       break;
@@ -440,18 +456,19 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     wrap_if_allowed(next_point);
     if (is_out_of_unit(next_point)) {
       eray::util::Logger::info("Out of unit bounds: {}, Error: {}", next_point, err_func.eval(next_point));
+      curve.push_point(next_point, s1, s2);
       break;
     }
     if (i != 0 && detect_closure(prev_point, next_point, end_point)) {
       eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
       closure_detected = true;
-      curve.push_point(end_point, s1);
+      curve.push_point(end_point, s1, s2);
       break;
     }
     if (err_func.eval(next_point) > kTolerance) {
       break;
     }
-    curve.push_point(next_point, s1);
+    curve.push_point(next_point, s1, s2);
   }
 
   if (!closure_detected) {
@@ -461,6 +478,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
     for (auto i = 0U; i < 10000; ++i) {
       auto prev_point = next_point;
       next_point      = newton_next_point(accuracy, next_point, s1, s2, 100, err_func, true);
+      //   s1.temp_rend.get().debug_point(s1.eval(next_point.x, next_point.y));
       if (is_nan(next_point)) {
         eray::util::Logger::err("NaN encountered");
         break;
@@ -469,18 +487,19 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
       wrap_if_allowed(next_point);
       if (is_out_of_unit(next_point)) {
         eray::util::Logger::info("Out of unit bounds: {}, Error: {}", next_point, err_func.eval(next_point));
+        curve.push_point(next_point, s1, s2);
         break;
       }
       if (i != 0 && detect_closure(next_point, prev_point, end_point)) {
         eray::util::Logger::info("Closure detected: {}, Error: {}", next_point, err_func.eval(next_point));
-        curve.push_point(end_point, s1);
+        curve.push_point(end_point, s1, s2);
         closure_detected = true;
         break;
       }
       if (err_func.eval(next_point) > kTolerance) {
         break;
       }
-      curve.push_point(next_point, s1);
+      curve.push_point(next_point, s1, s2);
     }
   }
 
