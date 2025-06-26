@@ -19,17 +19,19 @@ namespace mini::gl {
 std::generator<eray::math::Vec3f> PatchSurfaceRSCommandHandler::bezier_patch_generator(ref<PatchSurface> surface) {
   const auto& rbp = surface.get().bezier3_points();
 
-  auto id = static_cast<float>(renderer.m_.textures_manager.get_id(surface.get()));
+  auto tex_id   = static_cast<float>(renderer.m_.textures_manager.get_id(surface.get()));
+  auto patch_id = 0;
   for (auto i = 0U; i < rbp.size();) {
     for (auto j = 0U; j < PatchSurface::kPatchSize * PatchSurface::kPatchSize; ++j) {
       co_yield rbp[i++];
     }
-    co_yield eray::math::Vec3f(static_cast<float>(surface.get().tess_level()), id, 0.F);
+    co_yield eray::math::Vec3f(static_cast<float>(surface.get().tess_level()), tex_id, patch_id++);
+    co_yield eray::math::Vec3f(surface.get().dimensions().x, surface.get().dimensions().y, 0.F);
   }
 }
 
 size_t PatchSurfaceRSCommandHandler::bezier_patch_count(ref<PatchSurface> surface) {
-  return surface.get().bezier3_points().size() + FillInSurface::kNeighbors;
+  return surface.get().bezier3_points().size() + surface.get().dimensions().x * surface.get().dimensions().y * 2;
 }
 
 void PatchSurfaceRSCommandHandler::operator()(const PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures&) {
@@ -116,7 +118,7 @@ void PatchSurfaceRenderer::render_control_grids() const {
 }
 
 void PatchSurfaceRenderer::render_surfaces() const {
-  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 17));
+  ERAY_GL_CALL(glPatchParameteri(GL_PATCH_VERTICES, 18));
   ERAY_GL_CALL(glActiveTexture(GL_TEXTURE0));
   m_.surfaces_vao.bind();
   m_.textures_manager.txt_array().bind();
