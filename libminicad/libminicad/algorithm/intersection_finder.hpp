@@ -138,6 +138,8 @@ class IntersectionFinder {
   static constexpr auto kGradDescMaxIterations = 400;
   static constexpr auto kGradDescTrials        = 300;
 
+  //   static constexpr auto kNewtonTolerance = 1e-12F;
+
   static constexpr auto kBorderTolerance = 0.05F;
 
   static constexpr auto kWrappingTolerance = 0.01F;
@@ -162,8 +164,9 @@ class IntersectionFinder {
   static eray::math::Vec4f newton_start_point_refiner(const eray::math::Vec4f& init, ParamSurface& ps1,
                                                       ParamSurface& ps2, int iters, const ErrorFunc& err_func);
 
-  static eray::math::Vec4f newton_next_point(float accuracy, const eray::math::Vec4f& start, ParamSurface& ps1,
-                                             ParamSurface& ps2, int iters, ErrorFunc& err_func, bool reverse = false);
+  static std::optional<eray::math::Vec4f> newton_next_point(float accuracy, const eray::math::Vec4f& start,
+                                                            ParamSurface& ps1, ParamSurface& ps2, int iters,
+                                                            ErrorFunc& err_func, bool reverse = false);
 };
 
 }  // namespace mini
