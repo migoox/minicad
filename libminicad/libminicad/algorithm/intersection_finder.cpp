@@ -362,10 +362,7 @@ std::optional<eray::math::Vec4f> IntersectionFinder::newton_next_point(const flo
   auto t0 = math::cross(p0n, q0n);
 
   if (t0.length() < 0.1F) {
-    ps1.temp_rend.get().debug_line(p0, p0 + p0n);
-    ps1.temp_rend.get().debug_line(p0, p0 + q0n);
     t0 = p0_dx;
-    ps1.temp_rend.get().debug_point(p0);
   }
   if (reverse) {
     t0 = -t0;
