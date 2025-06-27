@@ -138,7 +138,7 @@ class IntersectionFinder {
   static constexpr auto kGradDescMaxIterations = 400;
   static constexpr auto kGradDescTrials        = 300;
 
-  //   static constexpr auto kNewtonTolerance = 1e-12F;
+  static constexpr auto kNewtonTolerance = 1e-8F;
 
   static constexpr auto kBorderTolerance = 0.05F;
 

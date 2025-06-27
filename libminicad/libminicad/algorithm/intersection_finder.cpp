@@ -386,6 +386,9 @@ std::optional<eray::math::Vec4f> IntersectionFinder::newton_next_point(const flo
       auto delta = kLearningRate * ((*inv) * b);
       result     = result + delta;
 
+      if (math::length(delta) < kNewtonTolerance) {
+        return result;
+      }
     } else {
       return std::nullopt;
     }
