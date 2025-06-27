@@ -1670,7 +1670,7 @@ bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_poin
       }
       if (auto opt = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
         auto& obj = **opt;
-        obj.set_points(curve->points);
+        obj.set_points(curve->points, curve->is_closed);
         util::Logger::info("Created new approx curve from intersection points");
       }
 

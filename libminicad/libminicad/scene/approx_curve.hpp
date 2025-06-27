@@ -1,8 +1,8 @@
 #pragma once
 
 #include <libminicad/renderer/scene_renderer.hpp>
-#include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/handles.hpp>
+#include <libminicad/scene/scene_object.hpp>
 #include <variant>
 #include <vector>
 
@@ -24,7 +24,7 @@ class ApproxCurve : public ObjectBase<ApproxCurve, ApproxCurveVariant> {
   ERAY_DEFAULT_MOVE(ApproxCurve)
   ERAY_DELETE_COPY(ApproxCurve)
 
-  void set_points(const std::vector<eray::math::Vec3f>& points);
+  void set_points(const std::vector<eray::math::Vec3f>& points, bool is_closed = false);
 
   std::vector<eray::math::Vec3f> get_equidistant_points(size_t count);
 
@@ -35,8 +35,11 @@ class ApproxCurve : public ObjectBase<ApproxCurve, ApproxCurveVariant> {
   void clone_to(ApproxCurve& curve) const;
   bool can_be_deleted() const;
 
+  bool is_closed() const { return is_closed_; }
+
  private:
   std::vector<eray::math::Vec3f> points_;
+  bool is_closed_;
 };
 
 }  // namespace mini

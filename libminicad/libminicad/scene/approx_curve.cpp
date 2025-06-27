@@ -4,9 +4,9 @@
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/approx_curve.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/scene_object.hpp>
-#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/types.hpp>
 
 namespace mini {
@@ -14,8 +14,9 @@ namespace mini {
 ApproxCurve::ApproxCurve(ApproxCurveHandle handle, Scene& scene)
     : ObjectBase<ApproxCurve, ApproxCurveVariant>(handle, scene) {}
 
-void ApproxCurve::set_points(const std::vector<eray::math::Vec3f>& points) {
-  points_ = points;
+void ApproxCurve::set_points(const std::vector<eray::math::Vec3f>& points, bool is_closed) {
+  is_closed_ = is_closed;
+  points_    = points;
   scene().renderer().push_object_rs_cmd(ApproxCurveRSCommand(handle_, ApproxCurveRSCommand::Internal::AddObject{}));
 }
 
@@ -40,6 +41,10 @@ std::vector<eray::math::Vec3f> ApproxCurve::get_equidistant_points(size_t count)
     v.push_back(points_.at(i));
   }
   v.push_back(points_.back());
+  if (is_closed_) {
+    v.push_back(points_.front());
+  }
+
   return v;
 }
 

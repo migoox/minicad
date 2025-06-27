@@ -776,6 +776,10 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
   eray::util::Logger::info("Curve point count: {}", curve.points.size());
 
+  if (closure_detected) {
+    curve.is_closed = true;
+  }
+
   return curve;
 }
 

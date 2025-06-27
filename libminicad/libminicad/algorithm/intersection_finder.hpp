@@ -31,6 +31,7 @@ class IntersectionFinder {
     std::vector<eray::math::Vec3f> points;
     ParamSpace param_space1;
     ParamSpace param_space2;
+    bool is_closed;
 
     void push_point(const eray::math::Vec4f& params, ParamSurface& s1, ParamSurface& s2);
     void reverse();
