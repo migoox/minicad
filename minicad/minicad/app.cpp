@@ -1719,16 +1719,17 @@ bool MiniCadApp::on_natural_spline_from_approx_curve(const ApproxCurveHandle& ha
     }
     auto& spline = **spline_opt;
 
-    auto point_handles_opt = m_.scene.create_many_objs<PointObject>(Point{}, count);
+    auto points = obj.get_equidistant_points(count);
+
+    auto point_handles_opt = m_.scene.create_many_objs<PointObject>(Point{}, points.size());
     if (!point_handles_opt) {
       util::Logger::err("Could not create a natural spline from approx curve. Could not create point objects.");
       return false;
     }
 
-    auto points               = obj.get_equidistant_points(count);
     const auto& point_handles = *point_handles_opt;
 
-    for (auto i = 0U; i < count; ++i) {
+    for (auto i = 0U; i < points.size(); ++i) {
       auto& p_obj = **m_.scene.arena<PointObject>().get_obj(point_handles[i]);
       p_obj.transform().set_local_pos(points[i]);
       p_obj.update();
