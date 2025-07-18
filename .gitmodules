@@ -1,3 +1,3 @@
 [submodule "eray"]
 	path = eray
-	url = git@github.com:migoox/eray.git
+	url = https://github.com/migoox/eray/tree/v0.1.0
