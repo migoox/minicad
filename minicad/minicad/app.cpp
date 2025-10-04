@@ -99,8 +99,6 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
 
   auto assets_path = System::executable_dir() / "assets";
 
-  eray::driver::GLSLShaderManager manager;
-
   auto centroid_img = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "centroid.png"));
   auto cursor_img   = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "cursor.png"));
 

@@ -72,7 +72,6 @@ class MiniCadApp final : public eray::os::Application {
     SelectTool select_tool;
     Scene scene;
 
-    // TODO(migoox): state machine
     ToolState tool_state;
 
     std::unique_ptr<TransformableSelection> transformable_selection;
