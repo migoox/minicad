@@ -31,6 +31,8 @@
 #include <minicad/selection/selection.hpp>
 #include <minicad/tools/select_tool.hpp>
 
+#include "libminicad/algorithm/paths_generator.hpp"
+
 namespace mini {
 
 class MiniCadApp final : public eray::os::Application {
@@ -72,12 +74,13 @@ class MiniCadApp final : public eray::os::Application {
     SelectTool select_tool;
     Scene scene;
 
-    // TODO(migoox): state machine
     ToolState tool_state;
 
     std::unique_ptr<TransformableSelection> transformable_selection;
     std::unique_ptr<NonTransformableSelection> non_transformable_selection;
     HelperPointSelection helper_point_selection;
+
+    std::optional<HeightMap> milling_height_map;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -148,6 +151,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_project_save();
 
   bool on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy);
+  bool on_generate_height_map();
 
   bool on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count);
 

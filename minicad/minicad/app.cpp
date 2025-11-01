@@ -58,6 +58,9 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
+#include "liberay/os/file_dialog.hpp"
+#include "libminicad/algorithm/paths_generator.hpp"
+
 namespace mini {
 
 namespace util = eray::util;
@@ -99,8 +102,6 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
 
   auto assets_path = System::executable_dir() / "assets";
 
-  eray::driver::GLSLShaderManager manager;
-
   auto centroid_img = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "centroid.png"));
   auto cursor_img   = util::unwrap_or_panic(eray::res::Image::load_from_path(assets_path / "img" / "cursor.png"));
 
@@ -109,7 +110,7 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   sr->add_billboard("centroid", centroid_img);
 
   return MiniCadApp(std::move(window),
-                    {
+                    Members{
                         .proj_path                   = std::nullopt,
                         .orbiting_camera_operator    = OrbitingCameraOperator(),    //
                         .cursor                      = std::make_unique<Cursor>(),  //
@@ -125,7 +126,8 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
                         .tool_state                  = ToolState::Cursor,
                         .transformable_selection     = std::make_unique<TransformableSelection>(),     //
                         .non_transformable_selection = std::make_unique<NonTransformableSelection>(),  //
-                        .helper_point_selection      = HelperPointSelection()                          //
+                        .helper_point_selection      = HelperPointSelection(),                         //
+                        .milling_height_map          = {},
                     });
 }
 
@@ -810,6 +812,33 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::Checkbox(ICON_FA_DRAW_POLYGON " Polylines", &polylines)) {
       m_.scene.renderer().show_polylines(polylines);
     }
+  }
+  ImGui::End();
+
+  ImGui::Begin("Milling");
+  if (ImGui::Button("Generate height map")) {
+    on_generate_height_map();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Load height map")) {
+    auto res = System::file_dialog().open_file(
+        [&](const auto& path) { m_.milling_height_map = HeightMap::load_from_file(m_.scene, path); });
+
+    if (!res) {
+      Logger::info("File dialog error");
+    }
+  }
+
+  if (m_.milling_height_map) {
+    if (ImGui::Button("Save height map")) {
+      auto res = System::file_dialog().save_file([&](const auto& path) { m_.milling_height_map->save_to_file(path); });
+
+      if (!res) {
+        Logger::info("File dialog error");
+      }
+    }
+    m_.scene.renderer().draw_imgui_texture_image(m_.milling_height_map->height_map_handle, HeightMap::kHeightMapSize,
+                                                 HeightMap::kHeightMapSize);
   }
   ImGui::End();
 
@@ -1703,6 +1732,17 @@ bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_poin
   }
 
   return false;
+}
+
+bool MiniCadApp::on_generate_height_map() {
+  auto handles = std::vector<PatchSurfaceHandle>();
+  auto append  = [&handles](const PatchSurfaceHandle& handle) { handles.push_back(handle); };
+  for (auto h : *m_.non_transformable_selection) {
+    std::visit(util::match{append, [](const auto&) {}}, h);
+  }
+
+  m_.milling_height_map = HeightMap::create(m_.scene, handles);
+  return true;
 }
 
 bool MiniCadApp::on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count) {
