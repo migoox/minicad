@@ -181,7 +181,7 @@ std::expected<void, JsonDeserializer::JsonDeserializationError> JsonDeserializer
     return std::unexpected(JsonDeserializationError::DoesNotMatchSchema);
   }
 
-  scene.clear();
+  //   scene.clear();
 
   if (auto point_elements = project.get_points()) {
     for (const auto& point_element : *point_elements) {
