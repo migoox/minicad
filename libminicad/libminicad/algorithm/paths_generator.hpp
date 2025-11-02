@@ -12,13 +12,14 @@ struct WorkpieceDesc {
   float width     = 15.F;
   float height    = 15.F;
   float depth     = 5.F;
-  float max_depth = 2.8F;
+  float max_depth = 3.4F;
 };
 
 struct HeightMap {
   static constexpr uint32_t kHeightMapSize = 2048;
 
   std::vector<float> height_map;
+  std::vector<eray::math::Vec3f> normal_map;
   TextureHandle height_map_handle;
   uint32_t width  = kHeightMapSize;
   uint32_t height = kHeightMapSize;

@@ -3,6 +3,7 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 
+#include "liberay/math/vec.hpp"
 #include "liberay/math/vec_fwd.hpp"
 #include "liberay/res/image.hpp"
 #include "liberay/util/logger.hpp"
@@ -15,6 +16,8 @@ HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handl
   // Stage 1: Create the height map
   auto height_map = std::vector<float>();
   height_map.resize(kHeightMapSize * kHeightMapSize, 0.F);
+  auto normal_map = std::vector<math::Vec3f>();
+  normal_map.resize(kHeightMapSize * kHeightMapSize, math::Vec3f{0.F, 1.F, 0.F});
 
   const auto half_width  = desc.width / 2.F;
   const auto half_height = desc.height / 2.F;
@@ -31,6 +34,9 @@ HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handl
           auto u     = static_cast<float>(i) / static_cast<float>(kSamples);
           auto v     = static_cast<float>(j) / static_cast<float>(kSamples);
           auto val   = patch_surface->evaluate(u, v);
+          auto deriv = patch_surface->evaluate_derivatives(u, v);
+          auto norm  = eray::math::cross(deriv.first, deriv.second).normalize();
+
           bool valid = val.x > -half_width && val.x < half_width && val.z > -half_height && val.z < half_height;
           if (!valid) {
             continue;
@@ -40,11 +46,14 @@ HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handl
           float x_f = (val.x + half_width) / desc.width * kHeightMapSizeFlt;
           float z_f = (val.z + half_height) / desc.height * kHeightMapSizeFlt;
 
-          auto h_ind = static_cast<size_t>(z_f) * kHeightMapSize + static_cast<size_t>(x_f);
+          auto ind = static_cast<size_t>(z_f) * kHeightMapSize + static_cast<size_t>(x_f);
 
-          if (h_ind < kHeightMapSize * kHeightMapSize) {
-            height_map[h_ind] = std::max(height_map[h_ind], val.y);
-            max_h             = std::max(max_h, val.y);
+          if (ind < kHeightMapSize * kHeightMapSize) {
+            if (height_map[ind] < val.y) {
+              height_map[ind] = val.y;
+              normal_map[ind] = norm;
+            }
+            max_h = std::max(max_h, val.y);
           }
         }
       }
@@ -66,6 +75,7 @@ HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handl
 
   return HeightMap{
       .height_map        = std::move(height_map),
+      .normal_map        = std::move(normal_map),
       .height_map_handle = txt_handle,
       .width             = kHeightMapSize,
       .height            = kHeightMapSize,
@@ -74,14 +84,22 @@ HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handl
 
 bool HeightMap::save_to_file(const std::filesystem::path& filename) {
   std::ofstream file(filename);
+  file << std::fixed << std::setprecision(6);
   if (!file.is_open()) {
     eray::util::Logger::info("Failed to open the file with path {}", filename.string());
     return false;
   }
+  auto sanitize = [](float v) {
+    if (!std::isfinite(v)) {
+      return 0.0F;
+    }
+    return v;
+  };
 
   file << width << " " << height << "\n";
-  for (float h : height_map) {
-    file << h << "\n";
+  for (auto i = 0U; i < width * height; ++i) {
+    file << sanitize(height_map[i]) << " " << sanitize(normal_map[i].x) << " " << sanitize(normal_map[i].y) << " "
+         << sanitize(normal_map[i].z) << "\n";
   }
 
   return true;
@@ -104,20 +122,32 @@ std::optional<HeightMap> HeightMap::load_from_file(Scene& scene, const std::file
 
   auto height_map = std::vector<float>();
   height_map.reserve(kHeightMapSize * kHeightMapSize);
-  float h     = 0.F;
+  auto normal_map = std::vector<math::Vec3f>();
+  normal_map.reserve(kHeightMapSize * kHeightMapSize);
   float max_h = 0.F;
-  while (file >> h) {
-    height_map.push_back(h);
-    max_h = std::max(h, max_h);
+  {
+    for (auto i = 0U; i < width * height; ++i) {
+      float h = 0.F;
+      float x = 0.F;
+      float y = 0.F;
+      float z = 0.F;
+      if (!(file >> h >> x >> y >> z)) {
+        eray::util::Logger::err("Unexpected end of file while reading height map data");
+        return std::nullopt;
+      }
+      height_map.push_back(h);
+      normal_map.emplace_back(x, y, z);
+      max_h = std::max(h, max_h);
+    }
   }
 
   auto temp_texture = std::vector<uint32_t>();
-  temp_texture.resize(kHeightMapSize * kHeightMapSize);
+  temp_texture.resize(width * height);
   if (max_h > 0.F) {
-    for (auto i = 0U; i < kHeightMapSize; ++i) {
-      for (auto j = 0U; j < kHeightMapSize; ++j) {
-        auto v                               = height_map[i * kHeightMapSize + j] / max_h;
-        temp_texture[i * kHeightMapSize + j] = eray::res::Color::from_rgb_norm(v, v, v);
+    for (auto i = 0U; i < height; ++i) {
+      for (auto j = 0U; j < width; ++j) {
+        auto v                      = height_map[i * width + j] / max_h;
+        temp_texture[i * width + j] = eray::res::Color::from_rgb_norm(v, v, v);
       }
     }
   }
@@ -129,6 +159,7 @@ std::optional<HeightMap> HeightMap::load_from_file(Scene& scene, const std::file
 
   return HeightMap{
       .height_map        = std::move(height_map),
+      .normal_map        = std::move(normal_map),
       .height_map_handle = txt_handle,
       .width             = width,
       .height            = height,
@@ -137,18 +168,49 @@ std::optional<HeightMap> HeightMap::load_from_file(Scene& scene, const std::file
 
 std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_map, const WorkpieceDesc& desc,
                                                             const float diameter) {
-  const auto radius              = diameter / 2.F;
-  const auto half_width          = desc.width / 2.F;
-  const auto half_height         = desc.height / 2.F;
-  const auto safety_offset       = radius;
-  const auto safety_depth_offset = 0.4F;
-  const auto layer1_y            = desc.max_depth - radius;
-  const auto layer2_y            = desc.max_depth - diameter;
+  const auto radius        = diameter / 2.F;
+  const auto half_width    = desc.width / 2.F;
+  const auto half_height   = desc.height / 2.F;
+  const auto safety_offset = radius;
+  const auto layer1_y      = desc.max_depth - diameter;
+  const auto layer2_y      = desc.max_depth - 2.F * diameter;
 
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_offset + desc.max_depth, 0.F);
   points.emplace_back(safety_offset + half_width, safety_offset + desc.max_depth, safety_offset + half_height);
   points.emplace_back(safety_offset + half_width, layer1_y, safety_offset + half_height);
+
+  auto collision_fix = [&](math::Vec3f p) {
+    auto ind_right = static_cast<size_t>(((p.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
+    auto ind_left  = static_cast<size_t>(((p.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
+
+    ind_right = std::clamp<size_t>(ind_right, 0U, height_map.width);
+    ind_left  = std::clamp<size_t>(ind_left, 0U, height_map.width);
+
+    auto ind_top = static_cast<size_t>(((p.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
+    auto ind_bottom =
+        static_cast<size_t>(((p.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
+
+    ind_bottom = std::clamp<size_t>(ind_bottom, 0U, height_map.height);
+    ind_top    = std::clamp<size_t>(ind_top, 0U, height_map.height);
+
+    auto max_h = p.y;
+    for (auto i = ind_left; i < ind_right; ++i) {
+      for (auto j = ind_top; j < ind_bottom; ++j) {
+        const auto x = (static_cast<float>(i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+        const auto y = height_map.height_map[j * height_map.width + i];
+        const auto z = (static_cast<float>(j) / static_cast<float>(height_map.height) - 0.5F) * desc.height;
+        auto hp      = math::Vec3f{x, y, z};
+
+        if (math::dot(hp - p, hp - p) < radius * radius) {
+          max_h = std::max(max_h, y);
+        }
+      }
+    }
+
+    p.y = max_h;
+    return p;
+  };
 
   // Layer 1
   uint32_t i        = 0;
@@ -161,17 +223,24 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
     points.emplace_back(start_x, layer1_y, curr_height);
     if (ind_y < height_map.width) {
-      bool collision = false;
-      for (auto j = 0U; j < height_map.width; ++j) {
-        const auto jj = i % 2 == 0 ? height_map.width - j : j;
-        const auto h  = height_map.height_map[jj + height_map.width * ind_y] + radius + safety_depth_offset;
-        const auto x  = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+      for (auto j = 0U; j < height_map.width; j += 2) {
+        const auto jj  = i % 2 == 0 ? height_map.width - j : j;
+        const auto ind = jj + height_map.width * ind_y;
+
+        const auto h = height_map.height_map[ind];
+        const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
         if (h > layer1_y) {
-          points.emplace_back(x, h, curr_height);
-          collision = true;
-        } else if (collision) {
-          points.emplace_back(x, layer1_y, curr_height);
-          collision = false;
+          auto norm = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
+          norm      = norm.normalize();
+          auto p    = math::Vec3f{x, h, curr_height} + (norm + math::Vec3f{0.F, -1.F, 0.F}) * radius;
+          p         = collision_fix(p);
+          p.y       = std::max(p.y, layer1_y);
+          if (i % 2 == 0 && points.back().x > p.x) {
+            points.push_back(p);
+          }
+          if (i % 2 != 0 && points.back().x < p.x) {
+            points.push_back(p);
+          }
         }
       }
     }
@@ -181,39 +250,46 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
     curr_height = half_height - radius * static_cast<float>(i);
   }
 
-  int odd = 0;
+  int even = 0;
   if (i % 2 == 0) {
     points.emplace_back(safety_offset + half_width, layer1_y, curr_height);
     points.emplace_back(-safety_offset - half_width, layer1_y, curr_height);
-    odd = 1;
+    even = 1;
   } else {
     points.emplace_back(-safety_offset - half_width, layer1_y, curr_height);
     points.emplace_back(safety_offset + half_width, layer1_y, curr_height);
-    odd = 0;
+    even = 0;
   }
 
   // Layer 2
   i                  = 0;
   float start_height = curr_height;
   while (curr_height < half_height) {
-    const float start_x = i % 2 == odd ? safety_offset + half_width : -safety_offset - half_width;
-    const float end_x   = i % 2 == odd ? -safety_offset - half_width : safety_offset + half_width;
+    const float start_x = i % 2 == even ? safety_offset + half_width : -safety_offset - half_width;
+    const float end_x   = i % 2 == even ? -safety_offset - half_width : safety_offset + half_width;
 
     auto ind_y = static_cast<size_t>((curr_height / desc.height + 0.5F) * static_cast<float>(height_map.height));
 
     points.emplace_back(start_x, layer2_y, curr_height);
     if (ind_y < height_map.width) {
-      bool collision = false;
       for (auto j = 0U; j < height_map.width; ++j) {
-        const auto jj = i % 2 == 0 ? height_map.width - j : j;
-        const auto h  = height_map.height_map[jj + height_map.width * ind_y] + radius + safety_depth_offset;
-        const auto x  = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+        const auto jj  = i % 2 == 0 ? height_map.width - j : j;
+        const auto ind = jj + height_map.width * ind_y;
+
+        const auto h = height_map.height_map[ind];
+        const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
         if (h > layer2_y) {
-          points.emplace_back(x, h, curr_height);
-          collision = true;
-        } else if (collision) {
-          points.emplace_back(x, layer2_y, curr_height);
-          collision = false;
+          auto norm = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
+          norm      = norm.normalize();
+          auto p    = math::Vec3f{x, h, curr_height} + (norm + math::Vec3f{0.F, -1.F, 0.F}) * radius;
+          p         = collision_fix(p);
+          p.y       = std::max(p.y, layer2_y);
+          if (i % 2 == even && points.back().x > p.x) {
+            points.push_back(p);
+          }
+          if (i % 2 != even && points.back().x < p.x) {
+            points.push_back(p);
+          }
         }
       }
     }
