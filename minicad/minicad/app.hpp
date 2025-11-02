@@ -81,6 +81,7 @@ class MiniCadApp final : public eray::os::Application {
     HelperPointSelection helper_point_selection;
 
     std::optional<HeightMap> milling_height_map;
+    std::optional<std::vector<eray::math::Vec3f>> rough_path_points; 
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -151,9 +152,11 @@ class MiniCadApp final : public eray::os::Application {
   bool on_project_save();
 
   bool on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy);
-  bool on_generate_height_map();
 
   bool on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count);
+
+  bool on_generate_height_map();
+  bool on_generate_rough_paths();
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);

@@ -830,6 +830,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   }
 
   if (m_.milling_height_map) {
+    static bool show_height_map = false;
+    ImGui::Checkbox("Show height map", &show_height_map);
     if (ImGui::Button("Save height map")) {
       auto res = System::file_dialog().save_file([&](const auto& path) { m_.milling_height_map->save_to_file(path); });
 
@@ -837,9 +839,24 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         Logger::info("File dialog error");
       }
     }
-    m_.scene.renderer().draw_imgui_texture_image(m_.milling_height_map->height_map_handle, HeightMap::kHeightMapSize,
-                                                 HeightMap::kHeightMapSize);
+    if (show_height_map) {
+      m_.scene.renderer().draw_imgui_texture_image(m_.milling_height_map->height_map_handle, HeightMap::kHeightMapSize,
+                                                   HeightMap::kHeightMapSize);
+    }
+
+    if (ImGui::Button("Generate paths")) {
+      on_generate_rough_paths();
+
+      if (m_.rough_path_points) {
+        const auto& points = *m_.rough_path_points;
+        if (!System::file_dialog().save_file(
+                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+          eray::util::Logger::err("Could not save the g-code");
+        }
+      }
+    }
   }
+
   ImGui::End();
 
   ImGui::Begin(ICON_FA_CAMERA_RETRO " Camera");
@@ -1742,6 +1759,25 @@ bool MiniCadApp::on_generate_height_map() {
   }
 
   m_.milling_height_map = HeightMap::create(m_.scene, handles);
+  return true;
+}
+
+bool MiniCadApp::on_generate_rough_paths() {
+  if (!m_.milling_height_map) {
+    return false;
+  }
+
+  auto result = RoughMillingSolver::solve(*m_.milling_height_map);
+  if (!result) {
+    return false;
+  }
+
+  if (auto opt_curve = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+    opt_curve.value()->set_points(result->points);
+    opt_curve.value()->set_name(std::format("{} [Rough milling]", opt_curve.value()->name));
+  }
+  m_.rough_path_points = std::move(result->points);
+
   return true;
 }
 
