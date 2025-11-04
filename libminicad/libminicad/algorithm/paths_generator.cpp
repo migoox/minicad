@@ -180,21 +180,24 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
   points.emplace_back(safety_offset + half_width, safety_offset + desc.max_depth, safety_offset + half_height);
   points.emplace_back(safety_offset + half_width, layer1_y, safety_offset + half_height);
 
-  auto collision_fix = [&](math::Vec3f p) {
-    auto ind_right = static_cast<size_t>(((p.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
-    auto ind_left  = static_cast<size_t>(((p.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
+  auto collision_fix = [&](math::Vec3f sphere_center) {
+    auto ind_right =
+        static_cast<size_t>(((sphere_center.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
+    auto ind_left =
+        static_cast<size_t>(((sphere_center.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
 
     ind_right = std::clamp<size_t>(ind_right, 0U, height_map.width);
     ind_left  = std::clamp<size_t>(ind_left, 0U, height_map.width);
 
-    auto ind_top = static_cast<size_t>(((p.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
+    auto ind_top =
+        static_cast<size_t>(((sphere_center.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
     auto ind_bottom =
-        static_cast<size_t>(((p.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
+        static_cast<size_t>(((sphere_center.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
 
     ind_bottom = std::clamp<size_t>(ind_bottom, 0U, height_map.height);
     ind_top    = std::clamp<size_t>(ind_top, 0U, height_map.height);
 
-    auto max_h = p.y;
+    auto max_offset = 0.F;
     for (auto i = ind_left; i < ind_right; ++i) {
       for (auto j = ind_top; j < ind_bottom; ++j) {
         const auto x = (static_cast<float>(i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
@@ -202,14 +205,18 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
         const auto z = (static_cast<float>(j) / static_cast<float>(height_map.height) - 0.5F) * desc.height;
         auto hp      = math::Vec3f{x, y, z};
 
-        if (math::dot(hp - p, hp - p) < radius * radius) {
-          max_h = std::max(max_h, y);
+        if (math::dot(hp - sphere_center, hp - sphere_center) < radius * radius) {
+          const auto dx = std::abs(hp.x - sphere_center.x);
+          const auto dy = std::abs(hp.y - sphere_center.y);
+          const auto dh = std::sqrt(radius * radius - dx * dx) - dy;
+
+          max_offset = std::max(dh, max_offset);
         }
       }
     }
 
-    p.y = max_h;
-    return p;
+    sphere_center.y += max_offset;
+    return sphere_center;
   };
 
   // Layer 1
@@ -230,11 +237,13 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
         const auto h = height_map.height_map[ind];
         const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
         if (h > layer1_y) {
-          auto norm = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
-          norm      = norm.normalize();
-          auto p    = math::Vec3f{x, h, curr_height} + (norm + math::Vec3f{0.F, -1.F, 0.F}) * radius;
-          p         = collision_fix(p);
-          p.y       = std::max(p.y, layer1_y);
+          auto norm_flat = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
+          norm_flat      = norm_flat.normalize();
+
+          auto sphere_center = math::Vec3f{x, h, curr_height} + norm_flat * radius;
+          auto p             = collision_fix(sphere_center);
+          p.y -= radius;
+          p.y = std::max(p.y, layer1_y);
           if (i % 2 == 0 && points.back().x > p.x) {
             points.push_back(p);
           }
@@ -279,11 +288,13 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
         const auto h = height_map.height_map[ind];
         const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
         if (h > layer2_y) {
-          auto norm = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
-          norm      = norm.normalize();
-          auto p    = math::Vec3f{x, h, curr_height} + (norm + math::Vec3f{0.F, -1.F, 0.F}) * radius;
-          p         = collision_fix(p);
-          p.y       = std::max(p.y, layer2_y);
+          auto norm_flat = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
+          norm_flat      = norm_flat.normalize();
+
+          auto sphere_center = math::Vec3f{x, h, curr_height} + norm_flat * radius;
+          auto p             = collision_fix(sphere_center);
+          p.y -= radius;
+          p.y = std::max(p.y, layer2_y);
           if (i % 2 == even && points.back().x > p.x) {
             points.push_back(p);
           }
