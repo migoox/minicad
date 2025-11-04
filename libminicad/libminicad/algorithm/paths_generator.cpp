@@ -2,6 +2,9 @@
 #include <libminicad/algorithm/paths_generator.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <limits>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "liberay/math/vec.hpp"
 #include "liberay/math/vec_fwd.hpp"
@@ -356,6 +359,132 @@ bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points
   ofs.flush();
   ofs.close();
   return true;
+}
+
+std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMap& height_map,
+                                                          const WorkpieceDesc& desc, float diameter) {
+  // Find starting point
+  static constexpr auto kMaxInd = std::numeric_limits<size_t>::max();
+  struct PairHash {
+    std::size_t operator()(const std::pair<size_t, size_t>& p) const noexcept {
+      return std::hash<size_t>()(p.first) ^ (std::hash<size_t>()(p.second) << 1);
+    }
+  };
+
+  auto is_border = std::vector<bool>();
+  auto border_normal    = std::unordered_map<std::pair<size_t, size_t>, math::Vec3f, PairHash>();
+  is_border.resize(height_map.height * height_map.width, false);
+
+  auto is_zero = [&height_map](size_t i, size_t j) { return height_map.height_map[height_map.width * i + j] < 1e-6F; };
+
+  size_t last_found_i = kMaxInd;
+  size_t last_found_j = kMaxInd;
+  size_t border_count = 0;
+  for (size_t i = 0; i < height_map.height; ++i) {
+    for (size_t j = 0; j < height_map.width; ++j) {
+      if (is_zero(i, j)) {
+        continue;
+      }
+
+      if (i + 1 < height_map.height && is_zero(i + 1, j)) {
+        is_border[height_map.width * (i + 1) + j] = true;
+        last_found_i                              = i + 1;
+        last_found_j                              = j;
+        ++border_count;
+        border_normal.emplace(std::make_pair(i + 1, j), height_map.normal_map[height_map.width * i + j]);
+      }
+      if (i > 0 && is_zero(i - 1, j)) {
+        is_border[height_map.width * (i - 1) + j] = true;
+        last_found_i                              = i - 1;
+        last_found_j                              = j;
+        ++border_count;
+        border_normal.emplace(std::make_pair(i - 1, j), height_map.normal_map[height_map.width * i + j]);
+      }
+      if (j + 1 < height_map.width && is_zero(i, j + 1)) {
+        is_border[height_map.width * i + j + 1] = true;
+        last_found_i                            = i;
+        last_found_j                            = j + 1;
+        ++border_count;
+        border_normal.emplace(std::make_pair(i, j + 1), height_map.normal_map[height_map.width * i + j]);
+      }
+      if (j > 0 && is_zero(i, j - 1)) {
+        is_border[height_map.width * i + j - 1] = true;
+        last_found_i                            = i;
+        last_found_j                            = j - 1;
+        ++border_count;
+        border_normal.emplace(std::make_pair(i, j - 1), height_map.normal_map[height_map.width * i + j]);
+      }
+    }
+  }
+
+  if (last_found_i == kMaxInd || last_found_j == kMaxInd) {
+    return std::nullopt;
+  }
+
+  auto points = std::vector<math::Vec3f>();
+  points.reserve(border_count);
+
+  auto visited = std::unordered_set<std::pair<size_t, size_t>, PairHash>();
+
+  for (size_t i = last_found_i, j = last_found_j, count = 0;;) {
+    auto x = (static_cast<float>(j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+    auto y = height_map.height_map[height_map.width * i + j];
+    auto z = (static_cast<float>(i) / static_cast<float>(height_map.height) - 0.5F) * desc.height;
+
+    auto norm      = border_normal.at(std::make_pair(i, j));
+    auto flat_norm = math::Vec3f{norm.x, 0.F, norm.z}.normalize();
+
+    points.emplace_back(math::Vec3f{x, y, z} + flat_norm * diameter / 2.F);
+
+    for (size_t ii = 0; ii < 3; ++ii) {
+      for (size_t jj = 0; jj < 3; ++jj) {
+        if (ii == 1 && ii == jj) {
+          continue;
+        }
+        auto iii = ii + i - 1;
+        auto jjj = jj + j - 1;
+        if (iii >= height_map.height || jjj >= height_map.width) {
+          continue;
+        }
+
+        // if (is_border[height_map.width * iii + jjj] && (iii != last_found_i || jjj != last_found_j)) {
+        //   last_found_i = i;
+        //   last_found_j = j;
+        //   i            = iii;
+        //   j            = jjj;
+
+        //   goto break_loop;
+        // }
+        if (is_border[height_map.width * iii + jjj] && !visited.contains(std::make_pair(iii, jjj))) {
+          visited.emplace(iii, jjj);
+          i = iii;
+          j = jjj;
+
+          goto break_loop;  // 😈
+        }
+      }
+    }
+  break_loop:
+
+    if (count >= border_count) {
+      break;
+    }
+
+    eray::util::Logger::info("{},{}->{},{}", last_found_i, last_found_j, i, j);
+    ++count;
+  }
+
+  auto texture_temp = std::vector<eray::res::ColorU32>();
+  texture_temp.resize(height_map.height * height_map.width);
+  for (size_t i = 0; i < height_map.width * height_map.height; ++i) {
+    texture_temp[i] = is_border[i] ? 0xFFFFFFFF : 0xFF000000;
+  }
+
+  auto handle = scene.renderer().upload_texture(texture_temp, height_map.height, height_map.width);
+  return FlatMillingSolver{
+      .points        = std::move(points),
+      .border_handle = handle,
+  };
 }
 
 }  // namespace mini

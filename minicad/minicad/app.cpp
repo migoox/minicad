@@ -844,7 +844,7 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                                                    HeightMap::kHeightMapSize);
     }
 
-    if (ImGui::Button("Generate paths")) {
+    if (ImGui::Button("Generate rough paths")) {
       on_generate_rough_paths();
 
       if (m_.rough_path_points) {
@@ -853,6 +853,28 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                 [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
           eray::util::Logger::err("Could not save the g-code");
         }
+      }
+    }
+
+    if (ImGui::Button("Generate flat paths")) {
+      on_generate_flat_paths();
+
+      if (m_.flat_milling_solution) {
+        const auto& points = m_.flat_milling_solution->points;
+
+        if (!System::file_dialog().save_file(
+                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+          eray::util::Logger::err("Could not save the g-code");
+        }
+      }
+    }
+
+    static bool show_border_map = false;
+    if (m_.flat_milling_solution) {
+      ImGui::Checkbox("Show border", &show_border_map);
+      if (show_border_map) {
+        m_.scene.renderer().draw_imgui_texture_image(m_.flat_milling_solution->border_handle, HeightMap::kHeightMapSize,
+                                                     HeightMap::kHeightMapSize);
       }
     }
   }
@@ -1777,6 +1799,24 @@ bool MiniCadApp::on_generate_rough_paths() {
     opt_curve.value()->set_name(std::format("{} [Rough milling]", opt_curve.value()->name));
   }
   m_.rough_path_points = std::move(result->points);
+
+  return true;
+}
+
+bool MiniCadApp::on_generate_flat_paths() {
+  if (!m_.milling_height_map) {
+    return false;
+  }
+  auto result = FlatMillingSolver::solve(m_.scene, *m_.milling_height_map);
+  if (!result) {
+    return false;
+  }
+
+  if (auto opt_curve = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+    opt_curve.value()->set_points(result->points);
+    opt_curve.value()->set_name(std::format("{} [Flat milling]", opt_curve.value()->name));
+  }
+  m_.flat_milling_solution = std::move(*result);
 
   return true;
 }

@@ -16,7 +16,7 @@ struct WorkpieceDesc {
 };
 
 struct HeightMap {
-  static constexpr uint32_t kHeightMapSize = 2048;
+  static constexpr uint32_t kHeightMapSize = 1500;  // accuracy: 1.5mm
 
   std::vector<float> height_map;
   std::vector<eray::math::Vec3f> normal_map;
@@ -42,6 +42,21 @@ struct RoughMillingSolver {
    */
   static std::optional<RoughMillingSolver> solve(HeightMap& height_map, const WorkpieceDesc& desc = WorkpieceDesc{},
                                                  float diameter = 1.6F);
+};
+
+struct FlatMillingSolver {
+  std::vector<eray::math::Vec3f> points;
+  TextureHandle border_handle;
+
+  /**
+   * @brief Uses flat milling tool.
+   *
+   * @param height_map
+   * @param desc
+   * @param radius in centimeters
+   */
+  static std::optional<FlatMillingSolver> solve(Scene& scene, HeightMap& height_map,
+                                                const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 1.0F);
 };
 
 struct GCodeSerializer {

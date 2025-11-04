@@ -81,7 +81,8 @@ class MiniCadApp final : public eray::os::Application {
     HelperPointSelection helper_point_selection;
 
     std::optional<HeightMap> milling_height_map;
-    std::optional<std::vector<eray::math::Vec3f>> rough_path_points; 
+    std::optional<std::vector<eray::math::Vec3f>> rough_path_points;
+    std::optional<FlatMillingSolver> flat_milling_solution;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);
@@ -157,6 +158,7 @@ class MiniCadApp final : public eray::os::Application {
 
   bool on_generate_height_map();
   bool on_generate_rough_paths();
+  bool on_generate_flat_paths();
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);
