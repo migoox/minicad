@@ -61,7 +61,7 @@ struct FlatMillingSolver {
 
 struct GCodeSerializer {
   static bool write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,
-                            float y_offset = 2.2F);
+                            const WorkpieceDesc& desc = WorkpieceDesc{});
 };
 
 }  // namespace mini

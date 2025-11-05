@@ -330,7 +330,7 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 }
 
 bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,
-                                    float y_offset) {
+                                    const WorkpieceDesc& desc) {
   std::ofstream ofs(filename, std::ios::out | std::ios::trunc);
   if (!ofs.is_open()) {
     eray::util::Logger::info("Could not open a file with path {}", filename.string());
@@ -351,7 +351,7 @@ bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points
   for (const auto& p : points) {
     std::string xs = format_coord(p.x * 10.F);
     std::string ys = format_coord(p.z * 10.F);
-    std::string zs = format_coord((p.y + y_offset) * 10.F);
+    std::string zs = format_coord((p.y + (desc.depth - desc.max_depth)) * 10.F);
 
     ofs << 'N' << n++ << "G01" << 'X' << xs << 'Y' << ys << 'Z' << zs << end_line;
   }
@@ -371,8 +371,11 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
   };
 
-  auto is_border = std::vector<bool>();
-  auto border_normal    = std::unordered_map<std::pair<size_t, size_t>, math::Vec3f, PairHash>();
+  const auto safe_depth = desc.max_depth + 2.F * diameter;
+
+  // == Create border texture ==========================================================================================
+  auto is_border     = std::vector<bool>();
+  auto border_normal = std::unordered_map<std::pair<size_t, size_t>, math::Vec3f, PairHash>();
   is_border.resize(height_map.height * height_map.width, false);
 
   auto is_zero = [&height_map](size_t i, size_t j) { return height_map.height_map[height_map.width * i + j] < 1e-6F; };
@@ -421,11 +424,10 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     return std::nullopt;
   }
 
+  // == Generate points ================================================================================================
   auto points = std::vector<math::Vec3f>();
   points.reserve(border_count);
-
   auto visited = std::unordered_set<std::pair<size_t, size_t>, PairHash>();
-
   for (size_t i = last_found_i, j = last_found_j, count = 0;;) {
     auto x = (static_cast<float>(j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
     auto y = height_map.height_map[height_map.width * i + j];
@@ -447,14 +449,6 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
           continue;
         }
 
-        // if (is_border[height_map.width * iii + jjj] && (iii != last_found_i || jjj != last_found_j)) {
-        //   last_found_i = i;
-        //   last_found_j = j;
-        //   i            = iii;
-        //   j            = jjj;
-
-        //   goto break_loop;
-        // }
         if (is_border[height_map.width * iii + jjj] && !visited.contains(std::make_pair(iii, jjj))) {
           visited.emplace(iii, jjj);
           i = iii;
@@ -470,10 +464,73 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       break;
     }
 
-    eray::util::Logger::info("{},{}->{},{}", last_found_i, last_found_j, i, j);
     ++count;
   }
 
+  // == Find outer point ===============================================================================================
+  const auto diag  = math::Vec2f{0.F, desc.height};
+  const auto p     = math::Vec2f{0.F, desc.height / 2.F};
+  size_t outer_ind = kMaxInd;
+  for (auto i = 0U; i < points.size() - 1; ++i) {
+    auto p0 = math::Vec2f{points[i].x, points[i].z};
+    auto p1 = math::Vec2f{points[i + 1].x, points[i + 1].z};
+    if (math::cross(p0 - p, diag) * math::cross(p1 - p, diag) > 0.F) {
+      continue;
+    }
+    if (outer_ind == kMaxInd || points[outer_ind].z < points[i].z) {
+      outer_ind = i;
+    }
+  }
+
+  // == Remove self intersections ======================================================================================
+  auto ind         = outer_ind;
+  auto path_points = std::vector<math::Vec3f>();
+  path_points.reserve(border_count);
+  path_points.emplace_back(0.F, safe_depth, 0.F);
+  path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
+  path_points.emplace_back(0.F, 0.F, desc.height / 2.F + diameter * 2.F);
+  path_points.push_back(points[ind]);
+  for (auto steps = 0U; steps < points.size(); ++steps) {
+    auto next_ind = (ind + 1) % points.size();
+
+    auto p0   = math::Vec2f{points[ind].x, points[ind].z};
+    auto p1   = math::Vec2f{points[next_ind].x, points[next_ind].z};
+    auto dirp = p1 - p0;
+
+    auto old_ind = ind;
+    ind          = next_ind;
+    for (auto j = next_ind; j != old_ind; j = (j + 1) % points.size()) {
+      auto next_j = (j + 1) % points.size();
+
+      auto q0   = math::Vec2f{points[j].x, points[j].z};
+      auto q1   = math::Vec2f{points[next_j].x, points[next_j].z};
+      auto dirq = q1 - q0;
+
+      auto c1 = math::cross(q0 - p1, dirp);
+      auto c2 = math::cross(q1 - p1, dirp);
+      auto c3 = math::cross(p0 - q1, dirq);
+      auto c4 = math::cross(p1 - q1, dirq);
+
+      if (c1 * c2 < 0.F && c3 * c4 < 0.F) {
+        if (c1 > c2) {
+          ind = j;
+        } else {
+          ind = j + 1;
+        }
+
+        break;
+      }
+    }
+
+    path_points.push_back(points[ind]);
+    if (ind == outer_ind) {
+      break;
+    }
+  }
+  path_points.emplace_back(points.back().x, safe_depth, points.back().z);
+  path_points.emplace_back(0.F, safe_depth, 0.F);
+
+  // == Upload border texture ==========================================================================================
   auto texture_temp = std::vector<eray::res::ColorU32>();
   texture_temp.resize(height_map.height * height_map.width);
   for (size_t i = 0; i < height_map.width * height_map.height; ++i) {
@@ -482,7 +539,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
 
   auto handle = scene.renderer().upload_texture(texture_temp, height_map.height, height_map.width);
   return FlatMillingSolver{
-      .points        = std::move(points),
+      .points        = std::move(path_points),
       .border_handle = handle,
   };
 }
