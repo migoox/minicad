@@ -877,6 +877,19 @@ void MiniCadApp::render_gui(Duration /* delta */) {
                                                      HeightMap::kHeightMapSize);
       }
     }
+
+    if (ImGui::Button("Generate detailed paths")) {
+      on_generate_detailed_paths();
+
+      if (m_.detailed_milling_solution) {
+        const auto& points = m_.detailed_milling_solution->points;
+
+        if (!System::file_dialog().save_file(
+                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+          eray::util::Logger::err("Could not save the g-code");
+        }
+      }
+    }
   }
 
   ImGui::End();
@@ -1817,6 +1830,17 @@ bool MiniCadApp::on_generate_flat_paths() {
     opt_curve.value()->set_name(std::format("{} [Flat milling]", opt_curve.value()->name));
   }
   m_.flat_milling_solution = std::move(*result);
+
+  return true;
+}
+
+bool MiniCadApp::on_generate_detailed_paths() {
+  auto handles = std::vector<PatchSurfaceHandle>();
+  auto append  = [&handles](const PatchSurfaceHandle& handle) { handles.push_back(handle); };
+  for (auto h : *m_.non_transformable_selection) {
+    std::visit(util::match{append, [](const auto&) {}}, h);
+  }
+  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles);
 
   return true;
 }

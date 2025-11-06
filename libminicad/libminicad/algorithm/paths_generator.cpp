@@ -1,10 +1,17 @@
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <iterator>
 #include <libminicad/algorithm/paths_generator.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <limits>
+#include <list>
+#include <optional>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "liberay/math/vec.hpp"
 #include "liberay/math/vec_fwd.hpp"
@@ -483,13 +490,10 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   }
 
   // == Remove self intersections ======================================================================================
-  auto ind         = outer_ind;
-  auto path_points = std::vector<math::Vec3f>();
-  path_points.reserve(border_count);
-  path_points.emplace_back(0.F, safe_depth, 0.F);
-  path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
-  path_points.emplace_back(0.F, 0.F, desc.height / 2.F + diameter * 2.F);
-  path_points.push_back(points[ind]);
+  auto ind            = outer_ind;
+  auto contour_points = std::vector<math::Vec3f>();
+  contour_points.reserve(border_count);
+  contour_points.push_back(points[ind]);
   for (auto steps = 0U; steps < points.size(); ++steps) {
     auto next_ind = (ind + 1) % points.size();
 
@@ -522,14 +526,188 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       }
     }
 
-    path_points.push_back(points[ind]);
+    contour_points.push_back(points[ind]);
     if (ind == outer_ind) {
       break;
     }
   }
-  path_points.emplace_back(points.back().x, safe_depth, points.back().z);
-  path_points.emplace_back(0.F, safe_depth, 0.F);
 
+  // == Generate zig-zag segments ======================================================================================
+  const auto intersection_find = +[](const math::Vec2f p0, const math::Vec2f p1, const math::Vec2f q0,
+                                     const math::Vec2f q1) -> std::optional<math::Vec2f> {
+    const auto p01 = p1 - p0;
+    const auto q01 = q1 - q0;
+    const auto c0  = math::cross(q0 - p1, p01);
+    const auto c1  = math::cross(q1 - p1, p01);
+    const auto c2  = math::cross(p0 - q1, q01);
+    const auto c3  = math::cross(p1 - q1, q01);
+    if (c0 * c1 < 0.F && c2 * c3 < 0.F) {
+      const auto w   = math::cross(p01, -q01);
+      const auto w_u = math::cross(q0 - p0, -q01);
+      return p0 + w_u / w * p01;
+    }
+    return std::nullopt;
+  };
+
+  struct ZigZagSegment {
+    size_t i = 0;  // line index
+    size_t j = 0;  // subdivision index, 0 if no subdivision
+    math::Vec2f start;
+    math::Vec2f end;
+    std::optional<size_t> contour_index_start;
+    std::optional<size_t> contour_index_end;
+  };
+  struct IntersectionPoint {
+    size_t contour_index{};
+    math::Vec2f pos;
+  };
+
+  const auto diameter_eps = diameter - 0.08F;
+  const float right_x     = desc.width / 2.F + diameter * 2.F;
+  const float left_x      = -desc.width / 2.F - diameter * 2.F;
+  const float start_z     = desc.height / 2.F;
+
+  auto segments            = std::vector<std::list<ZigZagSegment>>();
+  auto intersection_points = std::vector<IntersectionPoint>();
+  for (auto i = 0U;; ++i) {
+    float curr_z = start_z - diameter_eps * static_cast<float>(i);
+
+    auto p0 = math::Vec2f{right_x, curr_z};
+    auto p1 = math::Vec2f{left_x, curr_z};
+
+    intersection_points.clear();
+    for (auto j = 0U; j < contour_points.size() - 1; ++j) {
+      auto q0 = math::Vec2f{contour_points[j].x, contour_points[j].z};
+      auto q1 = math::Vec2f{contour_points[j + 1].x, contour_points[j + 1].z};
+
+      if (auto result = intersection_find(p0, p1, q0, q1)) {
+        intersection_points.emplace_back(j, *result);
+      }
+    }
+    std::ranges::sort(intersection_points, [](const auto& a, const auto& b) { return a.pos.x > b.pos.x; });
+
+    segments.emplace_back();
+
+    auto prev             = p0;
+    auto prev_contour_ind = std::optional<size_t>(std::nullopt);
+    auto j                = 0U;
+    for (; j < intersection_points.size(); j += 2) {
+      segments[i].emplace_front(ZigZagSegment{
+          .i                   = i,
+          .j                   = j,
+          .start               = prev,
+          .end                 = intersection_points[j].pos,
+          .contour_index_start = prev_contour_ind,
+          .contour_index_end   = intersection_points[j].contour_index,
+      });
+      if (segments[i].back().start.x < segments[i].back().end.x) {
+        std::swap(segments[i].back().start, segments[i].back().end);
+        std::swap(segments[i].back().contour_index_start, segments[i].back().contour_index_end);
+      }
+      prev             = intersection_points[j + 1].pos;
+      prev_contour_ind = intersection_points[j + 1].contour_index;
+    }
+    segments[i].emplace_front(ZigZagSegment{
+        .i                   = i,
+        .j                   = j,
+        .start               = prev,
+        .end                 = p1,
+        .contour_index_start = prev_contour_ind,
+        .contour_index_end   = std::nullopt,
+    });
+    if (segments[i].back().start.x < segments[i].back().end.x) {
+      std::swap(segments[i].back().start, segments[i].back().end);
+      std::swap(segments[i].back().contour_index_start, segments[i].back().contour_index_end);
+    }
+    if (curr_z < -desc.height / 2.F) {
+      break;
+    }
+  }
+
+  // == Generate paths =================================================================================================
+  auto path_points = std::vector<math::Vec3f>();
+  path_points.emplace_back(0.F, safe_depth, 0.F);
+  path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
+  path_points.emplace_back(0.F, 0.F, desc.height / 2.F + diameter * 2.F);
+  path_points.reserve(path_points.size() + contour_points.size());
+  for (const auto& cp : contour_points) {
+    if (std::isfinite(cp.x) && std::isfinite(cp.y) && std::isfinite(cp.z)) {
+      path_points.push_back(cp);
+    }
+  }
+  path_points.emplace_back(contour_points.back().x, safe_depth, contour_points.back().z);
+  for (;;) {
+    auto first_line_ind = kMaxInd;
+    for (auto i = 0U; i < segments.size() - 1; ++i) {
+      if (!segments[i].empty()) {
+        first_line_ind = i;
+        break;
+      }
+    }
+
+    if (first_line_ind == kMaxInd) {
+      break;
+    }
+
+    auto previous_segment = segments[first_line_ind].begin();
+    while (std::next(previous_segment) != segments[first_line_ind].end()) {
+      ++previous_segment;
+    }
+
+    auto rest = first_line_ind % 2;
+    path_points.emplace_back(previous_segment->start.x, safe_depth, previous_segment->start.y);
+    path_points.emplace_back(previous_segment->start.x, 0.F, previous_segment->start.y);
+    path_points.emplace_back(previous_segment->end.x, 0.F, previous_segment->end.y);
+
+    auto i = first_line_ind;
+    for (;;) {
+      if (i + 1 >= segments.size()) {
+        break;
+      }
+      if (segments[i + 1].empty()) {
+        break;
+      }
+
+      ++i;
+
+      const bool forward = i % 2 == rest;
+      auto curr_segment  = segments[i].end();
+      auto min_val       = std::numeric_limits<float>::max();
+      for (auto segment_it = segments[i].begin(); segment_it != segments[i].end(); ++segment_it) {
+        // TODO(migoox): Note that the code below is an approximation, to have accurate results, the contour length
+        // should be used.
+        auto val =
+            forward
+                ? math::dot(segment_it->start - previous_segment->start, segment_it->start - previous_segment->start)
+                : math::dot(segment_it->end - previous_segment->end, segment_it->end - previous_segment->end);
+        if (val < min_val) {
+          min_val      = val;
+          curr_segment = segment_it;
+        }
+      }
+
+      if (forward) {
+        path_points.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
+        path_points.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
+      } else {
+        path_points.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
+        path_points.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
+      }
+
+      segments[i - 1].erase(previous_segment);
+      previous_segment = curr_segment;
+    }
+    if (i % 2 == rest) {
+      path_points.emplace_back(previous_segment->end.x, safe_depth, previous_segment->end.y);
+    } else {
+      path_points.emplace_back(previous_segment->start.x, safe_depth, previous_segment->start.y);
+    }
+    segments[i].erase(previous_segment);
+  }
+
+  //   for (auto i = 0U; i < contour_points.size() - 1; ++i) {
+  //     scene.renderer().debug_line(contour_points[i], contour_points[i + 1]);
+  //   }
   // == Upload border texture ==========================================================================================
   auto texture_temp = std::vector<eray::res::ColorU32>();
   texture_temp.resize(height_map.height * height_map.width);
@@ -541,6 +719,17 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   return FlatMillingSolver{
       .points        = std::move(path_points),
       .border_handle = handle,
+  };
+}
+std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
+                                                                  const std::vector<PatchSurfaceHandle>& patch_handles,
+                                                                  const WorkpieceDesc& desc, float diameter) {
+  const auto safety_depth = desc.depth + diameter;
+  auto points             = std::vector<math::Vec3f>();
+  points.emplace_back(0.F, safety_depth, 0.F);
+  points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
+  return DetailedMillingSolver{
+      .points = std::move(points),
   };
 }
 

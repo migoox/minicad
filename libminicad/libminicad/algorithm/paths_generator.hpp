@@ -6,6 +6,8 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <vector>
 
+#include "libminicad/scene/handles.hpp"
+
 namespace mini {
 
 struct WorkpieceDesc {
@@ -57,6 +59,20 @@ struct FlatMillingSolver {
    */
   static std::optional<FlatMillingSolver> solve(Scene& scene, HeightMap& height_map,
                                                 const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 1.0F);
+};
+
+struct DetailedMillingSolver {
+  std::vector<eray::math::Vec3f> points;
+
+  /**
+   * @brief Uses flat milling tool.
+   *
+   * @param height_map
+   * @param desc
+   * @param radius in centimeters
+   */
+  static std::optional<DetailedMillingSolver> solve(Scene& scene, const std::vector<PatchSurfaceHandle>& patch_handles,
+                                                    const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 
 struct GCodeSerializer {
