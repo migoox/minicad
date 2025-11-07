@@ -21,6 +21,55 @@ namespace mini {
 
 namespace math = eray::math;
 
+void algo::rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon,
+                         std::vector<eray::math::Vec3f>& out) {
+  if (end <= start + 1) {
+    return;
+  }
+
+  float max_dist_sq = 0.0F;
+  size_t pivot      = start;
+
+  const auto dir      = math::Vec2f{points[end].x, points[end].z} - math::Vec2f{points[start].x, points[start].z};
+  const auto dir_norm = dir.normalize();
+
+  for (size_t i = start + 1; i < end; ++i) {
+    const auto curr_dir = math::Vec2f{points[i].x, points[i].z} - math::Vec2f{points[start].x, points[start].z};
+    auto dist_sq        = 0.F;
+    if (std::abs(dir.x) < 1e-8F && std::abs(dir.y) < 1e-8F) {
+      dist_sq = math::dot(curr_dir, curr_dir);
+    } else {
+      const auto h_dir = curr_dir - math::dot(curr_dir, dir_norm) * dir_norm;
+      dist_sq          = math::dot(h_dir, h_dir);
+    }
+
+    if (dist_sq > max_dist_sq) {
+      pivot       = i;
+      max_dist_sq = dist_sq;
+    }
+  }
+
+  if (max_dist_sq > epsilon * epsilon) {
+    rdp_recursive(points, start, pivot, epsilon, out);
+    out.push_back(points[pivot]);
+    rdp_recursive(points, pivot, end, epsilon, out);
+  }
+}
+
+std::vector<eray::math::Vec3f> algo::rdp(const std::vector<eray::math::Vec3f>& points, float epsilon) {
+  if (points.size() < 2) {
+    return points;
+  }
+
+  std::vector<math::Vec3f> result;
+  result.reserve(points.size());
+  result.push_back(points.front());
+  rdp_recursive(points, 0, points.size() - 1, epsilon, result);
+  result.push_back(points.back());
+
+  return result;
+}
+
 HeightMap HeightMap::create(Scene& scene, std::vector<PatchSurfaceHandle>& handles, const WorkpieceDesc& desc) {
   // Stage 1: Create the height map
   auto height_map = std::vector<float>();
@@ -368,7 +417,8 @@ bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points
 }
 
 std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMap& height_map,
-                                                          const WorkpieceDesc& desc, float diameter) {
+                                                          const WorkpieceDesc& desc, float diameter,
+                                                          float contour_epsilon) {
   // Find starting point
   static constexpr auto kMaxInd = std::numeric_limits<size_t>::max();
   struct PairHash {
@@ -474,7 +524,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
 
     ++count;
-  }
+  };
 
   // == Find outer point ===============================================================================================
   const auto diag  = math::Vec2f{0.F, desc.height};
@@ -533,6 +583,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       break;
     }
   }
+  contour_points = algo::rdp(contour_points, contour_epsilon);
 
   // == Generate zig-zag segments ======================================================================================
   const auto intersection_find = +[](const math::Vec2f p0, const math::Vec2f p1, const math::Vec2f q0,
@@ -806,8 +857,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   for (size_t i = 0; i < height_map.width * height_map.height; ++i) {
     texture_temp[i] = is_border[i] ? 0xFFFFFFFF : 0xFF000000;
   }
-
   auto handle = scene.renderer().upload_texture(texture_temp, height_map.height, height_map.width);
+
   return FlatMillingSolver{
       .points        = std::move(path_points),
       .border_handle = handle,

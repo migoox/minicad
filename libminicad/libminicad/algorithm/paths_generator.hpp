@@ -6,9 +6,19 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <vector>
 
-#include "libminicad/scene/handles.hpp"
-
 namespace mini {
+
+namespace algo {
+/**
+ * @brief RDP algorithm for points reduction.
+ *
+ * @param points
+ * @param epsilon
+ */
+std::vector<eray::math::Vec3f> rdp(const std::vector<eray::math::Vec3f>& points, float epsilon);
+void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon,
+                   std::vector<eray::math::Vec3f>& out);
+}  // namespace algo
 
 struct WorkpieceDesc {
   float width     = 15.F;
@@ -58,7 +68,8 @@ struct FlatMillingSolver {
    * @param radius in centimeters
    */
   static std::optional<FlatMillingSolver> solve(Scene& scene, HeightMap& height_map,
-                                                const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 1.0F);
+                                                const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 1.0F,
+                                                float contour_epsilon = 0.0095F);
 };
 
 struct DetailedMillingSolver {
