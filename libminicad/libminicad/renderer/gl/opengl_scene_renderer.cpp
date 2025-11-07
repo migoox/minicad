@@ -57,7 +57,7 @@ std::expected<std::unique_ptr<ISceneRenderer>, OpenGLSceneRenderer::SceneRendere
 OpenGLSceneRenderer::create(const std::filesystem::path& assets_path, eray::math::Vec2i win_size) {
   auto manager = driver::GLSLShaderManager();
 
-  // TODO(migoox): Add helper functions for shader loading, to make this code more readable. Use std::terminate with
+  // TODO(migoox): Add helper functions for shader loading to make this code more readable. Use std::terminate with
   // message instead of the UNWRAP
 
   // NOLINTBEGIN
