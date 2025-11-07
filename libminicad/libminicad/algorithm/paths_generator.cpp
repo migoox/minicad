@@ -688,7 +688,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
         }
       }
 
-      // Check if the line from segment to segment intersects the contour
+      // Fix line intersection with the contour
       size_t start_ind = kMaxInd;
       size_t end_ind   = kMaxInd;
       auto start       = math::Vec2f::filled(0.F);
@@ -745,42 +745,35 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
         const auto dir      = end - start;
         const auto norm_dir = dir.normalize();
 
-        bool intersection = false;
-
-        for (size_t l = 0U, forward_ind = (start_ind + 1) % n; l < n; ++l) {
-          if (forward_ind == end_ind) {
-            break;
-          }
-          const auto curr_dir = math::Vec2f{contour_points[forward_ind].x, contour_points[forward_ind].z} - start;
-          const auto c        = math::cross(dir, curr_dir);
-          if (c < 0.F) {
-            auto h_dir = curr_dir - norm_dir * math::dot(curr_dir, norm_dir);
-            if (math::dot(h_dir, h_dir) > kLineVsContourIntersectionTolerance) {
-              intersection = true;
-              break;
-            }
-          }
-
-          forward_ind = (forward_ind + 1) % n;
-        }
-
-        if (intersection && !swapped) {
-          for (size_t l = 0U, forward_ind = start_ind; l < n; ++l) {
-            if (forward_ind == end_ind) {
-              break;
-            }
-            path_points.emplace_back(contour_points[forward_ind]);
-            // scene.renderer().debug_point(contour_points[forward_ind]);
-            forward_ind = (forward_ind + 1) % n;
-          }
-        } else if (intersection) {
-          for (size_t l = 0U, backward_ind = end_ind; l < n; ++l) {
+        if (swapped) {
+          for (size_t l = 0U, backward_ind = (n + end_ind - 1) % n; l < n; ++l) {
             if (backward_ind == start_ind) {
               break;
             }
-            path_points.emplace_back(contour_points[backward_ind]);
-            // scene.renderer().debug_point(contour_points[forward_ind]);
+            const auto curr_dir = math::Vec2f{contour_points[backward_ind].x, contour_points[backward_ind].z} - start;
+            const auto c        = math::cross(dir, curr_dir);
+            if (c < 0.F) {
+              auto h_dir = curr_dir - norm_dir * math::dot(curr_dir, norm_dir);
+              if (math::dot(h_dir, h_dir) > kLineVsContourIntersectionTolerance) {
+                path_points.emplace_back(contour_points[backward_ind]);  // fix intersection
+              }
+            }
             backward_ind = (n + backward_ind - 1) % n;
+          }
+        } else {
+          for (size_t l = 0U, forward_ind = (start_ind + 1) % n; l < n; ++l) {
+            if (forward_ind == end_ind) {
+              break;
+            }
+            const auto curr_dir = math::Vec2f{contour_points[forward_ind].x, contour_points[forward_ind].z} - start;
+            const auto c        = math::cross(dir, curr_dir);
+            if (c < 0.F) {
+              auto h_dir = curr_dir - norm_dir * math::dot(curr_dir, norm_dir);
+              if (math::dot(h_dir, h_dir) > kLineVsContourIntersectionTolerance) {
+                path_points.emplace_back(contour_points[forward_ind]);  // fix intersection
+              }
+            }
+            forward_ind = (forward_ind + 1) % n;
           }
         }
       }
