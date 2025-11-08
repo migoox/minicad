@@ -1,7 +1,11 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
+#include <liberay/math/vec.hpp>
+#include <liberay/res/image.hpp>
+#include <liberay/util/logger.hpp>
 #include <libminicad/algorithm/paths_generator.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
@@ -12,10 +16,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "liberay/math/vec.hpp"
-#include "liberay/math/vec_fwd.hpp"
-#include "liberay/res/image.hpp"
-#include "liberay/util/logger.hpp"
+#include "libminicad/scene/curve.hpp"
 
 namespace mini {
 
@@ -225,163 +226,87 @@ std::optional<HeightMap> HeightMap::load_from_file(Scene& scene, const std::file
 }
 
 std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_map, const WorkpieceDesc& desc,
-                                                            const float diameter) {
+                                                            const float diameter, uint32_t layers) {
   const auto radius        = diameter / 2.F;
-  const auto half_width    = desc.width / 2.F;
   const auto half_height   = desc.height / 2.F;
-  const auto safety_offset = radius;
-  const auto layer1_y      = desc.max_depth - diameter;
-  const auto layer2_y      = desc.max_depth - 2.F * diameter;
+  const auto safety_offset = 1.2F * radius;
+
+  const float right_x = desc.width / 2.F + safety_offset;
+  const float left_x  = -desc.width / 2.F - safety_offset;
+
+  auto fix_intersection =
+      +[](const HeightMap& height_map, const WorkpieceDesc& desc, size_t map_i, size_t map_j, float& y) -> bool {
+    auto map_y = height_map.height_map[map_j * height_map.width + map_i];
+    auto map_x = (static_cast<float>(map_i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+    if (y < map_y) {
+      y = map_y;
+      return true;
+    }
+    return false;
+  };
 
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_offset + desc.max_depth, 0.F);
-  points.emplace_back(safety_offset + half_width, safety_offset + desc.max_depth, safety_offset + half_height);
-  points.emplace_back(safety_offset + half_width, layer1_y, safety_offset + half_height);
 
-  auto collision_fix = [&](math::Vec3f sphere_center) {
-    auto ind_right =
-        static_cast<size_t>(((sphere_center.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
-    auto ind_left =
-        static_cast<size_t>(((sphere_center.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width));
-
-    ind_right = std::clamp<size_t>(ind_right, 0U, height_map.width);
-    ind_left  = std::clamp<size_t>(ind_left, 0U, height_map.width);
-
-    auto ind_top =
-        static_cast<size_t>(((sphere_center.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
-    auto ind_bottom =
-        static_cast<size_t>(((sphere_center.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height));
-
-    ind_bottom = std::clamp<size_t>(ind_bottom, 0U, height_map.height);
-    ind_top    = std::clamp<size_t>(ind_top, 0U, height_map.height);
-
-    auto max_offset = 0.F;
-    for (auto i = ind_left; i < ind_right; ++i) {
-      for (auto j = ind_top; j < ind_bottom; ++j) {
-        const auto x = (static_cast<float>(i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-        const auto y = height_map.height_map[j * height_map.width + i];
-        const auto z = (static_cast<float>(j) / static_cast<float>(height_map.height) - 0.5F) * desc.height;
-        auto hp      = math::Vec3f{x, y, z};
-
-        if (math::dot(hp - sphere_center, hp - sphere_center) < radius * radius) {
-          const auto dx = std::abs(hp.x - sphere_center.x);
-          const auto dy = std::abs(hp.y - sphere_center.y);
-          const auto dh = std::sqrt(radius * radius - dx * dx) - dy;
-
-          max_offset = std::max(dh, max_offset);
-        }
-      }
+  float last_z = desc.height / 2.F;
+  bool forward = true;
+  points.emplace_back(right_x, safety_offset + desc.max_depth, last_z);
+  for (auto i = 0U; i < layers; ++i) {
+    const float layer_y = desc.max_depth - static_cast<float>(i + 1) * diameter;
+    if (forward) {
+      points.emplace_back(right_x, layer_y, last_z);
     }
 
-    sphere_center.y += max_offset;
-    return sphere_center;
-  };
+    for (auto j = 0U;; ++j) {
+      const float curr_z =
+          i % 2 == 0 ? last_z - radius * static_cast<float>(j) : last_z + radius * static_cast<float>(j);
 
-  // Layer 1
-  uint32_t i        = 0;
-  float curr_height = half_height;
-  while (curr_height > -half_height) {
-    const float start_x = i % 2 == 0 ? safety_offset + half_width : -safety_offset - half_width;
-    const float end_x   = i % 2 == 0 ? -safety_offset - half_width : safety_offset + half_width;
+      if (forward) {
+        points.emplace_back(right_x, layer_y, curr_z);
+      } else {
+        points.emplace_back(left_x, layer_y, curr_z);
+      }
 
-    auto ind_y = static_cast<size_t>((curr_height / desc.height + 0.5F) * static_cast<float>(height_map.height));
-
-    points.emplace_back(start_x, layer1_y, curr_height);
-    if (ind_y < height_map.width) {
-      for (auto j = 0U; j < height_map.width; j += 2) {
-        const auto jj  = i % 2 == 0 ? height_map.width - j : j;
-        const auto ind = jj + height_map.width * ind_y;
-
-        const auto h = height_map.height_map[ind];
-        const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-        if (h > layer1_y) {
-          auto norm_flat = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
-          norm_flat      = norm_flat.normalize();
-
-          auto sphere_center = math::Vec3f{x, h, curr_height} + norm_flat * radius;
-          auto p             = collision_fix(sphere_center);
-          p.y -= radius;
-          p.y = std::max(p.y, layer1_y);
-          if (i % 2 == 0 && points.back().x > p.x) {
-            points.push_back(p);
-          }
-          if (i % 2 != 0 && points.back().x < p.x) {
-            points.push_back(p);
+      auto map_j = static_cast<size_t>(static_cast<float>(height_map.height) * (curr_z / desc.height + 0.5F));
+      if (map_j < height_map.height) {
+        for (auto map_i = 0U; map_i < height_map.width; ++map_i) {
+          auto map_y = layer_y;
+          auto map_x = (static_cast<float>(map_i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+          if (fix_intersection(height_map, desc, map_i, map_j, map_y)) {
+            points.emplace_back(map_x, map_y, curr_z);
           }
         }
       }
-    }
-    points.emplace_back(end_x, layer1_y, curr_height);
 
-    ++i;
-    curr_height = half_height - radius * static_cast<float>(i);
+      if (forward) {
+        points.emplace_back(left_x, layer_y, curr_z);
+      } else {
+        points.emplace_back(right_x, layer_y, curr_z);
+      }
+      forward = !forward;
+
+      if (i % 2 == 0) {
+        if (curr_z <= -half_height) {
+          last_z = curr_z;
+          break;
+        }
+      } else {
+        if (curr_z >= half_height) {
+          last_z = curr_z;
+          break;
+        }
+      }
+    }
   }
 
-  int even = 0;
-  if (i % 2 == 0) {
-    points.emplace_back(safety_offset + half_width, layer1_y, curr_height);
-    points.emplace_back(-safety_offset - half_width, layer1_y, curr_height);
-    even = 1;
+  if (forward) {
+    points.emplace_back(right_x, safety_offset + desc.max_depth, last_z);
   } else {
-    points.emplace_back(-safety_offset - half_width, layer1_y, curr_height);
-    points.emplace_back(safety_offset + half_width, layer1_y, curr_height);
-    even = 0;
+    points.emplace_back(left_x, safety_offset + desc.max_depth, last_z);
   }
 
-  // Layer 2
-  i                  = 0;
-  float start_height = curr_height;
-  while (curr_height < half_height) {
-    const float start_x = i % 2 == even ? safety_offset + half_width : -safety_offset - half_width;
-    const float end_x   = i % 2 == even ? -safety_offset - half_width : safety_offset + half_width;
-
-    auto ind_y = static_cast<size_t>((curr_height / desc.height + 0.5F) * static_cast<float>(height_map.height));
-
-    points.emplace_back(start_x, layer2_y, curr_height);
-    if (ind_y < height_map.width) {
-      for (auto j = 0U; j < height_map.width; ++j) {
-        const auto jj  = i % 2 == 0 ? height_map.width - j : j;
-        const auto ind = jj + height_map.width * ind_y;
-
-        const auto h = height_map.height_map[ind];
-        const auto x = (static_cast<float>(jj) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-        if (h > layer2_y) {
-          auto norm_flat = math::Vec3f{height_map.normal_map[ind].x, height_map.normal_map[ind].y, 0.F};
-          norm_flat      = norm_flat.normalize();
-
-          auto sphere_center = math::Vec3f{x, h, curr_height} + norm_flat * radius;
-          auto p             = collision_fix(sphere_center);
-          p.y -= radius;
-          p.y = std::max(p.y, layer2_y);
-          if (i % 2 == even && points.back().x > p.x) {
-            points.push_back(p);
-          }
-          if (i % 2 != even && points.back().x < p.x) {
-            points.push_back(p);
-          }
-        }
-      }
-    }
-    points.emplace_back(end_x, layer2_y, curr_height);
-
-    ++i;
-    curr_height = start_height + radius * static_cast<float>(i);
-  }
-
-  if (i % 2 == 0) {
-    points.emplace_back(safety_offset + half_width, layer2_y, curr_height);
-    points.emplace_back(-safety_offset - half_width, layer2_y, curr_height);
-    points.emplace_back(-safety_offset - half_width, layer2_y, curr_height + safety_offset);
-    points.emplace_back(-safety_offset - half_width, safety_offset + desc.max_depth, curr_height + safety_offset);
-  } else {
-    points.emplace_back(-safety_offset - half_width, layer2_y, curr_height);
-    points.emplace_back(safety_offset + half_width, layer2_y, curr_height);
-    points.emplace_back(safety_offset + half_width, layer2_y, curr_height + safety_offset);
-    points.emplace_back(safety_offset + half_width, safety_offset + desc.max_depth, curr_height + safety_offset);
-  }
   points.emplace_back(0.F, safety_offset + desc.max_depth, 0.F);
-
-  return RoughMillingSolver{.points = points};
+  return RoughMillingSolver{.points = std::move(points)};
 }
 
 bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,

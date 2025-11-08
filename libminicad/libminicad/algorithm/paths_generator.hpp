@@ -53,7 +53,7 @@ struct RoughMillingSolver {
    * @param radius in centimeters
    */
   static std::optional<RoughMillingSolver> solve(HeightMap& height_map, const WorkpieceDesc& desc = WorkpieceDesc{},
-                                                 float diameter = 1.6F);
+                                                 float diameter = 1.6F, uint32_t layers = 2);
 };
 
 struct FlatMillingSolver {
