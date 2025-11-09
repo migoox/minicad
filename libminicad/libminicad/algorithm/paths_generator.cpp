@@ -873,11 +873,11 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_depth, 0.F);
   points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
-  bool forward = false;
+  bool forward = true;
   for (auto patch_surface : patch_surfaces) {
     // j (column) -> u parameter
     // i (row) -> v
-    for (auto i = 0; i < static_cast<int>(kBaseSampleCount) - 1; ++i) {
+    for (auto i = 0; i < static_cast<int>(kBaseSampleCount); ++i) {
       const int start = forward ? static_cast<int>(kBaseSampleCount) - 1 : 0;
       const int end   = forward ? -1 : static_cast<int>(kBaseSampleCount);
       const int step  = forward ? -1 : 1;
@@ -885,8 +885,8 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
         math::Vec3f p[] = {math::Vec3f::filled(0.F), math::Vec3f::filled(0.F)};
 
         for (auto k = 0; k < 2; ++k) {
-          auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
-          auto v = static_cast<float>(i + k) / kBaseSampleCountFlt;
+          const auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
+          const auto v = static_cast<float>(i) / kBaseSampleCountFlt;
 
           auto deriv  = patch_surface->evaluate_derivatives(u, v);
           auto offset = math::cross(deriv.first, deriv.second).normalize();
