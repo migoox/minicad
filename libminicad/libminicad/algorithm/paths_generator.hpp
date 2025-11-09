@@ -9,14 +9,21 @@
 namespace mini {
 
 namespace algo {
+enum class Plane : uint8_t {
+  XY,
+  XZ,
+  YZ,
+};
+
 /**
  * @brief RDP algorithm for points reduction.
  *
  * @param points
  * @param epsilon
  */
-std::vector<eray::math::Vec3f> rdp(const std::vector<eray::math::Vec3f>& points, float epsilon);
-void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon,
+std::vector<eray::math::Vec3f> rdp(const std::vector<eray::math::Vec3f>& points, float epsilon,
+                                   Plane plane = Plane::XZ);
+void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon, Plane plane,
                    std::vector<eray::math::Vec3f>& out);
 }  // namespace algo
 

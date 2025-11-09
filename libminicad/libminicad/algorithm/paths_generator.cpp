@@ -16,26 +16,39 @@
 #include <unordered_set>
 #include <utility>
 
-#include "libminicad/scene/curve.hpp"
+#include "liberay/math/vec_fwd.hpp"
 
 namespace mini {
 
 namespace math = eray::math;
 
 void algo::rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon,
-                         std::vector<eray::math::Vec3f>& out) {
+                         Plane plane, std::vector<eray::math::Vec3f>& out) {
   if (end <= start + 1) {
     return;
   }
 
+  auto project_onto_plane = [](math::Vec3f p, Plane plane) {
+    switch (plane) {
+      case Plane::XY:
+        return math::Vec2f{p.x, p.y};
+      case Plane::XZ:
+        return math::Vec2f{p.x, p.z};
+      case Plane::YZ:
+        return math::Vec2f{p.y, p.z};
+    }
+  };
+
   float max_dist_sq = 0.0F;
   size_t pivot      = start;
 
-  const auto dir      = math::Vec2f{points[end].x, points[end].z} - math::Vec2f{points[start].x, points[start].z};
+  if (plane == Plane::XY) {
+  }
+  const auto dir      = project_onto_plane(points[end], plane) - project_onto_plane(points[start], plane);
   const auto dir_norm = dir.normalize();
 
   for (size_t i = start + 1; i < end; ++i) {
-    const auto curr_dir = math::Vec2f{points[i].x, points[i].z} - math::Vec2f{points[start].x, points[start].z};
+    const auto curr_dir = project_onto_plane(points[i], plane) - project_onto_plane(points[start], plane);
     auto dist_sq        = 0.F;
     if (std::abs(dir.x) < 1e-8F && std::abs(dir.y) < 1e-8F) {
       dist_sq = math::dot(curr_dir, curr_dir);
@@ -51,13 +64,13 @@ void algo::rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t st
   }
 
   if (max_dist_sq > epsilon * epsilon) {
-    rdp_recursive(points, start, pivot, epsilon, out);
+    rdp_recursive(points, start, pivot, epsilon, plane, out);
     out.push_back(points[pivot]);
-    rdp_recursive(points, pivot, end, epsilon, out);
+    rdp_recursive(points, pivot, end, epsilon, plane, out);
   }
 }
 
-std::vector<eray::math::Vec3f> algo::rdp(const std::vector<eray::math::Vec3f>& points, float epsilon) {
+std::vector<eray::math::Vec3f> algo::rdp(const std::vector<eray::math::Vec3f>& points, float epsilon, Plane plane) {
   if (points.size() < 2) {
     return points;
   }
@@ -65,7 +78,7 @@ std::vector<eray::math::Vec3f> algo::rdp(const std::vector<eray::math::Vec3f>& p
   std::vector<math::Vec3f> result;
   result.reserve(points.size());
   result.push_back(points.front());
-  rdp_recursive(points, 0, points.size() - 1, epsilon, result);
+  rdp_recursive(points, 0, points.size() - 1, epsilon, plane, result);
   result.push_back(points.back());
 
   return result;
@@ -265,6 +278,7 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_offset + desc.max_depth, 0.F);
+  auto segment = std::vector<math::Vec3f>();
 
   float last_z = desc.height / 2.F;
   bool forward = true;
@@ -287,20 +301,33 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
       auto map_i = static_cast<size_t>(static_cast<float>(height_map.height) * (curr_z / desc.height + 0.5F));
       if (map_i < height_map.height) {
-        const auto map_y = layer_y;
-
         const int start = forward ? static_cast<int>(height_map.width) - 1 : 0;
         const int end   = forward ? -1 : static_cast<int>(height_map.width);
         const int step  = forward ? -1 : 1;
 
+        segment.clear();
+        auto last_not_intersecting_tool_tip = points.back();
+        bool intersected                    = false;
         for (int map_j = start; map_j != end; map_j += step) {
           const float map_x = (static_cast<float>(map_j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-          auto tool_tip     = math::Vec3f{map_x, map_y, curr_z};
+          auto tool_tip     = math::Vec3f{map_x, layer_y, curr_z};
 
           if (fix_intersection(height_map, desc, radius, tool_tip)) {
-            points.emplace_back(tool_tip);
+            if (!intersected) {
+              segment.emplace_back(last_not_intersecting_tool_tip);
+            }
+            segment.emplace_back(tool_tip);
+            intersected = true;
+          } else {
+            last_not_intersecting_tool_tip = tool_tip;
+            intersected                    = false;
           }
         }
+      }
+
+      if (!segment.empty()) {
+        auto reduced = algo::rdp(segment, 0.001F, algo::Plane::XY);
+        points.append_range(reduced);
       }
 
       if (forward) {
