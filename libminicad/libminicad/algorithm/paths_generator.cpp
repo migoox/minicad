@@ -16,8 +16,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "liberay/math/vec_fwd.hpp"
-
 namespace mini {
 
 namespace math = eray::math;
