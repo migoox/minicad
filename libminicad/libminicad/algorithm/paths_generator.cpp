@@ -234,12 +234,11 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
   const float right_x = desc.width / 2.F + safety_offset;
   const float left_x  = -desc.width / 2.F - safety_offset;
 
-  auto fix_intersection =
-      +[](const HeightMap& height_map, const WorkpieceDesc& desc, size_t map_i, size_t map_j, float& y) -> bool {
-    auto map_y = height_map.height_map[map_j * height_map.width + map_i];
-    auto map_x = (static_cast<float>(map_i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-    if (y < map_y) {
-      y = map_y;
+  auto fix_intersection = +[](const HeightMap& height_map, const WorkpieceDesc& desc, size_t map_i, size_t map_j,
+                              math::Vec3f& tool_tip) -> bool {
+    auto map_y = height_map.height_map[map_i * height_map.width + map_j];
+    if (tool_tip.y < map_y) {
+      tool_tip.y = map_y;
       return true;
     }
     return false;
@@ -267,13 +266,14 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
         points.emplace_back(left_x, layer_y, curr_z);
       }
 
-      auto map_j = static_cast<size_t>(static_cast<float>(height_map.height) * (curr_z / desc.height + 0.5F));
-      if (map_j < height_map.height) {
-        for (auto map_i = 0U; map_i < height_map.width; ++map_i) {
-          auto map_y = layer_y;
-          auto map_x = (static_cast<float>(map_i) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-          if (fix_intersection(height_map, desc, map_i, map_j, map_y)) {
-            points.emplace_back(map_x, map_y, curr_z);
+      auto map_i = static_cast<size_t>(static_cast<float>(height_map.height) * (curr_z / desc.height + 0.5F));
+      if (map_i < height_map.height) {
+        for (auto map_j = 0U; map_j < height_map.width; ++map_j) {
+          auto map_y    = layer_y;
+          auto map_x    = (static_cast<float>(map_j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+          auto tool_tip = math::Vec3f{map_x, map_y, curr_z};
+          if (fix_intersection(height_map, desc, map_i, map_j, tool_tip)) {
+            points.emplace_back(tool_tip);
           }
         }
       }
