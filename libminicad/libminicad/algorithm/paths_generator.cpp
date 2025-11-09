@@ -1,3 +1,5 @@
+#include <KHR/khrplatform.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -12,9 +14,12 @@
 #include <limits>
 #include <list>
 #include <optional>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+
+#include "libminicad/scene/handles.hpp"
 
 namespace mini {
 
@@ -846,13 +851,56 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       .border_handle = handle,
   };
 }
+
 std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
                                                                   const std::vector<PatchSurfaceHandle>& patch_handles,
                                                                   const WorkpieceDesc& desc, float diameter) {
-  const auto safety_depth = desc.depth + diameter;
-  auto points             = std::vector<math::Vec3f>();
+  if (patch_handles.empty()) {
+    eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
+    return std::nullopt;
+  }
+
+  auto patch_surfaces =
+      patch_handles | std::views::filter([&scene](auto& h) { return scene.arena<PatchSurface>().exists(h); }) |
+      std::views::transform([&scene](auto& h) { return scene.arena<PatchSurface>().unsafe_get_obj(h); });
+
+  const auto radius       = diameter / 2.F;
+  const auto safety_depth = desc.depth + 1.2F * radius;
+
+  constexpr auto kBaseSampleCountFlt = static_cast<float>(kBaseSampleCount);
+
+  auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_depth, 0.F);
   points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
+  for (auto patch_surface : patch_surfaces) {
+    // j (column) -> u parameter
+    // i (row) -> v
+    for (auto i = 0U; i < kBaseSampleCount - 1; ++i) {
+      for (auto j = 0U; j < kBaseSampleCount - 1; ++j) {
+        auto u      = static_cast<float>(j) / kBaseSampleCountFlt;
+        auto v      = static_cast<float>(i) / kBaseSampleCountFlt;
+        auto u_next = static_cast<float>(j + 1) / kBaseSampleCountFlt;
+        auto v_next = static_cast<float>(i + 1) / kBaseSampleCountFlt;
+
+        auto p0 = patch_surface->evaluate(u, v);
+        auto p1 = patch_surface->evaluate(u_next, v_next);
+        if (p0.y > desc.zero_level && p1.y > desc.zero_level) {
+          //   scene.renderer().debug_line(p0, p1);
+          if (std::isfinite(p0.x) && std::isfinite(p0.y) && std::isfinite(p0.z)) {
+            points.push_back(p0);
+          }
+          if (std::isfinite(p1.x) && std::isfinite(p1.y) && std::isfinite(p1.z)) {
+            points.push_back(p1);
+          }
+        }
+      }
+      //   auto u      = static_cast<float>(kBaseSampleCount - 1) / kBaseSampleCountFlt;
+      //   auto v      = static_cast<float>(i) / kBaseSampleCountFlt;
+      //   auto u_next = 0;
+      //   auto v_next = static_cast<float>(i + 1) / kBaseSampleCountFlt;
+    }
+  }
+
   return DetailedMillingSolver{
       .points = std::move(points),
   };

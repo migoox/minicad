@@ -778,7 +778,6 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     if (ImGui::Button("Clear Debug")) {
       m_.scene.renderer().clear_debug();
     }
-
 #endif
 
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
@@ -829,7 +828,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   }
 
-  if (m_.milling_height_map) {
+  {
+    const bool disabled = !m_.milling_height_map;
+    if (disabled) {
+      ImGui::BeginDisabled();
+    }
+
+    ImGui::BeginGroup();
     static bool show_height_map = false;
     ImGui::Checkbox("Show height map", &show_height_map);
     if (ImGui::Button("Save height map")) {
@@ -878,16 +883,24 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
     }
 
-    if (ImGui::Button("Generate detailed paths")) {
-      on_generate_detailed_paths();
+    ImGui::EndGroup();
+    if (disabled) {
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("Generate or load the model height map first!");
+      }
+      ImGui::EndDisabled();
+    }
+  }
 
-      if (m_.detailed_milling_solution) {
-        const auto& points = m_.detailed_milling_solution->points;
+  if (ImGui::Button("Generate detailed paths")) {
+    on_generate_detailed_paths();
 
-        if (!System::file_dialog().save_file(
-                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
-          eray::util::Logger::err("Could not save the g-code");
-        }
+    if (m_.detailed_milling_solution) {
+      const auto& points = m_.detailed_milling_solution->points;
+
+      if (!System::file_dialog().save_file(
+              [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+        eray::util::Logger::err("Could not save the g-code");
       }
     }
   }
@@ -1841,6 +1854,14 @@ bool MiniCadApp::on_generate_detailed_paths() {
     std::visit(util::match{append, [](const auto&) {}}, h);
   }
   m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles);
+  if (!m_.detailed_milling_solution) {
+    return false;
+  }
+
+  if (auto opt_curve = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+    opt_curve.value()->set_points(m_.detailed_milling_solution->points);
+    opt_curve.value()->set_name(std::format("{} [Detailed Milling]", opt_curve.value()->name));
+  }
 
   return true;
 }

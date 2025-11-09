@@ -28,10 +28,11 @@ void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, s
 }  // namespace algo
 
 struct WorkpieceDesc {
-  float width     = 15.F;
-  float height    = 15.F;
-  float depth     = 5.F;
-  float max_depth = 3.4F;
+  float width      = 15.F;
+  float height     = 15.F;
+  float depth      = 5.F;
+  float max_depth  = 3.4F;
+  float zero_level = 0.F;
 };
 
 struct HeightMap {
@@ -81,6 +82,8 @@ struct FlatMillingSolver {
 
 struct DetailedMillingSolver {
   std::vector<eray::math::Vec3f> points;
+
+  static constexpr size_t kBaseSampleCount = 100U;
 
   /**
    * @brief Uses flat milling tool.
