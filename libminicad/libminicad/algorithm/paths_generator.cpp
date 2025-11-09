@@ -236,13 +236,11 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
   auto fix_intersection =
       +[](const HeightMap& height_map, const WorkpieceDesc& desc, float radius, math::Vec3f& tool_tip) -> bool {
-    // Compute floating-point positions first to avoid unsigned overflow
     const float x_right  = ((tool_tip.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
     const float x_left   = ((tool_tip.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
     const float z_top    = ((tool_tip.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
     const float z_bottom = ((tool_tip.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
 
-    // Convert to integer indices safely (round to nearest)
     const auto map_right =
         static_cast<size_t>(std::clamp(std::lround(x_right), 0L, static_cast<long>(height_map.width)));
     const auto map_left = static_cast<size_t>(std::clamp(std::lround(x_left), 0L, static_cast<long>(height_map.width)));
