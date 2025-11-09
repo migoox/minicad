@@ -234,8 +234,8 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
   const float right_x = desc.width / 2.F + safety_offset;
   const float left_x  = -desc.width / 2.F - safety_offset;
 
-  auto fix_intersection = +[](const HeightMap& height_map, const WorkpieceDesc& desc, size_t map_i, size_t map_j,
-                              float radius, math::Vec3f& tool_tip) -> bool {
+  auto fix_intersection =
+      +[](const HeightMap& height_map, const WorkpieceDesc& desc, float radius, math::Vec3f& tool_tip) -> bool {
     // Compute floating-point positions first to avoid unsigned overflow
     const float x_right  = ((tool_tip.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
     const float x_left   = ((tool_tip.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
@@ -294,10 +294,12 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
         const int start = forward ? static_cast<int>(height_map.width) - 1 : 0;
         const int end   = forward ? -1 : static_cast<int>(height_map.width);
         const int step  = forward ? -1 : 1;
-        for (auto map_j = start; map_j != end; map_j += step) {
-          const float map_x = (static_cast<float>(j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+
+        for (int map_j = start; map_j != end; map_j += step) {
+          const float map_x = (static_cast<float>(map_j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
           auto tool_tip     = math::Vec3f{map_x, map_y, curr_z};
-          if (fix_intersection(height_map, desc, map_i, static_cast<size_t>(map_j), radius, tool_tip)) {
+
+          if (fix_intersection(height_map, desc, radius, tool_tip)) {
             points.emplace_back(tool_tip);
           }
         }
