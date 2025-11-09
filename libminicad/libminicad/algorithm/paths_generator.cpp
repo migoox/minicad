@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "liberay/math/vec_fwd.hpp"
 #include "libminicad/scene/handles.hpp"
 
 namespace mini {
@@ -872,32 +873,43 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_depth, 0.F);
   points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
+  bool forward = false;
   for (auto patch_surface : patch_surfaces) {
     // j (column) -> u parameter
     // i (row) -> v
-    for (auto i = 0U; i < kBaseSampleCount - 1; ++i) {
-      for (auto j = 0U; j < kBaseSampleCount - 1; ++j) {
-        auto u      = static_cast<float>(j) / kBaseSampleCountFlt;
-        auto v      = static_cast<float>(i) / kBaseSampleCountFlt;
-        auto u_next = static_cast<float>(j + 1) / kBaseSampleCountFlt;
-        auto v_next = static_cast<float>(i + 1) / kBaseSampleCountFlt;
+    for (auto i = 0; i < static_cast<int>(kBaseSampleCount) - 1; ++i) {
+      const int start = forward ? static_cast<int>(kBaseSampleCount) - 1 : 0;
+      const int end   = forward ? -1 : static_cast<int>(kBaseSampleCount);
+      const int step  = forward ? -1 : 1;
+      for (auto j = start; j != end; j += step) {
+        math::Vec3f p[] = {math::Vec3f::filled(0.F), math::Vec3f::filled(0.F)};
 
-        auto p0 = patch_surface->evaluate(u, v);
-        auto p1 = patch_surface->evaluate(u_next, v_next);
-        if (p0.y > desc.zero_level && p1.y > desc.zero_level) {
-          //   scene.renderer().debug_line(p0, p1);
-          if (std::isfinite(p0.x) && std::isfinite(p0.y) && std::isfinite(p0.z)) {
-            points.push_back(p0);
-          }
-          if (std::isfinite(p1.x) && std::isfinite(p1.y) && std::isfinite(p1.z)) {
-            points.push_back(p1);
-          }
+        for (auto k = 0; k < 2; ++k) {
+          auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
+          auto v = static_cast<float>(i + k) / kBaseSampleCountFlt;
+
+          auto deriv  = patch_surface->evaluate_derivatives(u, v);
+          auto offset = math::cross(deriv.first, deriv.second).normalize();
+          offset.y -= 1.F;
+          offset = radius * offset;
+          p[k]   = patch_surface->evaluate(u, v) + offset;
+        }
+
+        const auto k = desc.zero_level;
+        if (p[0].y > k && p[1].y > k) {
+          points.push_back(p[0]);
+          points.push_back(p[1]);
+        } else if (p[0].y > k) {
+          const auto t = (k - p[0].y) / (p[1].y - p[0].y);
+          points.push_back(p[0]);
+          points.push_back(p[0] + t * (p[1] - p[0]));
+        } else if (p[1].y > k) {
+          const auto t = (k - p[1].y) / (p[0].y - p[1].y);
+          points.push_back(p[1]);
+          points.push_back(p[1] + t * (p[0] - p[1]));
         }
       }
-      //   auto u      = static_cast<float>(kBaseSampleCount - 1) / kBaseSampleCountFlt;
-      //   auto v      = static_cast<float>(i) / kBaseSampleCountFlt;
-      //   auto u_next = 0;
-      //   auto v_next = static_cast<float>(i + 1) / kBaseSampleCountFlt;
+      forward = !forward;
     }
   }
 
