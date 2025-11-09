@@ -235,13 +235,34 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
   const float left_x  = -desc.width / 2.F - safety_offset;
 
   auto fix_intersection = +[](const HeightMap& height_map, const WorkpieceDesc& desc, size_t map_i, size_t map_j,
-                              math::Vec3f& tool_tip) -> bool {
-    auto map_y = height_map.height_map[map_i * height_map.width + map_j];
-    if (tool_tip.y < map_y) {
-      tool_tip.y = map_y;
-      return true;
+                              float radius, math::Vec3f& tool_tip) -> bool {
+    // Compute floating-point positions first to avoid unsigned overflow
+    const float x_right  = ((tool_tip.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
+    const float x_left   = ((tool_tip.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
+    const float z_top    = ((tool_tip.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
+    const float z_bottom = ((tool_tip.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
+
+    // Convert to integer indices safely (round to nearest)
+    const auto map_right =
+        static_cast<size_t>(std::clamp(std::lround(x_right), 0L, static_cast<long>(height_map.width)));
+    const auto map_left = static_cast<size_t>(std::clamp(std::lround(x_left), 0L, static_cast<long>(height_map.width)));
+    const auto map_top  = static_cast<size_t>(std::clamp(std::lround(z_top), 0L, static_cast<long>(height_map.height)));
+    const auto map_bottom =
+        static_cast<size_t>(std::clamp(std::lround(z_bottom), 0L, static_cast<long>(height_map.height)));
+
+    auto max_map_y    = tool_tip.y;
+    bool intersection = false;
+    for (auto i = map_bottom; i < map_top; ++i) {
+      for (auto j = map_left; j < map_right; ++j) {
+        auto map_y = height_map.height_map[i * height_map.width + j];
+        if (max_map_y < map_y) {
+          intersection = true;
+          max_map_y    = map_y;
+        }
+      }
     }
-    return false;
+    tool_tip.y = max_map_y;
+    return intersection;
   };
 
   auto points = std::vector<math::Vec3f>();
@@ -268,11 +289,15 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
       auto map_i = static_cast<size_t>(static_cast<float>(height_map.height) * (curr_z / desc.height + 0.5F));
       if (map_i < height_map.height) {
-        for (auto map_j = 0U; map_j < height_map.width; ++map_j) {
-          auto map_y    = layer_y;
-          auto map_x    = (static_cast<float>(map_j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
-          auto tool_tip = math::Vec3f{map_x, map_y, curr_z};
-          if (fix_intersection(height_map, desc, map_i, map_j, tool_tip)) {
+        const auto map_y = layer_y;
+
+        const int start = forward ? static_cast<int>(height_map.width) - 1 : 0;
+        const int end   = forward ? -1 : static_cast<int>(height_map.width);
+        const int step  = forward ? -1 : 1;
+        for (auto map_j = start; map_j != end; map_j += step) {
+          const float map_x = (static_cast<float>(j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+          auto tool_tip     = math::Vec3f{map_x, map_y, curr_z};
+          if (fix_intersection(height_map, desc, map_i, static_cast<size_t>(map_j), radius, tool_tip)) {
             points.emplace_back(tool_tip);
           }
         }
@@ -357,7 +382,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
 
   const auto safe_depth = desc.max_depth + 2.F * diameter;
 
-  // == Create border texture ==========================================================================================
+  // == Create border texture
+  // ==========================================================================================
   auto is_border     = std::vector<bool>();
   auto border_normal = std::unordered_map<std::pair<size_t, size_t>, math::Vec3f, PairHash>();
   is_border.resize(height_map.height * height_map.width, false);
@@ -408,7 +434,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     return std::nullopt;
   }
 
-  // == Generate points ================================================================================================
+  // == Generate points
+  // ================================================================================================
   auto points = std::vector<math::Vec3f>();
   points.reserve(border_count);
   auto visited = std::unordered_set<std::pair<size_t, size_t>, PairHash>();
@@ -451,7 +478,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     ++count;
   };
 
-  // == Find outer point ===============================================================================================
+  // == Find outer point
+  // ===============================================================================================
   const auto diag  = math::Vec2f{0.F, desc.height};
   const auto p     = math::Vec2f{0.F, desc.height / 2.F};
   size_t outer_ind = kMaxInd;
@@ -466,7 +494,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
   }
 
-  // == Remove self intersections ======================================================================================
+  // == Remove self intersections
+  // ======================================================================================
   auto ind            = outer_ind;
   auto contour_points = std::vector<math::Vec3f>();
   contour_points.reserve(border_count);
@@ -510,7 +539,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   }
   contour_points = algo::rdp(contour_points, contour_epsilon);
 
-  // == Generate zig-zag segments ======================================================================================
+  // == Generate zig-zag segments
+  // ======================================================================================
   const auto intersection_find = +[](const math::Vec2f p0, const math::Vec2f p1, const math::Vec2f q0,
                                      const math::Vec2f q1) -> std::optional<math::Vec2f> {
     const auto p01 = p1 - p0;
@@ -602,7 +632,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
   }
 
-  // == Generate paths =================================================================================================
+  // == Generate paths
+  // =================================================================================================
   auto path_points = std::vector<math::Vec3f>();
   path_points.emplace_back(0.F, safe_depth, 0.F);
   path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
@@ -776,7 +807,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   //   for (auto i = 0U; i < contour_points.size() - 1; ++i) {
   //     scene.renderer().debug_line(contour_points[i], contour_points[i + 1]);
   //   }
-  // == Upload border texture ==========================================================================================
+  // == Upload border texture
+  // ==========================================================================================
   auto texture_temp = std::vector<eray::res::ColorU32>();
   texture_temp.resize(height_map.height * height_map.width);
   for (size_t i = 0; i < height_map.width * height_map.height; ++i) {
