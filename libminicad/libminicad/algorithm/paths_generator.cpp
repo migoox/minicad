@@ -21,6 +21,7 @@
 
 #include "liberay/math/vec_fwd.hpp"
 #include "libminicad/scene/handles.hpp"
+#include "libminicad/scene/trimming.hpp"
 
 namespace mini {
 
@@ -853,64 +854,90 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   };
 }
 
-std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene,
-                                                                  const std::vector<PatchSurfaceHandle>& patch_handles,
+std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
                                                                   const WorkpieceDesc& desc, float diameter) {
-  if (patch_handles.empty()) {
+  if (!scene.arena<PatchSurface>().exists(patch_handle)) {
     eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
     return std::nullopt;
   }
-
-  auto patch_surfaces =
-      patch_handles | std::views::filter([&scene](auto& h) { return scene.arena<PatchSurface>().exists(h); }) |
-      std::views::transform([&scene](auto& h) { return scene.arena<PatchSurface>().unsafe_get_obj(h); });
+  auto patch_surface     = scene.arena<PatchSurface>().unsafe_get_obj(patch_handle);
+  const auto& uv_texture = patch_surface->trimming_manager().final_txt();
 
   const auto radius       = diameter / 2.F;
   const auto safety_depth = desc.depth + 1.2F * radius;
 
-  constexpr auto kBaseSampleCountFlt = static_cast<float>(kBaseSampleCount);
+  constexpr auto kBaseSampleCountFlt     = static_cast<float>(kBaseSampleCount);
+  constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
 
   auto points = std::vector<math::Vec3f>();
   points.emplace_back(0.F, safety_depth, 0.F);
   points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
   bool forward = true;
-  for (auto patch_surface : patch_surfaces) {
-    // j (column) -> u parameter
-    // i (row) -> v
-    for (auto i = 0; i < static_cast<int>(kBaseSampleCount); ++i) {
-      const int start = forward ? static_cast<int>(kBaseSampleCount) - 1 : 0;
-      const int end   = forward ? -1 : static_cast<int>(kBaseSampleCount);
-      const int step  = forward ? -1 : 1;
-      for (auto j = start; j != end; j += step) {
-        math::Vec3f p[] = {math::Vec3f::filled(0.F), math::Vec3f::filled(0.F)};
+  // j (column) -> u parameter
+  // i (row) -> v
+  for (auto i = 0; i < static_cast<int>(kBaseSampleCount); ++i) {
+    const int start = forward ? static_cast<int>(kBaseSampleCount) - 1 : 0;
+    const int end   = forward ? -1 : static_cast<int>(kBaseSampleCount);
+    const int step  = forward ? -1 : 1;
+    for (auto j = start; j != end; j += step) {
+      math::Vec3f p[] = {math::Vec3f::filled(0.F), math::Vec3f::filled(0.F)};
+      bool trimmed[]  = {false, false};
 
-        for (auto k = 0; k < 2; ++k) {
-          const auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
-          const auto v = static_cast<float>(i) / kBaseSampleCountFlt;
+      for (auto k = 0; k < 2; ++k) {
+        const auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
+        const auto v = static_cast<float>(i) / kBaseSampleCountFlt;
 
-          auto deriv  = patch_surface->evaluate_derivatives(u, v);
-          auto offset = math::cross(deriv.first, deriv.second).normalize();
-          offset.y -= 1.F;
-          offset = radius * offset;
-          p[k]   = patch_surface->evaluate(u, v) + offset;
+        auto deriv  = patch_surface->evaluate_derivatives(u, v);
+        auto offset = math::cross(deriv.first, deriv.second).normalize();
+        offset.y -= 1.F;
+        offset = radius * offset;
+        p[k]   = patch_surface->evaluate(u, v) + offset;
+
+        auto mapped_i = static_cast<size_t>(static_cast<float>(i) / kBaseSampleCountFlt * kTrimmingTextureSizeFlt);
+        auto mapped_j = static_cast<size_t>(static_cast<float>(j) / kBaseSampleCountFlt * kTrimmingTextureSizeFlt);
+
+        trimmed[k] = uv_texture[mapped_i * ParamSpaceTrimmingData::kCPUTrimmingTxtSize + mapped_j] == 0xFF000000;
+      }
+
+      const auto k = desc.zero_level;
+      if (p[0].y > k && p[1].y > k) {
+        points.push_back(p[0]);
+        points.push_back(p[1]);
+
+        if (!trimmed[0]) {
+          scene.renderer().debug_point(p[0]);
+        }
+        if (!trimmed[1]) {
+          scene.renderer().debug_point(p[1]);
         }
 
-        const auto k = desc.zero_level;
-        if (p[0].y > k && p[1].y > k) {
-          points.push_back(p[0]);
-          points.push_back(p[1]);
-        } else if (p[0].y > k) {
-          const auto t = (k - p[0].y) / (p[1].y - p[0].y);
-          points.push_back(p[0]);
-          points.push_back(p[0] + t * (p[1] - p[0]));
-        } else if (p[1].y > k) {
-          const auto t = (k - p[1].y) / (p[0].y - p[1].y);
-          points.push_back(p[1]);
-          points.push_back(p[1] + t * (p[0] - p[1]));
+      } else if (p[0].y > k) {
+        const auto t         = (k - p[0].y) / (p[1].y - p[0].y);
+        const auto projected = p[0] + t * (p[1] - p[0]);
+        points.push_back(p[0]);
+        points.push_back(projected);
+
+        if (!trimmed[0]) {
+          scene.renderer().debug_point(p[0]);
+        }
+        if (!trimmed[1]) {
+          scene.renderer().debug_point(p[0] + t * (p[1] - p[0]));
+        }
+      } else if (p[1].y > k) {
+        const auto t         = (k - p[1].y) / (p[0].y - p[1].y);
+        const auto projected = p[1] + t * (p[0] - p[1]);
+        points.push_back(p[1]);
+        points.push_back(projected);
+
+        if (!trimmed[0]) {
+          scene.renderer().debug_point(p[1] + t * (p[0] - p[1]));
+        }
+        if (!trimmed[1]) {
+          scene.renderer().debug_point(p[1]);
         }
       }
-      forward = !forward;
     }
+    forward = !forward;
   }
 
   return DetailedMillingSolver{

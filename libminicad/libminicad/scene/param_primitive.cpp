@@ -5,6 +5,8 @@
 #include <limits>
 #include <numbers>
 
+#include "libminicad/scene/trimming.hpp"
+
 namespace mini {
 namespace math = eray::math;
 
@@ -69,11 +71,11 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> Torus::aabb_bounding_box(const m
 
 ParamPrimitive::ParamPrimitive(ParamPrimitiveHandle handle, Scene& scene)
     : ObjectBase<ParamPrimitive, ParamPrimitiveVariant>(handle, scene),
-      trimming_manager_(ParamSpaceTrimmingDataManager::create(IntersectionFinder::Curve::kTxtSize,
-                                                              IntersectionFinder::Curve::kTxtSize)),
+      trimming_manager_(ParamSpaceTrimmingDataManager::create()),
       txt_handle_(TextureHandle(0, 0, 0)) {
-  txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt(), trimming_manager_.width(),
-                                                       trimming_manager_.height());
+  txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt(),
+                                                       ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                                       ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
   scene_.get().renderer().push_object_rs_cmd(
       ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::AddObject{}));
   scene_.get().renderer().push_object_rs_cmd(
@@ -127,8 +129,9 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> ParamPrimitive::aabb_bounding_bo
 
 void ParamPrimitive::update_trimming_txt() {
   trimming_manager_.update_final_txt();
-  scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt(), trimming_manager_.width(),
-                                      trimming_manager_.height());
+  scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt_gpu(),
+                                      ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                      ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
   scene_.get().renderer().push_object_rs_cmd(
       ParamPrimitiveRSCommand(handle_, ParamPrimitiveRSCommand::Internal::UpdateTrimmingTextures{}));
 }

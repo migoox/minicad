@@ -9,6 +9,9 @@ struct ParamSpaceTrimmingData {
   static ParamSpaceTrimmingData from_intersection_curve(ISceneRenderer& renderer,
                                                         const IntersectionFinder::ParamSpace& param_space);
 
+  static constexpr auto kCPUTrimmingTxtSize = IntersectionFinder::Curve::kTxtSize;
+  static constexpr auto kGPUTrimmingTxtSize = 128;
+
   const TextureHandle& get_current_trimming_variant_txt() {
     return reverse ? trimming_variant_txt[1] : trimming_variant_txt[0];
   }
@@ -25,7 +28,10 @@ struct ParamSpaceTrimmingData {
 
 class ParamSpaceTrimmingDataManager {
  public:
-  static ParamSpaceTrimmingDataManager create(size_t width, size_t height);
+  static ParamSpaceTrimmingDataManager create();
+
+  static constexpr auto kCPUTrimmingTxtSize = ParamSpaceTrimmingData::kCPUTrimmingTxtSize;
+  static constexpr auto kGPUTrimmingTxtSize = ParamSpaceTrimmingData::kGPUTrimmingTxtSize;
 
   void add(ParamSpaceTrimmingData&& data);
   void remove(uint32_t idx);
@@ -36,20 +42,17 @@ class ParamSpaceTrimmingDataManager {
   void update_final_txt(bool force = false);
 
   const std::vector<uint32_t>& final_txt();
+  const std::vector<uint32_t>& final_txt_gpu();
 
   void mark_dirty() { dirty_ = true; }
 
-  size_t width() const { return width_; }
-  size_t height() const { return height_; }
-
  private:
-  ParamSpaceTrimmingDataManager(size_t width, size_t height) : width_(width), height_(height) {}
+  ParamSpaceTrimmingDataManager() = default;
 
   std::vector<ParamSpaceTrimmingData> data_;
   std::vector<uint32_t> final_txt_;
+  std::vector<uint32_t> final_txt_gpu_;
   bool dirty_ = false;
-  size_t width_;
-  size_t height_;
 };
 
 }  // namespace mini

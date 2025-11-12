@@ -455,8 +455,8 @@ void MiniCadApp::gui_object_window() {
 
   auto draw_trimming = [&](CParametricSurfaceObject auto& obj) {
     ImGui::Text("Trimming texture");
-    m_.scene.renderer().draw_imgui_texture_image(obj.txt_handle(), IntersectionFinder::Curve::kTxtSize,
-                                                 IntersectionFinder::Curve::kTxtSize);
+    m_.scene.renderer().draw_imgui_texture_image(obj.txt_handle(), ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                                 ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
 
     bool update_txt = false;
     for (auto idx = 0; auto& o : obj.trimming_manager().data()) {
@@ -472,8 +472,8 @@ void MiniCadApp::gui_object_window() {
       }
 
       m_.scene.renderer().draw_imgui_texture_image(o.get_current_trimming_variant_txt(),
-                                                   IntersectionFinder::Curve::kTxtSize,
-                                                   IntersectionFinder::Curve::kTxtSize);
+                                                   ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                                   ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
 
       ImGui::PopID();
     }
@@ -1853,7 +1853,10 @@ bool MiniCadApp::on_generate_detailed_paths() {
   for (auto h : *m_.non_transformable_selection) {
     std::visit(util::match{append, [](const auto&) {}}, h);
   }
-  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles);
+  if (handles.empty()) {
+    return false;
+  }
+  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front());
   if (!m_.detailed_milling_solution) {
     return false;
   }

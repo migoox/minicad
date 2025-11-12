@@ -93,11 +93,11 @@ void PatchSurface::init_cylinder_from_curve(const CurveHandle& handle, CylinderP
 
 PatchSurface::PatchSurface(const PatchSurfaceHandle& handle, Scene& scene)
     : ObjectBase<PatchSurface, PatchSurfaceVariant>(handle, scene),
-      trimming_manager_(ParamSpaceTrimmingDataManager::create(IntersectionFinder::Curve::kTxtSize,
-                                                              IntersectionFinder::Curve::kTxtSize)),
+      trimming_manager_(ParamSpaceTrimmingDataManager::create()),
       txt_handle_(TextureHandle(0, 0, 0)) {
-  txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt(), trimming_manager_.width(),
-                                                       trimming_manager_.height());
+  txt_handle_ = scene_.get().renderer().upload_texture(trimming_manager_.final_txt_gpu(),
+                                                       ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                                       ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
   scene_.get().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle, PatchSurfaceRSCommand::Internal::AddObject{}));
 }
@@ -749,8 +749,9 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box(
 
 void PatchSurface::update_trimming_txt() {
   trimming_manager_.update_final_txt();
-  scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt(), trimming_manager_.width(),
-                                      trimming_manager_.height());
+  scene().renderer().reupload_texture(txt_handle_, trimming_manager_.final_txt_gpu(),
+                                      ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                      ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize);
   scene().renderer().push_object_rs_cmd(
       PatchSurfaceRSCommand(handle_, PatchSurfaceRSCommand::Internal::UpdateTrimmingTextures{}));
 }

@@ -14,18 +14,18 @@ template <typename TObject>
 class TrimmingTexturesManager {
  public:
   static TrimmingTexturesManager<TObject> create() {
-    return TrimmingTexturesManager<TObject>(
-        TextureArray::create(IntersectionFinder::Curve::kTxtSize, IntersectionFinder::Curve::kTxtSize));
+    return TrimmingTexturesManager<TObject>(TextureArray::create(ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize,
+                                                                 ParamSpaceTrimmingDataManager::kGPUTrimmingTxtSize));
   }
 
   void update(TObject& obj) {
     auto it = patch_trimming_txts_.find(obj.handle());
 
     if (it == patch_trimming_txts_.end()) {
-      auto id = trimming_txt_array_.upload_texture(obj.trimming_manager().final_txt());
+      auto id = trimming_txt_array_.upload_texture(obj.trimming_manager().final_txt_gpu());
       patch_trimming_txts_.emplace(obj.handle(), id);
     } else {
-      trimming_txt_array_.reupload_texture(it->second, obj.trimming_manager().final_txt());
+      trimming_txt_array_.reupload_texture(it->second, obj.trimming_manager().final_txt_gpu());
     }
   }
 

@@ -92,7 +92,7 @@ struct DetailedMillingSolver {
    * @param desc
    * @param radius in centimeters
    */
-  static std::optional<DetailedMillingSolver> solve(Scene& scene, const std::vector<PatchSurfaceHandle>& patch_handles,
+  static std::optional<DetailedMillingSolver> solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
                                                     const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 
