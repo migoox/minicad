@@ -132,28 +132,20 @@ static eray::math::Vec2f project_to_closest_border(const eray::math::Vec2f& poin
 void IntersectionFinder::Curve::draw_curve(std::vector<uint32_t>& txt,
                                            const std::vector<eray::math::Vec2f>& params_surface) {
   txt.resize(kTxtSize * kTxtSize, 0xFFFFFFFF);
-  constexpr auto kSize = static_cast<float>(kTxtSize);
 
   auto wins = params_surface | std::views::adjacent<2>;
   for (const auto& [p0, p1] : wins) {
-    auto first = p0;
-    auto end   = p1;
-    if (math::distance(p0, p1) > 0.2F) {
-      end = project_to_closest_border(p0);
+    if (math::distance(p0, p1) > 0.2F) {  // detect wrap
+      line_dda(txt, p0, project_to_closest_border(p0));
+      line_dda(txt, p1, project_to_closest_border(p1));
+    } else {
+      line_dda(txt, p0, p1);
     }
-    line_dda(txt, static_cast<int>(first.x * kSize), static_cast<int>(first.y * kSize), static_cast<int>(end.x * kSize),
-             static_cast<int>(end.y * kSize));
   }
 
-  if (math::distance(params_surface.front(), params_surface.back()) > 0.1F) {
-    auto first = params_surface.back();
-    auto end   = project_to_closest_border(first);
-
-    if (math::distance(first, end) > 0.2F) {
-      end = project_to_closest_border(end);
-    }
-    line_dda(txt, static_cast<int>(first.x * kSize), static_cast<int>(first.y * kSize), static_cast<int>(end.x * kSize),
-             static_cast<int>(end.y * kSize));
+  if (math::distance(params_surface.front(), params_surface.back()) > 0.1F) {  // contour is not closed
+    line_dda(txt, params_surface.front(), project_to_closest_border(params_surface.front()));
+    line_dda(txt, params_surface.back(), project_to_closest_border(params_surface.back()));
   }
 }
 
@@ -212,6 +204,12 @@ void IntersectionFinder::Curve::flood_fill(std::vector<uint32_t>& txt, size_t st
       s.emplace(x, y - 1);
     }
   }
+}
+
+void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, eray::math::Vec2f p0, eray::math::Vec2f p1) {
+  constexpr auto kTxtSizeFlt = static_cast<float>(kTxtSize);
+  line_dda(txt, static_cast<int>(p0.x * kTxtSizeFlt), static_cast<int>(p0.y * kTxtSizeFlt),
+           static_cast<int>(p1.x * kTxtSizeFlt), static_cast<int>(p1.y * kTxtSizeFlt));
 }
 
 void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1) {

@@ -42,6 +42,7 @@ class IntersectionFinder {
 
    private:
     void draw_curve(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
+    void line_dda(std::vector<uint32_t>& txt, eray::math::Vec2f p0, eray::math::Vec2f p1);
     void line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1);
     void fill_trimming_txts(const std::vector<uint32_t>& curve_txt, std::vector<uint32_t>& txt1,
                             std::vector<uint32_t>& txt2, ParamSurface& s);
