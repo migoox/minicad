@@ -136,16 +136,16 @@ void IntersectionFinder::Curve::draw_curve(std::vector<uint32_t>& txt,
   auto wins = params_surface | std::views::adjacent<2>;
   for (const auto& [p0, p1] : wins) {
     if (math::distance(p0, p1) > 0.2F) {  // detect wrap
-      line_dda(txt, p0, project_to_closest_border(p0));
-      line_dda(txt, p1, project_to_closest_border(p1));
+      line(txt, p0, project_to_closest_border(p0));
+      line(txt, p1, project_to_closest_border(p1));
     } else {
-      line_dda(txt, p0, p1);
+      line(txt, p0, p1);
     }
   }
 
   if (math::distance(params_surface.front(), params_surface.back()) > 0.1F) {  // contour is not closed
-    line_dda(txt, params_surface.front(), project_to_closest_border(params_surface.front()));
-    line_dda(txt, params_surface.back(), project_to_closest_border(params_surface.back()));
+    line(txt, params_surface.front(), project_to_closest_border(params_surface.front()));
+    line(txt, params_surface.back(), project_to_closest_border(params_surface.back()));
   }
 }
 
@@ -180,6 +180,7 @@ void IntersectionFinder::Curve::fill_trimming_txts(const std::vector<uint32_t>& 
     }
   }
 }
+
 void IntersectionFinder::Curve::flood_fill(std::vector<uint32_t>& txt, size_t start_x, size_t start_y) {
   static constexpr uint32_t kBlack = 0xFF000000;
 
@@ -206,39 +207,40 @@ void IntersectionFinder::Curve::flood_fill(std::vector<uint32_t>& txt, size_t st
   }
 }
 
-void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, eray::math::Vec2f p0, eray::math::Vec2f p1) {
+void IntersectionFinder::Curve::line(std::vector<uint32_t>& txt, eray::math::Vec2f p0, eray::math::Vec2f p1) {
   constexpr auto kTxtSizeFlt = static_cast<float>(kTxtSize);
-  line_dda(txt, static_cast<int>(p0.x * kTxtSizeFlt), static_cast<int>(p0.y * kTxtSizeFlt),
-           static_cast<int>(p1.x * kTxtSizeFlt), static_cast<int>(p1.y * kTxtSizeFlt));
+  line(txt, static_cast<int>(p0.x * kTxtSizeFlt), static_cast<int>(p0.y * kTxtSizeFlt),
+       static_cast<int>(p1.x * kTxtSizeFlt), static_cast<int>(p1.y * kTxtSizeFlt));
 }
-
-void IntersectionFinder::Curve::line_dda(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1) {
+void IntersectionFinder::Curve::line(std::vector<uint32_t>& txt, int x0, int y0, int x1, int y1) {
   static const uint32_t kBlack = 0xFF000000;
 
-  int dx = x1 - x0;
-  int dy = y1 - y0;
+  int dx = std::abs(x1 - x0);
+  int dy = std::abs(y1 - y0);
 
-  int steps = std::max(std::abs(dx), std::abs(dy));
-  if (steps == 0) {
-    return;
-  }
+  int sx = (x0 < x1) ? 1 : -1;
+  int sy = (y0 < y1) ? 1 : -1;
 
-  float x_inc = dx / static_cast<float>(steps);
-  float y_inc = dy / static_cast<float>(steps);
+  int err = dx - dy;
 
-  float x = x0;
-  float y = y0;
-
-  for (int i = 0; i <= steps; ++i) {
-    int xi = std::round(x);
-    int yi = std::round(y);
-
-    if (xi >= 0 && xi < kTxtSize && yi >= 0 && yi < kTxtSize) {
-      txt[yi * kTxtSize + xi] = kBlack;
+  while (true) {
+    if (x0 >= 0 && x0 < kTxtSize && y0 >= 0 && y0 < kTxtSize) {
+      txt[y0 * kTxtSize + x0] = kBlack;
     }
 
-    x += x_inc;
-    y += y_inc;
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
+    int e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
   }
 }
 
