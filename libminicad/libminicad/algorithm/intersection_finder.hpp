@@ -88,18 +88,12 @@ class IntersectionFinder {
   template <CParametricSurfaceObject T1, CParametricSurfaceObject T2>
   [[nodiscard]] static std::optional<Curve> find_intersection(ISceneRenderer& renderer, T1& ps1, T2& ps2,
                                                               std::optional<eray::math::Vec3f> init = std::nullopt,
-                                                              float accuracy                        = 0.1F) {
+                                                              float accuracy = 0.1F, float offset = 0.F) {
     auto bb1 = ps1.aabb_bounding_box();
     auto bb2 = ps2.aabb_bounding_box();
     if (!aabb_intersects(bb1, bb2)) {
       return std::nullopt;
     }
-
-    auto eval1  = [&](float u, float v) { return ps1.evaluate(u, v); };
-    auto evald1 = [&](float u, float v) { return ps1.evaluate_derivatives(u, v); };
-
-    auto eval2  = [&](float u, float v) { return ps2.evaluate(u, v); };
-    auto evald2 = [&](float u, float v) { return ps2.evaluate_derivatives(u, v); };
 
     auto wrap1 = false;
     auto wrap2 = false;
@@ -115,16 +109,70 @@ class IntersectionFinder {
         .temp_rend = renderer,
         .wrap_u    = wrap1,
         .wrap_v    = wrap1,
-        .eval      = std::move(eval1),
-        .evald     = std::move(evald1),
+        .eval      = nullptr,
+        .evald     = nullptr,
     };
     auto s2 = ParamSurface{
         .temp_rend = renderer,
         .wrap_u    = wrap2,
         .wrap_v    = wrap2,
-        .eval      = std::move(eval2),
-        .evald     = std::move(evald2),
+        .eval      = nullptr,
+        .evald     = nullptr,
     };
+
+    if (std::abs(offset) > 1e-5F) {
+      auto eval1 = [&](float u, float v) {
+        auto deriv      = ps1.evaluate_derivatives(u, v);
+        auto offset_vec = eray::math::cross(deriv.first, deriv.second).normalize() * offset;
+        return ps1.evaluate(u, v) + offset_vec;
+      };
+      auto evald1 = [&](float u, float v) {
+        auto deriv  = ps1.evaluate_derivatives(u, v);
+        auto deriv2 = ps1.evaluate_second_derivatives(u, v);
+
+        auto dn_du = (eray::math::cross(deriv2.dp_duu, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_duv))
+                         .normalize();
+        auto dn_dv = (eray::math::cross(deriv2.dp_duv, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_dvv))
+                         .normalize();
+
+        auto result = ps1.evaluate_derivatives(u, v);
+        result.first += offset * dn_du;
+        result.second += offset * dn_dv;
+        return result;
+      };
+      auto eval2 = [&](float u, float v) {
+        auto deriv      = ps2.evaluate_derivatives(u, v);
+        auto offset_vec = eray::math::cross(deriv.first, deriv.second).normalize() * offset;
+        return ps2.evaluate(u, v) + offset_vec;
+      };
+      auto evald2 = [&](float u, float v) {
+        auto deriv  = ps2.evaluate_derivatives(u, v);
+        auto deriv2 = ps2.evaluate_second_derivatives(u, v);
+
+        auto dn_du = (eray::math::cross(deriv2.dp_duu, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_duv))
+                         .normalize();
+        auto dn_dv = (eray::math::cross(deriv2.dp_duv, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_dvv))
+                         .normalize();
+
+        auto result = ps2.evaluate_derivatives(u, v);
+        result.first += offset * dn_du;
+        result.second += offset * dn_dv;
+        return result;
+      };
+      s1.eval  = std::move(eval1);
+      s2.eval  = std::move(eval2);
+      s1.evald = std::move(evald1);
+      s2.evald = std::move(evald2);
+    } else {
+      auto eval1  = [&](float u, float v) { return ps1.evaluate(u, v); };
+      auto evald1 = [&](float u, float v) { return ps1.evaluate_derivatives(u, v); };
+      auto eval2  = [&](float u, float v) { return ps2.evaluate(u, v); };
+      auto evald2 = [&](float u, float v) { return ps2.evaluate_derivatives(u, v); };
+      s1.eval     = std::move(eval1);
+      s2.eval     = std::move(eval2);
+      s1.evald    = std::move(evald1);
+      s2.evald    = std::move(evald2);
+    }
 
     return find_intersections(s1, s2, init, accuracy, false);
   }

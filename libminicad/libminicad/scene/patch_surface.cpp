@@ -1,3 +1,5 @@
+#include <liberay/math/mat_fwd.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/math/bezier3.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
@@ -7,9 +9,8 @@
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
 #include <libminicad/scene/trimming.hpp>
+#include <libminicad/scene/types.hpp>
 #include <vector>
-
-#include "liberay/math/mat_fwd.hpp"
 
 namespace mini {
 
@@ -705,6 +706,7 @@ eray::math::Vec3f PatchSurface::evaluate(float u, float v) {
     pu[i] = bezier3(points[curr_row_idx], points[curr_row_idx + 1], points[curr_row_idx + 2], points[curr_row_idx + 3],
                     param.x);
   }
+
   return bezier3(pu[0], pu[1], pu[2], pu[3], param.y);
 }
 
@@ -730,6 +732,47 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::evaluate_derivativ
 
   return std::make_pair(bezier3_dt(pv[0], pv[1], pv[2], pv[3], param.x),
                         bezier3_dt(pu[0], pu[1], pu[2], pu[3], param.y));
+}
+
+SecondDerivatives PatchSurface::evaluate_second_derivatives(float u, float v) {
+  auto points = bezier3_points();
+  if (points.empty()) {
+    return SecondDerivatives{
+        .dp_duu = math::Vec3f::zeros(),
+        .dp_dvv = math::Vec3f::zeros(),
+        .dp_duv = math::Vec3f::zeros(),
+    };
+  }
+
+  auto [param, patch_coords] = find_bezier3_patch_and_param(u, v);
+
+  auto pu  = std::array<math::Vec3f, kPatchSize>();
+  auto pv  = std::array<math::Vec3f, kPatchSize>();
+  auto idx = kPatchSize * kPatchSize * dim_.x * patch_coords.y + kPatchSize * kPatchSize * patch_coords.x;
+  for (auto i = 0U; i < kPatchSize; ++i) {
+    auto pu_idx = idx + kPatchSize * i;
+    pu[i]       = bezier3(points[pu_idx], points[pu_idx + 1], points[pu_idx + 2], points[pu_idx + 3], param.x);
+
+    auto pv_idx = idx + i;
+    pv[i]       = bezier3(points[pv_idx], points[pv_idx + kPatchSize], points[pv_idx + 2 * kPatchSize],
+                          points[pv_idx + 3 * kPatchSize], param.y);
+  }
+
+  auto duu = bezier3_dtt(pv[0], pv[1], pv[2], pv[3], param.x);
+  auto dvv = bezier3_dtt(pu[0], pu[1], pu[2], pu[3], param.y);
+
+  std::array<math::Vec3f, kPatchSize> du;
+  for (auto i = 0U; i < kPatchSize; ++i) {
+    auto pu_idx = idx + kPatchSize * i;
+    du[i]       = bezier3_dt(points[pu_idx], points[pu_idx + 1], points[pu_idx + 2], points[pu_idx + 3], param.x);
+  }
+  auto duv = bezier3_dt(du[0], du[1], du[2], du[3], param.y);
+
+  return SecondDerivatives{
+      .dp_duu = duu,
+      .dp_dvv = dvv,
+      .dp_duv = duv,
+  };
 }
 
 std::pair<eray::math::Vec3f, eray::math::Vec3f> PatchSurface::aabb_bounding_box() const {

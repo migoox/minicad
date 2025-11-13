@@ -1,13 +1,12 @@
 #pragma once
 
 #include <liberay/math/mat_fwd.hpp>
+#include <liberay/math/transform3_fwd.hpp>
 #include <liberay/math/vec_fwd.hpp>
 #include <liberay/util/variant_match.hpp>
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/trimming.hpp>
 #include <libminicad/scene/types.hpp>
-
-#include "liberay/math/transform3_fwd.hpp"
 
 namespace mini {
 class Torus {
@@ -18,6 +17,7 @@ class Torus {
   eray::math::Vec3f evaluate(const eray::math::Transform3f& transform, float u, float v) const;
   std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(const eray::math::Transform3f& transform,
                                                                        float u, float v) const;
+  SecondDerivatives evaluate_second_derivatives(const eray::math::Transform3f& transform, float u, float v) const;
   std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box(const eray::math::Transform3f& transform) const;
 
  public:
@@ -56,6 +56,7 @@ class ParamPrimitive : public ObjectBase<ParamPrimitive, ParamPrimitiveVariant> 
   eray::math::Mat4f frenet_frame(float u, float v);
   eray::math::Vec3f evaluate(float u, float v);
   std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(float u, float v);
+  SecondDerivatives evaluate_second_derivatives(float u, float v);
   std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box();
 
   ParamSpaceTrimmingDataManager& trimming_manager() { return trimming_manager_; }

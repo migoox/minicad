@@ -171,6 +171,8 @@ class PatchSurface : public ObjectBase<PatchSurface, PatchSurfaceVariant>, publi
 
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> evaluate_derivatives(float u, float v);
 
+  [[nodiscard]] SecondDerivatives evaluate_second_derivatives(float u, float v);
+
   [[nodiscard]] std::pair<eray::math::Vec3f, eray::math::Vec3f> aabb_bounding_box() const;
 
   ParamSpaceTrimmingDataManager& trimming_manager() { return trimming_manager_; }

@@ -153,7 +153,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_project_save_as(const std::filesystem::path& path);
   bool on_project_save();
 
-  bool on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy);
+  bool on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy, float offset = 0.F);
 
   bool on_natural_spline_from_approx_curve(const ApproxCurveHandle& handle, size_t count);
 

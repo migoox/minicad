@@ -109,6 +109,10 @@ MiniCadApp MiniCadApp::create(std::unique_ptr<os::Window> window) {
   sr->add_billboard("cursor", cursor_img);
   sr->add_billboard("centroid", centroid_img);
 
+  sr->show_grid(true);
+  sr->show_points(false);
+  sr->show_polylines(false);
+
   return MiniCadApp(std::move(window),
                     Members{
                         .proj_path                   = std::nullopt,
@@ -758,22 +762,8 @@ void MiniCadApp::gui_object_window() {
 }
 
 void MiniCadApp::render_gui(Duration /* delta */) {
-  ImGui::ShowDemoWindow();
-
   ImGui::Begin("MiNI CAD");
   {
-    static bool use_cursor = false;
-    static auto err        = 0.1F;
-    ImGui::Checkbox("Use Cursor", &use_cursor);
-    ImGui::InputFloat("Err", &err);
-    if (ImGui::Button("Find Intersection")) {
-      if (use_cursor) {
-        on_find_intersection(m_.cursor->transform.pos(), err);
-      } else {
-        on_find_intersection(std::nullopt, err);
-      }
-    }
-
 #ifndef NDEBUG
     if (ImGui::Button("Clear Debug")) {
       m_.scene.renderer().clear_debug();
@@ -810,6 +800,22 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     bool polylines = m_.scene.renderer().are_polylines_shown();
     if (ImGui::Checkbox(ICON_FA_DRAW_POLYGON " Polylines", &polylines)) {
       m_.scene.renderer().show_polylines(polylines);
+    }
+  }
+  ImGui::End();
+
+  ImGui::Begin("Intersections");
+  static bool use_cursor = false;
+  static auto err        = 0.1F;
+  static auto offset     = 0.4F;
+  ImGui::Checkbox("Use Cursor", &use_cursor);
+  ImGui::InputFloat("Err", &err);
+  ImGui::InputFloat("Offset", &offset);
+  if (ImGui::Button("Find Intersection")) {
+    if (use_cursor) {
+      on_find_intersection(m_.cursor->transform.pos(), err, offset);
+    } else {
+      on_find_intersection(std::nullopt, err, offset);
     }
   }
   ImGui::End();
@@ -890,17 +896,27 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
       ImGui::EndDisabled();
     }
-  }
 
-  if (ImGui::Button("Generate detailed paths")) {
-    on_generate_detailed_paths();
+    if (ImGui::Button("Generate detailed paths")) {
+      on_generate_detailed_paths();
+
+      if (m_.detailed_milling_solution) {
+        const auto& points = m_.detailed_milling_solution->points;
+
+        if (!System::file_dialog().save_file(
+                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+          eray::util::Logger::err("Could not save the g-code");
+        }
+      }
+    }
 
     if (m_.detailed_milling_solution) {
-      const auto& points = m_.detailed_milling_solution->points;
-
-      if (!System::file_dialog().save_file(
-              [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
-        eray::util::Logger::err("Could not save the g-code");
+      static bool show_trimming = false;
+      ImGui::Checkbox("Show last trimming txt", &show_trimming);
+      if (show_trimming) {
+        m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
+                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
+                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
       }
     }
   }
@@ -1717,7 +1733,7 @@ bool MiniCadApp::on_patch_surface_added_from_curve(const CurveHandle& curve_hand
   return false;
 }
 
-bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy) {
+bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_point, float accuracy, float offset) {
   ParametricSurfaceHandle first  = PatchSurfaceHandle(0, 0, 0);
   ParametricSurfaceHandle second = PatchSurfaceHandle(0, 0, 0);
 
@@ -1757,7 +1773,7 @@ bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_poin
 
       CParametricSurfaceObject auto& obj1 = **m_.scene.arena<T1>().get_obj(handle1);
       CParametricSurfaceObject auto& obj2 = **m_.scene.arena<T2>().get_obj(handle2);
-      auto curve = IntersectionFinder::find_intersection(m_.scene.renderer(), obj1, obj2, init_point, accuracy);
+      auto curve = IntersectionFinder::find_intersection(m_.scene.renderer(), obj1, obj2, init_point, accuracy, offset);
       if (!curve) {
         util::Logger::info("No intersection found");
         return;
@@ -1856,7 +1872,11 @@ bool MiniCadApp::on_generate_detailed_paths() {
   if (handles.empty()) {
     return false;
   }
-  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front());
+  if (!m_.milling_height_map) {
+    return false;
+  }
+
+  m_.detailed_milling_solution = DetailedMillingSolver::solve(*m_.milling_height_map, m_.scene, handles.front());
   if (!m_.detailed_milling_solution) {
     return false;
   }

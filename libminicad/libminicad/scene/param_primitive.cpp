@@ -1,11 +1,12 @@
 #include <liberay/util/logger.hpp>
+#include <liberay/util/panic.hpp>
 #include <libminicad/renderer/rendering_command.hpp>
 #include <libminicad/scene/param_primitive.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/trimming.hpp>
+#include <libminicad/scene/types.hpp>
 #include <limits>
 #include <numbers>
-
-#include "libminicad/scene/trimming.hpp"
 
 namespace mini {
 namespace math = eray::math;
@@ -57,6 +58,12 @@ std::pair<eray::math::Vec3f, eray::math::Vec3f> Torus::evaluate_derivatives(cons
   dy = rot * dy;
 
   return std::make_pair(dx, dy);
+}
+
+SecondDerivatives Torus::evaluate_second_derivatives(const eray::math::Transform3f& transform, float u, float v) const {
+  eray::util::panic("not implemented yet");  // TODO(migoox): implement
+
+  return SecondDerivatives{};
 }
 
 std::pair<eray::math::Vec3f, eray::math::Vec3f> Torus::aabb_bounding_box(const math::Transform3f& /*transform*/) const {
@@ -117,6 +124,13 @@ eray::math::Vec3f ParamPrimitive::evaluate(float u, float v) {
 std::pair<eray::math::Vec3f, eray::math::Vec3f> ParamPrimitive::evaluate_derivatives(float u, float v) {
   return std::visit(eray::util::match([&](const CParamPrimitiveType auto& param) {
                       return param.evaluate_derivatives(transform_, u, v);
+                    }),
+                    object);
+}
+
+SecondDerivatives ParamPrimitive::evaluate_second_derivatives(float u, float v) {
+  return std::visit(eray::util::match([&](const CParamPrimitiveType auto& param) {
+                      return param.evaluate_second_derivatives(transform_, u, v);
                     }),
                     object);
 }
