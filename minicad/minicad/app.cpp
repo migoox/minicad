@@ -465,6 +465,18 @@ void MiniCadApp::gui_object_window() {
     bool update_txt = false;
     for (auto idx = 0; auto& o : obj.trimming_manager().data()) {
       ImGui::PushID(idx++);
+      std::visit(eray::util::match{[&](const auto& h) {
+                                     using T = ERAY_HANDLE_OBJ(h);
+                                     if (auto o = m_.scene.arena<T>().get_obj(h)) {
+                                       ImGui::Text("%s", o.value()->name.c_str());
+                                     } else {
+                                       ImGui::Text("Uknown");
+                                     }
+                                   },
+                                   []() {}},
+                 o.intersecting_surface_handle);
+
+      ImGui::SameLine();
       if (ImGui::Checkbox("Enable", &o.enable)) {
         update_txt = true;
         obj.trimming_manager().mark_dirty();
@@ -1785,9 +1797,9 @@ bool MiniCadApp::on_find_intersection(std::optional<eray::math::Vec3f> init_poin
       }
 
       obj1.trimming_manager().add(
-          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space1));
+          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space1, handle2));
       obj2.trimming_manager().add(
-          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2));
+          ParamSpaceTrimmingData::from_intersection_curve(m_.scene.renderer(), curve->param_space2, handle1));
     };
 
     std::visit(match{unsafe_param_obj_extractor}, first, second);

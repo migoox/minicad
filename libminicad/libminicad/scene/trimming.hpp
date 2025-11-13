@@ -2,12 +2,14 @@
 
 #include <libminicad/algorithm/intersection_finder.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
+#include <libminicad/scene/handles.hpp>
 
 namespace mini {
 
 struct ParamSpaceTrimmingData {
   static ParamSpaceTrimmingData from_intersection_curve(ISceneRenderer& renderer,
-                                                        const IntersectionFinder::ParamSpace& param_space);
+                                                        const IntersectionFinder::ParamSpace& param_space,
+                                                        const ParametricSurfaceHandle& intersecting_surface_handle);
 
   static constexpr auto kCPUTrimmingTxtSize = IntersectionFinder::Curve::kTxtSize;
   static constexpr auto kGPUTrimmingTxtSize = 128;
@@ -22,6 +24,7 @@ struct ParamSpaceTrimmingData {
   TextureHandle curve_txt;
   std::array<TextureHandle, 2> trimming_variant_txt;
   std::array<std::vector<uint32_t>, 2> trimming_variant_txt_data;
+  ParametricSurfaceHandle intersecting_surface_handle;
   bool reverse = false;
   bool enable  = false;
 };
@@ -42,6 +45,7 @@ class ParamSpaceTrimmingDataManager {
   void update_final_txt(bool force = false);
 
   const std::vector<uint32_t>& final_txt();
+  const std::vector<ParametricSurfaceHandle>& final_intersecting_surfaces_handles() const;
   const std::vector<uint32_t>& final_txt_gpu();
 
   void mark_dirty() { dirty_ = true; }
@@ -49,6 +53,7 @@ class ParamSpaceTrimmingDataManager {
  private:
   ParamSpaceTrimmingDataManager() = default;
 
+  std::vector<ParametricSurfaceHandle> final_intersecting_surfaces_handles_;
   std::vector<ParamSpaceTrimmingData> data_;
   std::vector<uint32_t> final_txt_;
   std::vector<uint32_t> final_txt_gpu_;

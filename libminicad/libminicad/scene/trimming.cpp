@@ -5,7 +5,8 @@
 namespace mini {
 
 ParamSpaceTrimmingData ParamSpaceTrimmingData::from_intersection_curve(
-    ISceneRenderer& renderer, const IntersectionFinder::ParamSpace& param_space) {
+    ISceneRenderer& renderer, const IntersectionFinder::ParamSpace& param_space,
+    const ParametricSurfaceHandle& second_surface_handle) {
   constexpr auto kCPUTrimmingTxtSizeFlt = static_cast<float>(kCPUTrimmingTxtSize);
   constexpr auto kGPUTrimmingTxtSizeFlt = static_cast<float>(kGPUTrimmingTxtSize);
 
@@ -98,7 +99,8 @@ ParamSpaceTrimmingData ParamSpaceTrimmingData::from_intersection_curve(
               std::move(param_space.trimming_txt1),
               std::move(param_space.trimming_txt2),
           },
-      .enable = false,
+      .intersecting_surface_handle = second_surface_handle,
+      .enable                      = false,
   };
 }
 
@@ -134,10 +136,12 @@ void ParamSpaceTrimmingDataManager::update_final_txt(bool force) {
 
   std::ranges::fill(final_txt_, 0xFFFFFFFF);
 
+  final_intersecting_surfaces_handles_.clear();
   for (const auto& d : data_) {
     if (!d.enable) {
       continue;
     }
+    final_intersecting_surfaces_handles_.push_back(d.intersecting_surface_handle);
 
     for (auto i = 0U; i < kCPUTrimmingTxtSize; ++i) {
       for (auto j = 0U; j < kCPUTrimmingTxtSize; ++j) {
@@ -169,6 +173,10 @@ void ParamSpaceTrimmingDataManager::update_final_txt(bool force) {
 const std::vector<uint32_t>& ParamSpaceTrimmingDataManager::final_txt() {
   update_final_txt();
   return final_txt_;
+}
+
+const std::vector<ParametricSurfaceHandle>& ParamSpaceTrimmingDataManager::final_intersecting_surfaces_handles() const {
+  return final_intersecting_surfaces_handles_;
 }
 
 const std::vector<uint32_t>& ParamSpaceTrimmingDataManager::final_txt_gpu() {
