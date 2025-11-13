@@ -348,6 +348,11 @@ std::optional<eray::math::Vec4f> IntersectionFinder::newton_next_point(const flo
                                                                        const bool reverse) {
   constexpr auto kLearningRate = 0.1F;
 
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> dist(-1e-5F, 1e-5F);
+
+  float learning_rate = kLearningRate;
+
   const auto d = accuracy;
 
   auto result = start;
@@ -370,6 +375,7 @@ std::optional<eray::math::Vec4f> IntersectionFinder::newton_next_point(const flo
 
   t0 = t0.normalize();
 
+  int fail_count = 0;
   for (auto i = 0; i < iters; ++i) {
     auto p = ps1.eval(result.x, result.y);
     auto q = ps2.eval(result.z, result.w);
@@ -383,14 +389,19 @@ std::optional<eray::math::Vec4f> IntersectionFinder::newton_next_point(const flo
     auto b = math::Vec4f(p - q, math::dot(p, t0) - math::dot(p0, t0) - d);
 
     if (auto inv = eray::math::inverse(mat)) {
-      auto delta = kLearningRate * ((*inv) * b);
+      auto delta = learning_rate * ((*inv) * b);
       result     = result + delta;
 
       if (math::length(delta) < kNewtonTolerance) {
         return result;
       }
     } else {
-      return std::nullopt;
+      // perturbation and step decrease
+      result += eray::math::Vec4f{dist(rng), dist(rng), dist(rng), dist(rng)};
+      learning_rate *= 0.9F;
+      if (fail_count++ > 10) {
+        return std::nullopt;
+      }
     }
   }
 
@@ -680,7 +691,7 @@ std::optional<IntersectionFinder::Curve> IntersectionFinder::find_intersections(
 
     if (is_nan(next_point)) {
       eray::util::Logger::err("NaN encountered");
-      break;
+      return std::nullopt;
     }
     refine_point(next_point);
     wrap_if_allowed(next_point);
