@@ -18,9 +18,12 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
+#include "liberay/math/mat_fwd.hpp"
 #include "liberay/math/vec_fwd.hpp"
 #include "libminicad/scene/handles.hpp"
+#include "libminicad/scene/param_primitive.hpp"
 #include "libminicad/scene/trimming.hpp"
 
 namespace mini {
@@ -571,8 +574,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   }
   contour_points = algo::rdp(contour_points, contour_epsilon);
 
-  // == Generate zig-zag segments
-  // ======================================================================================
+  // == Generate zig-zag segments ======================================================================================
   const auto intersection_find = +[](const math::Vec2f p0, const math::Vec2f p1, const math::Vec2f q0,
                                      const math::Vec2f q1) -> std::optional<math::Vec2f> {
     const auto p01 = p1 - p0;
@@ -664,8 +666,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
   }
 
-  // == Generate paths
-  // =================================================================================================
+  // == Generate paths =================================================================================================
   auto path_points = std::vector<math::Vec3f>();
   path_points.emplace_back(0.F, safe_depth, 0.F);
   path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
@@ -839,8 +840,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   //   for (auto i = 0U; i < contour_points.size() - 1; ++i) {
   //     scene.renderer().debug_line(contour_points[i], contour_points[i + 1]);
   //   }
-  // == Upload border texture
-  // ==========================================================================================
+  // == Upload border texture ==========================================================================================
   auto texture_temp = std::vector<eray::res::ColorU32>();
   texture_temp.resize(height_map.height * height_map.width);
   for (size_t i = 0; i < height_map.width * height_map.height; ++i) {
@@ -854,94 +854,363 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   };
 }
 
-std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
-                                                                  const WorkpieceDesc& desc, float diameter) {
-  if (!scene.arena<PatchSurface>().exists(patch_handle)) {
-    eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
+namespace {
+
+constexpr std::optional<eray::math::Mat3f> inverse(const eray::math::Mat3f& m) {
+  const float coef00 = m[1][1] * m[2][2] - m[2][1] * m[1][2];
+  const float coef01 = m[1][0] * m[2][2] - m[2][0] * m[1][2];
+  const float coef02 = m[1][0] * m[2][1] - m[2][0] * m[1][1];
+
+  const float det = m[0][0] * coef00 - m[0][1] * coef01 + m[0][2] * coef02;
+
+  if (std::abs(det) < 0.000001F) {
     return std::nullopt;
   }
-  auto patch_surface     = scene.arena<PatchSurface>().unsafe_get_obj(patch_handle);
-  const auto& uv_texture = patch_surface->trimming_manager().final_txt();
+
+  eray::math::Mat3f inv;
+
+  inv[0][0] = (m[1][1] * m[2][2] - m[2][1] * m[1][2]);
+  inv[0][1] = -(m[0][1] * m[2][2] - m[2][1] * m[0][2]);
+  inv[0][2] = (m[0][1] * m[1][2] - m[1][1] * m[0][2]);
+
+  inv[1][0] = -(m[1][0] * m[2][2] - m[2][0] * m[1][2]);
+  inv[1][1] = (m[0][0] * m[2][2] - m[2][0] * m[0][2]);
+  inv[1][2] = -(m[0][0] * m[1][2] - m[1][0] * m[0][2]);
+
+  inv[2][0] = (m[1][0] * m[2][1] - m[2][0] * m[1][1]);
+  inv[2][1] = -(m[0][0] * m[2][1] - m[2][0] * m[0][1]);
+  inv[2][2] = (m[0][0] * m[1][1] - m[1][0] * m[0][1]);
+
+  return inv * (1.F / det);
+}
+
+}  // namespace
+
+namespace algo {
+
+static constexpr float wrap_to_unit_interval(float x) noexcept {
+  float int_part        = 0.F;
+  const float frac_part = std::modf(x, &int_part);
+  return frac_part < 0.0F ? frac_part + 1.0F : frac_part;
+}
+
+static std::optional<eray::math::Vec3f> y_up_ray_vs_param_surface(Scene& scene, eray::math::Vec3f p0,
+                                                                  ParamSurface& param_surface) {
+  auto u = 0.5F;
+  auto v = 0.5F;
+  auto t = 0.5F;
+
+  for (auto i = 0U; i < 100; ++i) {
+    auto diff = param_surface.eval(u, v) - p0;
+    diff.y -= t;
+    if (math::dot(diff, diff) < 0.01F * 0.01F) {
+      break;
+    }
+  }
+
+  //   constexpr auto kIters = 10U;
+
+  //   auto u = 0.5F;
+  //   auto v = 0.5F;
+  //   auto t = 5.F;
+
+  //   for (auto i = 0U; i < kIters; ++i) {
+  //     auto val   = param_surface.eval(u, v);
+  //     auto deriv = param_surface.evald(u, v);
+
+  //     auto jacobian = math::Mat3f{deriv.first, deriv.second, math::Vec3f{0.F, -1.F, 0.F}};
+  //     if (auto inv_jacobian = inverse(jacobian)) {
+  //       auto func_val = val - p0;
+  //       func_val.y -= t;
+  //       auto new_params = math::Vec3f{u, v, t} - *inv_jacobian * func_val;
+  //       u               = wrap_to_unit_interval(new_params.x);
+  //       v               = wrap_to_unit_interval(new_params.y);
+  //       t               = new_params.z;
+  //     } else {
+  //       // perturb
+  //       u += 0.01F;
+  //       v += 0.01F;
+  //       t += 0.01F;
+  //     }
+  //   }
+  //   scene.renderer().debug_point(param_surface.eval(u, v));
+
+  return math::Vec3f{u, v, t};
+}
+
+std::optional<eray::math::Vec3f> y_up_ray_vs_param_surfaces(eray::math::Vec3f p0,
+                                                            const std::vector<ParamSurface>& param_surface) {
+  return std::nullopt;
+}
+
+}  // namespace algo
+
+std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
+                                                                  bool dir, size_t paths, const WorkpieceDesc& desc,
+                                                                  float diameter) {
+  constexpr auto kTrimmingTextureSize    = ParamSpaceTrimmingData::kCPUTrimmingTxtSize;
+  constexpr auto kTrimmingTextureSizeInt = static_cast<int>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+  constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
 
   const auto radius       = diameter / 2.F;
   const auto safety_depth = desc.depth + 1.2F * radius;
 
-  constexpr auto kBaseSampleCountFlt     = static_cast<float>(kBaseSampleCount);
-  constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+  if (!scene.arena<PatchSurface>().exists(patch_handle)) {
+    eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
+    return std::nullopt;
+  }
+  auto patch_surface = scene.arena<PatchSurface>().unsafe_get_obj(patch_handle);
 
-  auto points = std::vector<math::Vec3f>();
-  points.emplace_back(0.F, safety_depth, 0.F);
-  points.emplace_back(0.F, safety_depth, desc.height / 2.F + diameter);
-  bool forward = true;
+  // == Get trimming intersecting surfaces info ========================================================================
+  std::vector<ObserverPtr<PatchSurface>> intersecting_surfaces;
+  for (auto handle : patch_surface->trimming_manager().final_intersecting_surfaces_handles()) {
+    bool failure = false;
+    std::visit(eray::util::match{
+                   [&](const PatchSurfaceHandle& h) {
+                     if (auto o = scene.arena<PatchSurface>().get_obj(h)) {
+                       intersecting_surfaces.emplace_back(*o.value());
+                     } else {
+                       eray::util::Logger::err("One of the intersecting surfaces no longer exists");
+                       failure = true;
+                     }
+                   },
+                   [&](const auto&) {
+                     eray::util::Logger::err("Only patch surfaces are supported");
+                     failure = true;
+                   },
+               },
+               handle);
+
+    if (failure) {
+      return std::nullopt;
+    }
+  }
+
+  auto is_below_level = [&](size_t i, size_t j) {
+    const auto u = static_cast<float>(j) / kTrimmingTextureSizeFlt;
+    const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
+    auto p       = patch_surface->evaluate(u, v);
+    auto deriv   = patch_surface->evaluate_derivatives(u, v);
+    p            = p + math::cross(deriv.first, deriv.second).normalize() * radius;
+    return p.y < desc.zero_level + radius;
+  };
+
+  std::vector<algo::ParamSurface> intersecting_param_surfaces;
+  for (auto i = 0U; i < intersecting_surfaces.size(); ++i) {  // NOLINT
+    auto eval = [&intersecting_surfaces, i, radius](float u, float v) {
+      auto deriv      = intersecting_surfaces[i]->evaluate_derivatives(u, v);
+      auto offset_vec = eray::math::cross(deriv.first, deriv.second).normalize() * radius;
+      return intersecting_surfaces[i]->evaluate(u, v) + offset_vec;
+    };
+    auto evald = [&intersecting_surfaces, i, radius](float u, float v) {
+      auto deriv  = intersecting_surfaces[i]->evaluate_derivatives(u, v);
+      auto deriv2 = intersecting_surfaces[i]->evaluate_second_derivatives(u, v);
+
+      auto dn_du =
+          (eray::math::cross(deriv2.dp_duu, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_duv)).normalize();
+      auto dn_dv =
+          (eray::math::cross(deriv2.dp_duv, deriv.second) + eray::math::cross(deriv.first, deriv2.dp_dvv)).normalize();
+
+      auto result = intersecting_surfaces[i]->evaluate_derivatives(u, v);
+      result.first += radius * dn_du;
+      result.second += radius * dn_dv;
+      return result;
+    };
+    intersecting_param_surfaces.emplace_back(algo::ParamSurface{.eval = std::move(eval), .evald = std::move(evald)});
+  }
+
+  auto trimming_txt = patch_surface->trimming_manager().final_txt();
+  for (size_t i = 0U; i < kTrimmingTextureSize; ++i) {
+    for (size_t j = 0U; j < kTrimmingTextureSize; ++j) {
+      if (is_below_level(i, j)) {
+        trimming_txt[i * kTrimmingTextureSize + j] = 0xFF000000;
+      }
+    }
+  }
+
+  // ===================================================================================================================
+
   // j (column) -> u parameter
   // i (row) -> v
-  for (auto i = 0; i < static_cast<int>(kBaseSampleCount); ++i) {
-    const int start = forward ? static_cast<int>(kBaseSampleCount) - 1 : 0;
-    const int end   = forward ? -1 : static_cast<int>(kBaseSampleCount);
-    const int step  = forward ? -1 : 1;
-    for (auto j = start; j != end; j += step) {
-      math::Vec3f p[] = {math::Vec3f::filled(0.F), math::Vec3f::filled(0.F)};
-      bool trimmed[]  = {false, false};
 
-      for (auto k = 0; k < 2; ++k) {
-        const auto u = static_cast<float>(j + k) / kBaseSampleCountFlt;
-        const auto v = static_cast<float>(i) / kBaseSampleCountFlt;
+  // == Generate line segments =========================================================================================
+  struct Coord {
+    int i = 0;
+    int j = 0;
+  };
+  std::vector<std::vector<Coord>> lines;
+  {
+    lines.reserve(paths);
 
-        auto deriv  = patch_surface->evaluate_derivatives(u, v);
-        auto offset = math::cross(deriv.first, deriv.second).normalize();
-        offset.y -= 1.F;
-        offset = radius * offset;
-        p[k]   = patch_surface->evaluate(u, v) + offset;
+    auto mark = [&](size_t i, size_t j) {
+      const auto u = static_cast<float>(j) / kTrimmingTextureSizeFlt;
+      const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
+      auto p       = patch_surface->evaluate(u, v);
+      auto deriv   = patch_surface->evaluate_derivatives(u, v);
+      scene.renderer().debug_point(p + math::cross(deriv.first, deriv.second).normalize() * radius);
+    };
 
-        auto mapped_i = static_cast<size_t>(static_cast<float>(i) / kBaseSampleCountFlt * kTrimmingTextureSizeFlt);
-        auto mapped_j = static_cast<size_t>(static_cast<float>(j) / kBaseSampleCountFlt * kTrimmingTextureSizeFlt);
+    auto is_trimmed = [&](size_t i, size_t j) { return trimming_txt[i * kTrimmingTextureSize + j] == 0xFF000000; };
 
-        trimmed[k] = uv_texture[mapped_i * ParamSpaceTrimmingData::kCPUTrimmingTxtSize + mapped_j] == 0xFF000000;
+    const auto i_step = kTrimmingTextureSize / paths;
+    for (size_t i_base = 0U; i_base < kTrimmingTextureSize; i_base += i_step) {
+      std::vector<Coord> line;
+
+      for (size_t j_base = 0U; j_base < kTrimmingTextureSize; ++j_base) {
+        auto i  = i_base;
+        auto j  = j_base;
+        auto in = i_base;
+        auto jn = static_cast<size_t>(j_base + 1U);
+        if (dir) {
+          std::swap(i, j);
+          in = j_base + 1;
+          jn = i_base;
+        }
+
+        if ((j_base == 0 || j_base == kTrimmingTextureSize - 1) && !is_trimmed(i, j)) {
+          line.emplace_back(i, j);
+          mark(i, j);
+        }
+
+        if (j_base < kTrimmingTextureSize - 1 && is_trimmed(i, j) != is_trimmed(in, jn)) {
+          line.emplace_back(i, j);
+          mark(i, j);
+        }
       }
+      lines.emplace_back(std::move(line));
+    }
+  }
 
-      const auto k = desc.zero_level;
-      if (p[0].y > k && p[1].y > k) {
-        points.push_back(p[0]);
-        points.push_back(p[1]);
-
-        if (!trimmed[0]) {
-          scene.renderer().debug_point(p[0]);
+  // Texture visualization
+  for (auto& line : lines) {
+    if (line.size() % 2 != 0) {
+      eray::util::Logger::err("Error");
+      return std::nullopt;
+    }
+    for (auto k = 0U; k < line.size(); k += 2U) {
+      if (line[k].i == line[k + 1].i) {
+        for (auto j = line[k].j; j <= line[k + 1].j; ++j) {
+          trimming_txt[line[k].i * kTrimmingTextureSize + j] = 0xFF00FFFF;
         }
-        if (!trimmed[1]) {
-          scene.renderer().debug_point(p[1]);
-        }
-
-      } else if (p[0].y > k) {
-        const auto t         = (k - p[0].y) / (p[1].y - p[0].y);
-        const auto projected = p[0] + t * (p[1] - p[0]);
-        points.push_back(p[0]);
-        points.push_back(projected);
-
-        if (!trimmed[0]) {
-          scene.renderer().debug_point(p[0]);
-        }
-        if (!trimmed[1]) {
-          scene.renderer().debug_point(p[0] + t * (p[1] - p[0]));
-        }
-      } else if (p[1].y > k) {
-        const auto t         = (k - p[1].y) / (p[0].y - p[1].y);
-        const auto projected = p[1] + t * (p[0] - p[1]);
-        points.push_back(p[1]);
-        points.push_back(projected);
-
-        if (!trimmed[0]) {
-          scene.renderer().debug_point(p[1] + t * (p[0] - p[1]));
-        }
-        if (!trimmed[1]) {
-          scene.renderer().debug_point(p[1]);
+      } else {
+        for (auto i = line[k].i; i <= line[k + 1].i; ++i) {
+          trimming_txt[i * kTrimmingTextureSize + line[k].j] = 0xFF00FFFF;
         }
       }
     }
-    forward = !forward;
   }
 
+  // == Generate paths =================================================================================================
+  auto evaluate = [&](size_t i, size_t j) {
+    const auto u = static_cast<float>(j) / kTrimmingTextureSizeFlt;
+    const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
+    auto p       = patch_surface->evaluate(u, v);
+    auto deriv   = patch_surface->evaluate_derivatives(u, v);
+    return p + math::cross(deriv.first, deriv.second).normalize() * radius;
+  };
+
+  auto points = std::vector<math::Vec3f>();
+
+  auto draw_straight_line = [&](Coord start, Coord end) {
+    if (start.i == end.i) {
+      if (start.j < end.j) {
+        for (auto j = start.j; j <= end.j; ++j) {
+          points.push_back(evaluate(start.i, j));
+        }
+      } else {
+        for (auto j = start.j; j >= end.j; --j) {
+          points.push_back(evaluate(start.i, j));
+        }
+      }
+    } else {
+      if (start.i < end.i) {
+        for (auto i = start.i; i <= end.i; ++i) {
+          points.push_back(evaluate(i, start.j));
+        }
+      } else {
+        for (auto i = start.i; i >= end.i; --i) {
+          points.push_back(evaluate(i, start.j));
+        }
+      }
+    }
+  };
+
+  auto debug_straight_line = [&](Coord start, Coord end) {
+    if (start.i == end.i) {
+      for (auto j = std::min(start.j, end.j); j < std::min(start.j, end.j); ++j) {
+        scene.renderer().debug_line(evaluate(start.i, j), evaluate(start.i, j + 1));
+      }
+    } else {
+      for (auto i = std::min(start.i, end.i); i < std::max(start.i, end.i); ++i) {
+        scene.renderer().debug_line(evaluate(i, start.j), evaluate(i + 1, start.j));
+      }
+    }
+  };
+
+  for (;;) {
+    auto first_line_ind = lines.size();
+    for (auto i = 0U; i < lines.size() - 1; ++i) {
+      if (!lines[i].empty()) {
+        first_line_ind = i;
+        break;
+      }
+    }
+
+    if (first_line_ind == lines.size()) {
+      break;
+    }
+
+    bool forward = true;
+    for (auto line_ind = first_line_ind; line_ind < lines.size(); ++line_ind) {
+      if (lines[line_ind].empty()) {
+        break;
+      }
+      auto segment_start = lines[line_ind][lines[line_ind].size() - 1];
+      auto segment_end   = lines[line_ind][lines[line_ind].size() - 2];
+      lines[line_ind].pop_back();
+      lines[line_ind].pop_back();
+      if (forward) {
+        draw_straight_line(segment_start, segment_end);
+      } else {
+        draw_straight_line(segment_end, segment_start);
+      }
+      forward = !forward;
+    }
+  }
+
+  if (points.empty()) {
+    return std::nullopt;
+  }
+
+  // Transform tool center to tool tip
+  //   for (auto& point : points) {
+  //     point.y += radius;
+  //   }
+
+  //   const auto a = desc.zero_level + radius;
+  //   if (p[0].y > a && p[1].y > a) {
+  //     points.push_back(p[0]);
+  //     points.push_back(p[1]);
+
+  //   } else if (p[0].y > a) {
+  //     const auto t         = (a - p[0].y) / (p[1].y - p[0].y);
+  //     const auto projected = p[0] + t * (p[1] - p[0]);
+  //     points.push_back(p[0]);
+  //     points.push_back(projected);
+
+  //   } else if (p[1].y > a) {
+  //     const auto t         = (a - p[1].y) / (p[0].y - p[1].y);
+  //     const auto projected = p[1] + t * (p[0] - p[1]);
+  //     points.push_back(projected);
+  //     points.push_back(p[1]);
+  //   }
+
+  auto handle = scene.renderer().upload_texture(trimming_txt, ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
+                                                ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+
   return DetailedMillingSolver{
-      .points = std::move(points),
+      .points           = std::move(points),
+      .trimming_texture = handle,
   };
 }
 

@@ -25,6 +25,17 @@ std::vector<eray::math::Vec3f> rdp(const std::vector<eray::math::Vec3f>& points,
                                    Plane plane = Plane::XZ);
 void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon, Plane plane,
                    std::vector<eray::math::Vec3f>& out);
+
+struct ParamSurface {
+  std::function<eray::math::Vec3f(float, float)> eval;
+  std::function<std::pair<eray::math::Vec3f, eray::math::Vec3f>(float, float)> evald;
+};
+
+std::optional<eray::math::Vec3f> y_up_ray_vs_param_surface(Scene& scene, eray::math::Vec3f p0,
+                                                           const ParamSurface& param_surface);
+std::optional<eray::math::Vec3f> y_up_ray_vs_param_surfaces(eray::math::Vec3f p0,
+                                                            const std::vector<ParamSurface>& param_surface);
+
 }  // namespace algo
 
 struct WorkpieceDesc {
@@ -82,8 +93,7 @@ struct FlatMillingSolver {
 
 struct DetailedMillingSolver {
   std::vector<eray::math::Vec3f> points;
-
-  static constexpr size_t kBaseSampleCount = 100U;
+  TextureHandle trimming_texture;
 
   /**
    * @brief Uses flat milling tool.
@@ -93,6 +103,7 @@ struct DetailedMillingSolver {
    * @param radius in centimeters
    */
   static std::optional<DetailedMillingSolver> solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
+                                                    bool dir = true, size_t paths = 100,
                                                     const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 

@@ -908,28 +908,28 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
       ImGui::EndDisabled();
     }
+  }
 
-    if (ImGui::Button("Generate detailed paths")) {
-      on_generate_detailed_paths();
-
-      if (m_.detailed_milling_solution) {
-        const auto& points = m_.detailed_milling_solution->points;
-
-        if (!System::file_dialog().save_file(
-                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
-          eray::util::Logger::err("Could not save the g-code");
-        }
-      }
-    }
+  if (ImGui::Button("Generate detailed paths")) {
+    on_generate_detailed_paths();
 
     if (m_.detailed_milling_solution) {
-      static bool show_trimming = false;
-      ImGui::Checkbox("Show last trimming txt", &show_trimming);
-      if (show_trimming) {
-        m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
-                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
-                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+      const auto& points = m_.detailed_milling_solution->points;
+
+      if (!System::file_dialog().save_file(
+              [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+        eray::util::Logger::err("Could not save the g-code");
       }
+    }
+  }
+
+  if (m_.detailed_milling_solution) {
+    static bool show_trimming = false;
+    ImGui::Checkbox("Show last trimming txt", &show_trimming);
+    if (show_trimming) {
+      m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
+                                                   ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
+                                                   ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
     }
   }
 
@@ -1884,11 +1884,8 @@ bool MiniCadApp::on_generate_detailed_paths() {
   if (handles.empty()) {
     return false;
   }
-  if (!m_.milling_height_map) {
-    return false;
-  }
 
-  m_.detailed_milling_solution = DetailedMillingSolver::solve(*m_.milling_height_map, m_.scene, handles.front());
+  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front());
   if (!m_.detailed_milling_solution) {
     return false;
   }
