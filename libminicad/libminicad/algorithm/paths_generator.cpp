@@ -39,19 +39,19 @@ void algo::rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t st
   auto project_onto_plane = [](math::Vec3f p, Plane plane) {
     switch (plane) {
       case Plane::XY:
-        return math::Vec2f{p.x, p.y};
+        return math::Vec3f{p.x, p.y, 0.F};
       case Plane::XZ:
-        return math::Vec2f{p.x, p.z};
+        return math::Vec3f{p.x, 0.F, p.z};
       case Plane::YZ:
-        return math::Vec2f{p.y, p.z};
+        return math::Vec3f{0.F, p.y, p.z};
+      case Plane::None:
+        return p;
     }
   };
 
   float max_dist_sq = 0.0F;
   size_t pivot      = start;
 
-  if (plane == Plane::XY) {
-  }
   const auto dir      = project_onto_plane(points[end], plane) - project_onto_plane(points[start], plane);
   const auto dir_norm = dir.normalize();
 
@@ -572,7 +572,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       break;
     }
   }
-  contour_points = algo::rdp(contour_points, contour_epsilon);
+  contour_points = algo::rdp(contour_points, contour_epsilon, algo::Plane::XZ);
 
   // == Generate zig-zag segments ======================================================================================
   const auto intersection_find = +[](const math::Vec2f p0, const math::Vec2f p1, const math::Vec2f q0,
@@ -1024,7 +1024,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
     auto p       = patch_surface->evaluate(u, v);
     auto deriv   = patch_surface->evaluate_derivatives(u, v);
     p            = p + math::cross(deriv.first, deriv.second).normalize() * radius;
-    return p.y < desc.zero_level + radius;
+    return p.y < desc.zero_level + radius + 0.01F;
   };
 
   std::vector<algo::ParamSurface> intersecting_param_surfaces;
@@ -1079,7 +1079,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
       auto p       = patch_surface->evaluate(u, v);
       auto deriv   = patch_surface->evaluate_derivatives(u, v);
-      scene.renderer().debug_point(p + math::cross(deriv.first, deriv.second).normalize() * radius);
+      //   scene.renderer().debug_point(p + math::cross(deriv.first, deriv.second).normalize() * radius);
     };
 
     auto is_trimmed = [&](size_t i, size_t j) { return trimming_txt[i * kTrimmingTextureSize + j] == 0xFF000000; };
@@ -1142,30 +1142,34 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
   };
 
   std::vector<std::vector<eray::math::Vec3f>> point_lists;
-  auto points = std::vector<math::Vec3f>();
+  auto points                 = std::vector<math::Vec3f>();
+  auto current_segment_points = std::vector<math::Vec3f>();
 
   auto draw_straight_line = [&](Coord start, Coord end) {
+    current_segment_points.clear();
+
     if (start.i == end.i) {
       if (start.j < end.j) {
         for (auto j = start.j; j <= end.j; ++j) {
-          points.push_back(evaluate(start.i, j));
+          current_segment_points.push_back(evaluate(start.i, j));
         }
       } else {
         for (auto j = start.j; j >= end.j; --j) {
-          points.push_back(evaluate(start.i, j));
+          current_segment_points.push_back(evaluate(start.i, j));
         }
       }
     } else {
       if (start.i < end.i) {
         for (auto i = start.i; i <= end.i; ++i) {
-          points.push_back(evaluate(i, start.j));
+          current_segment_points.push_back(evaluate(i, start.j));
         }
       } else {
         for (auto i = start.i; i >= end.i; --i) {
-          points.push_back(evaluate(i, start.j));
+          current_segment_points.push_back(evaluate(i, start.j));
         }
       }
     }
+    points.append_range(algo::rdp(current_segment_points, 0.001F));
   };
 
   auto debug_straight_line = [&](Coord start, Coord end) {
@@ -1200,7 +1204,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
 
             if (trimming_txt[ni * kTrimmingTextureSize + nj] != 0xFF000000) {
               trimming_txt[ni * kTrimmingTextureSize + nj] = 0xFF00FFFF;
-              points.push_back(evaluate(ni, nj));
+              current_segment_points.push_back(evaluate(ni, nj));
               found = true;
               break;
             }
@@ -1214,7 +1218,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       }
     } else {
       trimming_txt[i * kTrimmingTextureSize + j] = 0xFF00FFFF;
-      points.push_back(evaluate(i, j));
+      current_segment_points.push_back(evaluate(i, j));
     }
   };
 
@@ -1281,10 +1285,14 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       lines[line_ind].erase(lines[line_ind].begin() + best_segment_ind, lines[line_ind].begin() + best_segment_ind + 2);
 
       if (forward) {
+        current_segment_points.clear();
         line(prev_segment_start.j, prev_segment_start.i, segment_start.j, segment_start.i, on_draw);
+        points.append_range(algo::rdp(current_segment_points, 0.001F));
         draw_straight_line(segment_start, segment_end);
       } else {
+        current_segment_points.clear();
         line(prev_segment_end.j, prev_segment_end.i, segment_end.j, segment_end.i, on_draw);
+        points.append_range(algo::rdp(current_segment_points, 0.001F));
         draw_straight_line(segment_end, segment_start);
       }
       forward = !forward;

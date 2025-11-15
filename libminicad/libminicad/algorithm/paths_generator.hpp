@@ -13,6 +13,7 @@ enum class Plane : uint8_t {
   XY,
   XZ,
   YZ,
+  None,
 };
 
 /**
@@ -22,7 +23,7 @@ enum class Plane : uint8_t {
  * @param epsilon
  */
 std::vector<eray::math::Vec3f> rdp(const std::vector<eray::math::Vec3f>& points, float epsilon,
-                                   Plane plane = Plane::XZ);
+                                   Plane plane = Plane::None);
 void rdp_recursive(const std::vector<eray::math::Vec3f>& points, size_t start, size_t end, float epsilon, Plane plane,
                    std::vector<eray::math::Vec3f>& out);
 
