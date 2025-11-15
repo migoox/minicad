@@ -1348,5 +1348,184 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       .trimming_texture = handle,
   };
 }
+std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path) {
+  namespace fs = std::filesystem;
+
+  if (!fs::exists(path)) {
+    eray::util::Logger::err("File with path {} does not exist", path.string());
+    return std::nullopt;
+  }
+
+  if (!fs::is_regular_file(path) && !fs::is_symlink(path)) {
+    eray::util::Logger::err("File with path {} is not a regular file or symlink", path.string());
+    return std::nullopt;
+  }
+  auto name = path.filename().string();
+  auto ext  = path.extension().string();
+  if (ext.size() != 4U) {
+    eray::util::Logger::err("File with path {} has invalid extension, expected .(f|k)XX", path.string());
+    return std::nullopt;
+  }
+  ext = ext.substr(1, 3);  // skip the leading dot
+
+  if (ext[0] != 'k' && ext[0] != 'f') {
+    eray::util::Logger::err("File with path {} has invalid extension, expected .(f|k)XX", path.string());
+    return std::nullopt;
+  }
+  if (!std::isdigit(ext[1]) || !std::isdigit(ext[2])) {
+    eray::util::Logger::err("File with path {} has invalid extension, expected .(f|k)XX", path.string());
+    return std::nullopt;
+  }
+
+  auto type     = ext[0] == 'k' ? PathType::Sphere : PathType::Flat;
+  auto diameter = 0;
+  if (ext[1] == '0') {
+    diameter = ext[2] - '0';
+  } else {
+    diameter = std::stoi(ext.substr(1, 2));
+  }
+
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    eray::util::Logger::err("Could not open the file with path {}", path.string());
+    return std::nullopt;
+  }
+
+  std::vector<math::Vec3f> points;
+  std::string line;
+
+  auto prev_pos = math::Vec3f{0.F, 0.F, 0.F};
+
+  auto parse_float = [](std::string& l, std::string::iterator& it) -> std::optional<float> {
+    auto coord_start = it;
+    if (it != l.end() && (*it == '-' || *it == '+')) {
+      ++it;
+    }
+
+    while (it != l.end() && (std::isdigit(*it) != 0 || *it == '.')) {
+      ++it;
+    }
+
+    float coord = 0.0F;
+    if (coord_start == it) {
+      return coord;
+    }
+
+    const char* last = it == l.end() ? l.c_str() + l.size() : &*it;
+    auto [ptr, ec]   = std::from_chars(&*coord_start, last, coord);
+    if (ec != std::errc()) {
+      std::string_view bad_part(&*coord_start, std::distance(coord_start, it));
+      eray::util::Logger::warn(
+          "Parsing error: Could not parse floating number \"{}\". The G-Code command will be omitted.", bad_part);
+      return std::nullopt;
+    }
+    return coord;
+  };
+
+  while (std::getline(file, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    auto pos = math::Vec3f{0.F, 0.F, 0.F};
+
+    auto it = line.begin();
+    it      = std::ranges::find(it, line.end(), 'G');
+    if (it == line.end()) {
+      continue;
+    }
+    ++it;
+    if (it == line.end() || *it != '0') {
+      continue;
+    }
+    ++it;
+    if (it == line.end() || *it != '1') {
+      continue;
+    }
+
+    while (it != line.end() && (std::isspace(*it) != 0)) {
+      ++it;
+    }
+
+    it = std::ranges::find(it, line.end(), 'X');
+    ++it;
+    if (it == line.end()) {
+      pos.x = prev_pos.x;
+    } else {
+      auto coord = parse_float(line, it);
+      if (!coord) {
+        continue;
+      }
+
+      // convert mm to cm
+      pos.x = *coord / 10.F;
+    }
+
+    while (it != line.end() && (std::isspace(*it) != 0)) {
+      ++it;
+    }
+
+    it = std::ranges::find(it, line.end(), 'Y');
+    ++it;
+    if (it == line.end()) {
+      pos.z = prev_pos.z;
+    } else {
+      auto coord = parse_float(line, it);
+      if (!coord) {
+        continue;
+      }
+
+      // convert mm to cm and right-handed Z up ---> right-handed Y up
+      pos.z = -*coord / 10.F;
+    }
+
+    while (it != line.end() && (std::isspace(*it) != 0)) {
+      ++it;
+    }
+
+    it = std::ranges::find(it, line.end(), 'Z');
+    ++it;
+    if (it == line.end()) {
+      pos.y = prev_pos.y;
+    } else {
+      auto coord = parse_float(line, it);
+      if (!coord) {
+        continue;
+      }
+      // convert mm to cm and right-handed Z up ---> right-handed Y up
+      pos.y = *coord / 10.F;
+    }
+
+    prev_pos = pos;
+
+    points.push_back(pos);
+  }
+
+  return MillingPath{
+      .name     = std::move(name),
+      .points   = std::move(points),
+      .type     = type,
+      .diameter = diameter,
+  };
+}
+
+bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
+  auto filepath_str = filepath.string();
+  bool exists       = std::ranges::any_of(paths, [&](const auto& path) { return path.name == filepath_str; });
+  if (exists) {
+    eray::util::Logger::warn("Already loaded {}", filepath_str);
+    return false;
+  }
+
+  auto result = GCodeParser::parse(filepath);
+  if (!result) {
+    return false;
+  }
+  result->name = filepath;
+  paths.emplace_back(*result);
+
+  return true;
+}
+
+std::vector<eray::math::Vec3f> MillingPathsCombiner::combine() { return std::vector<eray::math::Vec3f>(); }
 
 }  // namespace mini

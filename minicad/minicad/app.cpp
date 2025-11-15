@@ -42,6 +42,7 @@
 #include <libminicad/scene/scene_object.hpp>
 #include <libminicad/scene/types.hpp>
 #include <libminicad/serialization/json/json.hpp>
+#include <limits>
 #include <memory>
 #include <minicad/app.hpp>
 #include <minicad/camera/orbiting_camera_operator.hpp>
@@ -833,112 +834,179 @@ void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::End();
 
   ImGui::Begin("Milling");
-  if (ImGui::Button("Generate height map")) {
-    on_generate_height_map();
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Load height map")) {
-    auto res = System::file_dialog().open_file(
-        [&](const auto& path) { m_.milling_height_map = HeightMap::load_from_file(m_.scene, path); });
+  ImGui::BeginTabBar("MillingOptions");
 
-    if (!res) {
-      Logger::info("File dialog error");
+  if (ImGui::BeginTabItem("Paths generator")) {
+    if (ImGui::Button("Generate height map")) {
+      on_generate_height_map();
     }
-  }
-
-  {
-    const bool disabled = !m_.milling_height_map;
-    if (disabled) {
-      ImGui::BeginDisabled();
-    }
-
-    ImGui::BeginGroup();
-    static bool show_height_map = false;
-    ImGui::Checkbox("Show height map", &show_height_map);
-    if (ImGui::Button("Save height map")) {
-      auto res = System::file_dialog().save_file([&](const auto& path) { m_.milling_height_map->save_to_file(path); });
+    ImGui::SameLine();
+    if (ImGui::Button("Load height map")) {
+      auto res = System::file_dialog().open_file(
+          [this](const auto& path) { m_.milling_height_map = HeightMap::load_from_file(m_.scene, path); });
 
       if (!res) {
         Logger::info("File dialog error");
       }
     }
-    if (show_height_map) {
-      m_.scene.renderer().draw_imgui_texture_image(m_.milling_height_map->height_map_handle, HeightMap::kHeightMapSize,
-                                                   HeightMap::kHeightMapSize);
-    }
 
-    if (ImGui::Button("Generate rough paths")) {
-      on_generate_rough_paths();
+    {
+      const bool disabled = !m_.milling_height_map;
+      if (disabled) {
+        ImGui::BeginDisabled();
+      }
 
-      if (m_.rough_path_points) {
-        const auto& points = *m_.rough_path_points;
-        if (!System::file_dialog().save_file(
-                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
-          eray::util::Logger::err("Could not save the g-code");
+      ImGui::BeginGroup();
+      static bool show_height_map = false;
+      ImGui::Checkbox("Show height map", &show_height_map);
+      if (ImGui::Button("Save height map")) {
+        auto res =
+            System::file_dialog().save_file([&](const auto& path) { m_.milling_height_map->save_to_file(path); });
+
+        if (!res) {
+          Logger::info("File dialog error");
         }
       }
-    }
+      if (show_height_map) {
+        m_.scene.renderer().draw_imgui_texture_image(m_.milling_height_map->height_map_handle,
+                                                     HeightMap::kHeightMapSize, HeightMap::kHeightMapSize);
+      }
 
-    if (ImGui::Button("Generate flat paths")) {
-      on_generate_flat_paths();
+      if (ImGui::Button("Generate rough paths")) {
+        on_generate_rough_paths();
 
+        if (m_.rough_path_points) {
+          const auto& points = *m_.rough_path_points;
+          if (!System::file_dialog().save_file(
+                  [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+            eray::util::Logger::err("Could not save the g-code");
+          }
+        }
+      }
+
+      if (ImGui::Button("Generate flat paths")) {
+        on_generate_flat_paths();
+
+        if (m_.flat_milling_solution) {
+          const auto& points = m_.flat_milling_solution->points;
+
+          if (!System::file_dialog().save_file(
+                  [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+            eray::util::Logger::err("Could not save the g-code");
+          }
+        }
+      }
+
+      static bool show_border_map = false;
       if (m_.flat_milling_solution) {
-        const auto& points = m_.flat_milling_solution->points;
+        ImGui::Checkbox("Show border", &show_border_map);
+        if (show_border_map) {
+          m_.scene.renderer().draw_imgui_texture_image(m_.flat_milling_solution->border_handle,
+                                                       HeightMap::kHeightMapSize, HeightMap::kHeightMapSize);
+        }
+      }
 
-        if (!System::file_dialog().save_file(
-                [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+      ImGui::EndGroup();
+      if (disabled) {
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+          ImGui::SetTooltip("Generate or load the model height map first!");
+        }
+        ImGui::EndDisabled();
+      }
+    }
+
+    static int paths = 100;
+    ImGui::InputInt("Paths", &paths);
+    if (ImGui::Button("Generate detailed paths")) {
+      on_generate_detailed_paths(paths);
+
+      if (m_.detailed_milling_solution) {
+        if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
+              auto i = 0;
+              for (const auto& points : m_.detailed_milling_solution->point_lists) {
+                GCodeSerializer::write_to_file(points, path / std::format("part_{}.k08", i));
+                ++i;
+              }
+            })) {
           eray::util::Logger::err("Could not save the g-code");
         }
       }
     }
-
-    static bool show_border_map = false;
-    if (m_.flat_milling_solution) {
-      ImGui::Checkbox("Show border", &show_border_map);
-      if (show_border_map) {
-        m_.scene.renderer().draw_imgui_texture_image(m_.flat_milling_solution->border_handle, HeightMap::kHeightMapSize,
-                                                     HeightMap::kHeightMapSize);
-      }
-    }
-
-    ImGui::EndGroup();
-    if (disabled) {
-      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("Generate or load the model height map first!");
-      }
-      ImGui::EndDisabled();
-    }
-  }
-
-  static int paths = 100;
-  ImGui::InputInt("Paths", &paths);
-  if (ImGui::Button("Generate detailed paths")) {
-    on_generate_detailed_paths(paths);
+    ImGui::SameLine();
 
     if (m_.detailed_milling_solution) {
-      if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
-            auto i = 0;
-            for (const auto& points : m_.detailed_milling_solution->point_lists) {
-              GCodeSerializer::write_to_file(points, path / std::format("part_{}.k08", i));
-              ++i;
-            }
-          })) {
-        eray::util::Logger::err("Could not save the g-code");
+      static bool show_trimming = false;
+      ImGui::Checkbox("Show last trimming txt", &show_trimming);
+      if (show_trimming) {
+        m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
+                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
+                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
       }
     }
+    ImGui::EndTabItem();
   }
-  ImGui::SameLine();
 
-  if (m_.detailed_milling_solution) {
-    static bool show_trimming = false;
-    ImGui::Checkbox("Show last trimming txt", &show_trimming);
-    if (show_trimming) {
-      m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
-                                                   ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
-                                                   ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+  if (ImGui::BeginTabItem("Paths combiner")) {
+    if (ImGui::BeginListBox("##PathsListBox")) {
+      size_t i                      = 0;
+      constexpr auto kSelectionNull = std::numeric_limits<size_t>::max();
+
+      static size_t selected_ind = std::numeric_limits<size_t>::max();
+
+      for (const auto& p : m_.milling_path_combiner.paths) {
+        if (ImGui::Selectable(p.name.c_str(), selected_ind == i)) {
+          selected_ind = i;
+        }
+
+        ++i;
+      }
+      ImGui::EndListBox();
+
+      if (selected_ind != kSelectionNull) {
+        if (ImGui::Button("Remove")) {
+          m_.milling_path_combiner.paths.erase(m_.milling_path_combiner.paths.begin() + selected_ind);
+          selected_ind = kSelectionNull;
+        }
+
+        if (selected_ind < m_.milling_path_combiner.paths.size() - 1) {
+          if (ImGui::Button("v")) {
+            std::swap(m_.milling_path_combiner.paths[selected_ind], m_.milling_path_combiner.paths[selected_ind + 1]);
+            selected_ind++;
+          }
+        }
+
+        if (selected_ind > 0) {
+          if (ImGui::Button("^")) {
+            std::swap(m_.milling_path_combiner.paths[selected_ind], m_.milling_path_combiner.paths[selected_ind - 1]);
+            selected_ind--;
+          }
+        }
+      }
+
+      if (ImGui::Button("Load")) {
+        auto res =
+            System::file_dialog().open_file([this](const auto& path) { m_.milling_path_combiner.load_path(path); });
+
+        if (!res) {
+          Logger::info("File dialog error");
+        }
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Combine")) {
+        auto res = System::file_dialog().save_file([this](const auto& path) {
+          auto points = m_.milling_path_combiner.combine();
+          GCodeSerializer::write_to_file(points, path);
+        });
+
+        if (!res) {
+          Logger::info("File dialog error");
+        }
+      }
     }
+    ImGui::EndTabItem();
   }
 
+  ImGui::EndTabBar();
   ImGui::End();
 
   ImGui::Begin(ICON_FA_CAMERA_RETRO " Camera");

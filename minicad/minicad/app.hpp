@@ -84,6 +84,8 @@ class MiniCadApp final : public eray::os::Application {
     std::optional<std::vector<eray::math::Vec3f>> rough_path_points;
     std::optional<FlatMillingSolver> flat_milling_solution;
     std::optional<DetailedMillingSolver> detailed_milling_solution;
+
+    MillingPathsCombiner milling_path_combiner;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);

@@ -108,6 +108,34 @@ struct DetailedMillingSolver {
                                                     const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 
+enum class PathType : std::uint8_t { Sphere, Flat };
+
+struct MillingPath {
+  std::string name;
+  std::vector<eray::math::Vec3f> points;  // [cm]
+  PathType type;
+  int diameter;  // [cm]
+};
+
+struct GCodeParser {
+  static std::optional<MillingPath> parse(const std::filesystem::path& path);
+};
+
+struct MillingPathsCombiner {
+  std::vector<MillingPath> paths;
+
+  /**
+   * @brief
+   *
+   * @param filepath
+   * @return true if successfully loaded
+   * @return false
+   */
+  bool load_path(const std::filesystem::path& filepath);
+
+  std::vector<eray::math::Vec3f> combine();
+};
+
 struct GCodeSerializer {
   static bool write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,
                             const WorkpieceDesc& desc = WorkpieceDesc{});
