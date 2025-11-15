@@ -38,7 +38,7 @@ class IntersectionFinder {
 
     void fill_textures(ParamSurface& s1, ParamSurface& s2);
 
-    static constexpr auto kTxtSize = 1000;
+    static constexpr auto kTxtSize = 1500;
 
    private:
     void draw_curve(std::vector<uint32_t>& txt, const std::vector<eray::math::Vec2f>& params_surface);
