@@ -92,7 +92,7 @@ struct FlatMillingSolver {
 };
 
 struct DetailedMillingSolver {
-  std::vector<eray::math::Vec3f> points;
+  std::vector<std::vector<eray::math::Vec3f>> point_lists;
   TextureHandle trimming_texture;
 
   /**

@@ -910,18 +910,24 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     }
   }
 
+  static int paths = 100;
+  ImGui::InputInt("Paths", &paths);
   if (ImGui::Button("Generate detailed paths")) {
-    on_generate_detailed_paths();
+    on_generate_detailed_paths(paths);
 
     if (m_.detailed_milling_solution) {
-      const auto& points = m_.detailed_milling_solution->points;
-
-      if (!System::file_dialog().save_file(
-              [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+      if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
+            auto i = 0;
+            for (const auto& points : m_.detailed_milling_solution->point_lists) {
+              GCodeSerializer::write_to_file(points, path / std::format("part_{}.k08", i));
+              ++i;
+            }
+          })) {
         eray::util::Logger::err("Could not save the g-code");
       }
     }
   }
+  ImGui::SameLine();
 
   if (m_.detailed_milling_solution) {
     static bool show_trimming = false;
@@ -1875,7 +1881,7 @@ bool MiniCadApp::on_generate_flat_paths() {
   return true;
 }
 
-bool MiniCadApp::on_generate_detailed_paths() {
+bool MiniCadApp::on_generate_detailed_paths(size_t paths) {
   auto handles = std::vector<PatchSurfaceHandle>();
   auto append  = [&handles](const PatchSurfaceHandle& handle) { handles.push_back(handle); };
   for (auto h : *m_.non_transformable_selection) {
@@ -1885,14 +1891,16 @@ bool MiniCadApp::on_generate_detailed_paths() {
     return false;
   }
 
-  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front());
+  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front(), true, paths);
   if (!m_.detailed_milling_solution) {
     return false;
   }
 
-  if (auto opt_curve = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
-    opt_curve.value()->set_points(m_.detailed_milling_solution->points);
-    opt_curve.value()->set_name(std::format("{} [Detailed Milling]", opt_curve.value()->name));
+  for (const auto& points : m_.detailed_milling_solution->point_lists) {
+    if (auto opt_curve = m_.scene.create_obj_and_get<ApproxCurve>(DefaultApproxCurve{})) {
+      opt_curve.value()->set_points(points);
+      opt_curve.value()->set_name(std::format("{} [Detailed Milling]", opt_curve.value()->name));
+    }
   }
 
   return true;

@@ -945,6 +945,38 @@ std::optional<eray::math::Vec3f> y_up_ray_vs_param_surfaces(eray::math::Vec3f p0
 
 }  // namespace algo
 
+static void line(int x0, int y0, int x1, int y1, std::function<void(int x, int y)> on_pixel) {
+  constexpr auto kTrimmingTextureSizeInt = static_cast<int>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+
+  int dx = std::abs(x1 - x0);
+  int dy = std::abs(y1 - y0);
+
+  int sx = (x0 < x1) ? 1 : -1;
+  int sy = (y0 < y1) ? 1 : -1;
+
+  int err = dx - dy;
+
+  while (true) {
+    if (x0 >= 0 && x0 < kTrimmingTextureSizeInt && y0 >= 0 && y0 < kTrimmingTextureSizeInt) {
+      on_pixel(x0, y0);
+    }
+
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
+    int e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+}
+
 std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
                                                                   bool dir, size_t paths, const WorkpieceDesc& desc,
                                                                   float diameter) {
@@ -1109,6 +1141,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
     return p + math::cross(deriv.first, deriv.second).normalize() * radius;
   };
 
+  std::vector<std::vector<eray::math::Vec3f>> point_lists;
   auto points = std::vector<math::Vec3f>();
 
   auto draw_straight_line = [&](Coord start, Coord end) {
@@ -1147,7 +1180,47 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
     }
   };
 
+  auto on_draw = [&](int j, int i) {
+    if (trimming_txt[i * kTrimmingTextureSize + j] == 0xFF000000) {
+      // find closest non-trimmed pixel
+      int radius = 1;
+      bool found = false;
+      while (!found) {
+        bool hit_border = false;
+
+        for (int dj = -radius; dj <= radius && !found; ++dj) {
+          for (int di = -radius; di <= radius && !found; ++di) {
+            int nj = j + dj;
+            int ni = i + di;
+
+            if (nj < 0 || nj >= kTrimmingTextureSize || ni < 0 || ni >= kTrimmingTextureSize) {
+              hit_border = true;
+              break;
+            }
+
+            if (trimming_txt[ni * kTrimmingTextureSize + nj] != 0xFF000000) {
+              trimming_txt[ni * kTrimmingTextureSize + nj] = 0xFF00FFFF;
+              points.push_back(evaluate(ni, nj));
+              found = true;
+              break;
+            }
+          }
+        }
+
+        if (found || hit_border) {
+          break;
+        }
+        radius++;
+      }
+    } else {
+      trimming_txt[i * kTrimmingTextureSize + j] = 0xFF00FFFF;
+      points.push_back(evaluate(i, j));
+    }
+  };
+
+  bool forward = true;
   for (;;) {
+    points.clear();
     auto first_line_ind = lines.size();
     for (auto i = 0U; i < lines.size() - 1; ++i) {
       if (!lines[i].empty()) {
@@ -1160,25 +1233,72 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       break;
     }
 
-    bool forward = true;
-    for (auto line_ind = first_line_ind; line_ind < lines.size(); ++line_ind) {
+    auto prev_segment_start = lines[first_line_ind][lines[first_line_ind].size() - 2];
+    auto prev_segment_end   = lines[first_line_ind][lines[first_line_ind].size() - 1];
+    lines[first_line_ind].pop_back();
+    lines[first_line_ind].pop_back();
+    if (forward) {
+      draw_straight_line(prev_segment_start, prev_segment_end);
+    } else {
+      draw_straight_line(prev_segment_end, prev_segment_start);
+    }
+    forward = !forward;
+
+    for (auto line_ind = first_line_ind + 1; line_ind < lines.size(); ++line_ind) {
       if (lines[line_ind].empty()) {
         break;
       }
-      auto segment_start = lines[line_ind][lines[line_ind].size() - 1];
-      auto segment_end   = lines[line_ind][lines[line_ind].size() - 2];
-      lines[line_ind].pop_back();
-      lines[line_ind].pop_back();
+
+      // Find best next segment from current line
+      auto min              = std::numeric_limits<float>::max();
+      auto best_segment_ind = 0U;
+      for (auto segment_ind = 0; segment_ind < lines[line_ind].size(); segment_ind += 2) {
+        if (forward) {
+          auto curr_segment_end = lines[line_ind][segment_ind + 1];
+          auto prev             = evaluate(prev_segment_end.i, prev_segment_end.j);
+          auto curr             = evaluate(curr_segment_end.i, curr_segment_end.j);
+
+          auto curr_dist = dot(prev - curr, prev - curr);
+          if (min < curr_dist) {
+            min              = curr_dist;
+            best_segment_ind = segment_ind;
+          }
+        } else {
+          auto curr_segment_start = lines[line_ind][segment_ind];
+          auto prev               = evaluate(prev_segment_start.i, prev_segment_start.j);
+          auto curr               = evaluate(curr_segment_start.i, curr_segment_start.j);
+
+          auto curr_dist = dot(prev - curr, prev - curr);
+          if (min < curr_dist) {
+            min              = curr_dist;
+            best_segment_ind = segment_ind;
+          }
+        }
+      }
+
+      auto segment_start = lines[line_ind][best_segment_ind];
+      auto segment_end   = lines[line_ind][best_segment_ind + 1];
+      lines[line_ind].erase(lines[line_ind].begin() + best_segment_ind, lines[line_ind].begin() + best_segment_ind + 2);
+
       if (forward) {
+        line(prev_segment_start.j, prev_segment_start.i, segment_start.j, segment_start.i, on_draw);
         draw_straight_line(segment_start, segment_end);
       } else {
+        line(prev_segment_end.j, prev_segment_end.i, segment_end.j, segment_end.i, on_draw);
         draw_straight_line(segment_end, segment_start);
       }
       forward = !forward;
+
+      prev_segment_start = segment_start;
+      prev_segment_end   = segment_end;
+    }
+
+    if (!points.empty()) {
+      point_lists.push_back(points);
     }
   }
 
-  if (points.empty()) {
+  if (point_lists.empty()) {
     return std::nullopt;
   }
 
@@ -1208,8 +1328,15 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
   auto handle = scene.renderer().upload_texture(trimming_txt, ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
                                                 ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
 
+  // == Center to tooltip transform ====================================================================================
+  for (auto& point_list : point_lists) {
+    for (auto& p : point_list) {
+      p.y -= radius;
+    }
+  }
+
   return DetailedMillingSolver{
-      .points           = std::move(points),
+      .point_lists      = std::move(point_lists),
       .trimming_texture = handle,
   };
 }
