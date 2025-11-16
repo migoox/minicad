@@ -103,9 +103,10 @@ struct DetailedMillingSolver {
    * @param desc
    * @param radius in centimeters
    */
-  static std::optional<DetailedMillingSolver> solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
-                                                    bool dir = true, size_t paths = 100,
-                                                    const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
+  static std::optional<DetailedMillingSolver> solve(const HeightMap& height_map, Scene& scene,
+                                                    const PatchSurfaceHandle& patch_handle, bool dir = true,
+                                                    size_t paths = 100, const WorkpieceDesc& desc = WorkpieceDesc{},
+                                                    float diameter = 0.8F);
 };
 
 enum class PathType : std::uint8_t { Sphere, Flat };
@@ -115,6 +116,7 @@ struct MillingPath {
   std::vector<eray::math::Vec3f> points;  // [cm]
   PathType type;
   int diameter;  // [cm]
+  bool reverse = false;
 };
 
 struct GCodeParser {

@@ -163,7 +163,7 @@ class MiniCadApp final : public eray::os::Application {
   bool on_generate_height_map();
   bool on_generate_rough_paths();
   bool on_generate_flat_paths();
-  bool on_generate_detailed_paths(size_t paths);
+  bool on_generate_detailed_paths(size_t paths, bool dir);
 
   // Window Events
   bool on_mouse_pressed(const eray::os::MouseButtonPressedEvent& ev);

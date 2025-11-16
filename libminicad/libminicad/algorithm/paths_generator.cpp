@@ -482,7 +482,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     auto norm      = border_normal.at(std::make_pair(i, j));
     auto flat_norm = math::Vec3f{norm.x, 0.F, norm.z}.normalize();
 
-    points.emplace_back(math::Vec3f{x, y, z} + flat_norm * diameter / 2.F);
+    points.emplace_back(math::Vec3f{x, y, z} + flat_norm * (diameter / 2.F + 0.01F));
 
     for (size_t ii = 0; ii < 3; ++ii) {
       for (size_t jj = 0; jj < 3; ++jj) {
@@ -977,15 +977,13 @@ static void line(int x0, int y0, int x1, int y1, std::function<void(int x, int y
   }
 }
 
-std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, const PatchSurfaceHandle& patch_handle,
-                                                                  bool dir, size_t paths, const WorkpieceDesc& desc,
+std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMap& height_map, Scene& scene,
+                                                                  const PatchSurfaceHandle& patch_handle, bool dir,
+                                                                  size_t paths, const WorkpieceDesc& desc,
                                                                   float diameter) {
   constexpr auto kTrimmingTextureSize    = ParamSpaceTrimmingData::kCPUTrimmingTxtSize;
-  constexpr auto kTrimmingTextureSizeInt = static_cast<int>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
   constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
-
-  const auto radius       = diameter / 2.F;
-  const auto safety_depth = desc.depth + 1.2F * radius;
+  const auto radius                      = diameter / 2.F;
 
   if (!scene.arena<PatchSurface>().exists(patch_handle)) {
     eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
@@ -1133,6 +1131,43 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
   }
 
   // == Generate paths =================================================================================================
+  auto fix_intersection = [&](const HeightMap& height_map, const WorkpieceDesc& desc, float radius,
+                              math::Vec3f& tool_center) -> bool {
+    const float x_right  = ((tool_center.x + radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
+    const float x_left   = ((tool_center.x - radius) / desc.width + 0.5F) * static_cast<float>(height_map.width);
+    const float z_top    = ((tool_center.z + radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
+    const float z_bottom = ((tool_center.z - radius) / desc.height + 0.5F) * static_cast<float>(height_map.height);
+
+    const auto map_right =
+        static_cast<size_t>(std::clamp(std::lround(x_right), 0L, static_cast<long>(height_map.width)));
+    const auto map_left = static_cast<size_t>(std::clamp(std::lround(x_left), 0L, static_cast<long>(height_map.width)));
+    const auto map_top  = static_cast<size_t>(std::clamp(std::lround(z_top), 0L, static_cast<long>(height_map.height)));
+    const auto map_bottom =
+        static_cast<size_t>(std::clamp(std::lround(z_bottom), 0L, static_cast<long>(height_map.height)));
+
+    bool intersection = false;
+    for (auto i = map_bottom; i < map_top; ++i) {
+      for (auto j = map_left; j < map_right; ++j) {
+        auto map_x = (static_cast<float>(j) / static_cast<float>(height_map.width) - 0.5F) * desc.width;
+        auto map_y = height_map.height_map[i * height_map.width + j];
+        auto map_z = (static_cast<float>(i) / static_cast<float>(height_map.height) - 0.5F) * desc.height;
+
+        auto map_p = math::Vec3f{map_x, map_y, map_z};
+
+        auto piercing_vector = tool_center - map_p;
+        auto dist_sq         = eray::math::dot(piercing_vector, piercing_vector);
+        if (dist_sq < radius * radius) {
+          auto n       = height_map.normal_map[i * height_map.width + j];
+          auto dist    = std::sqrt(dist_sq);
+          intersection = true;
+          tool_center += (radius - dist) * n;
+        }
+      }
+    }
+
+    return intersection;
+  };
+
   auto evaluate = [&](size_t i, size_t j) {
     const auto u = static_cast<float>(j) / kTrimmingTextureSizeFlt;
     const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
@@ -1168,6 +1203,10 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
           current_segment_points.push_back(evaluate(i, start.j));
         }
       }
+    }
+
+    for (auto& p : current_segment_points) {
+      fix_intersection(height_map, desc, radius, p);
     }
     points.append_range(algo::rdp(current_segment_points, 0.001F));
   };
@@ -1262,7 +1301,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
           auto prev             = evaluate(prev_segment_end.i, prev_segment_end.j);
           auto curr             = evaluate(curr_segment_end.i, curr_segment_end.j);
 
-          auto curr_dist = dot(prev - curr, prev - curr);
+          auto curr_dist = math::dot(prev - curr, prev - curr);
           if (min < curr_dist) {
             min              = curr_dist;
             best_segment_ind = segment_ind;
@@ -1286,13 +1325,33 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
 
       if (forward) {
         current_segment_points.clear();
+
+        // if (!(prev_segment_start.j == segment_start.j &&
+        //       (segment_start.j == 0 || segment_start.j == kTrimmingTextureSize - 1)) &&
+        //     !(prev_segment_start.i == segment_start.i &&
+        //       (segment_start.i == 0 || segment_start.i == kTrimmingTextureSize - 1))) {
         line(prev_segment_start.j, prev_segment_start.i, segment_start.j, segment_start.i, on_draw);
+        for (auto& p : current_segment_points) {
+          fix_intersection(height_map, desc, radius, p);
+        }
         points.append_range(algo::rdp(current_segment_points, 0.001F));
+        // }
+
         draw_straight_line(segment_start, segment_end);
       } else {
         current_segment_points.clear();
+
+        // if (!(prev_segment_end.j == segment_end.j &&
+        //       (segment_end.j == 0 || segment_end.j == kTrimmingTextureSize - 1)) &&
+        //     !(prev_segment_end.i == segment_end.i &&
+        //       (segment_end.i == 0 || segment_end.i == kTrimmingTextureSize - 1))) {
         line(prev_segment_end.j, prev_segment_end.i, segment_end.j, segment_end.i, on_draw);
+        for (auto& p : current_segment_points) {
+          fix_intersection(height_map, desc, radius, p);
+        }
         points.append_range(algo::rdp(current_segment_points, 0.001F));
+        // }
+
         draw_straight_line(segment_end, segment_start);
       }
       forward = !forward;
@@ -1309,29 +1368,6 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
   if (point_lists.empty()) {
     return std::nullopt;
   }
-
-  // Transform tool center to tool tip
-  //   for (auto& point : points) {
-  //     point.y += radius;
-  //   }
-
-  //   const auto a = desc.zero_level + radius;
-  //   if (p[0].y > a && p[1].y > a) {
-  //     points.push_back(p[0]);
-  //     points.push_back(p[1]);
-
-  //   } else if (p[0].y > a) {
-  //     const auto t         = (a - p[0].y) / (p[1].y - p[0].y);
-  //     const auto projected = p[0] + t * (p[1] - p[0]);
-  //     points.push_back(p[0]);
-  //     points.push_back(projected);
-
-  //   } else if (p[1].y > a) {
-  //     const auto t         = (a - p[1].y) / (p[0].y - p[1].y);
-  //     const auto projected = p[1] + t * (p[0] - p[1]);
-  //     points.push_back(projected);
-  //     points.push_back(p[1]);
-  //   }
 
   auto handle = scene.renderer().upload_texture(trimming_txt, ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
                                                 ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
@@ -1539,6 +1575,10 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
 
   {
     auto first = paths[0].points.front();
+    if (paths[0].reverse) {
+      first = paths[0].points.back();
+    }
+
     if (std::abs(first.x) > std::abs(first.z)) {
       if (first.x > 0.F) {
         result.emplace_back(desc.width / 2.F, safety_depth, first.z);
@@ -1559,19 +1599,29 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   }
 
   auto real_size = 0;
+
   for (auto& path : paths) {
     if (path.points.empty()) {
       continue;
     }
 
-    if (real_size != 0) {
-      auto first = path.points.front();
-      result.emplace_back(first.x, safety_depth, first.z);
-    }
-    result.append_range(path.points);
+    const bool rev  = path.reverse;
+    const auto& pts = path.points;
 
-    auto last = path.points.back();
-    result.emplace_back(last.x, safety_depth, last.z);
+    const auto& first_pt = rev ? pts.back() : pts.front();
+    const auto& last_pt  = rev ? pts.front() : pts.back();
+
+    if (real_size != 0) {
+      result.emplace_back(first_pt.x, safety_depth, first_pt.z);
+    }
+
+    if (rev) {
+      result.append_range(pts | std::views::reverse);
+    } else {
+      result.append_range(pts);
+    }
+
+    result.emplace_back(last_pt.x, safety_depth, last_pt.z);
 
     ++real_size;
   }

@@ -906,6 +906,36 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         }
       }
 
+      static int paths = 100;
+      static bool dir  = true;
+      ImGui::InputInt("Paths", &paths);
+      ImGui::Checkbox("Dir", &dir);
+      if (ImGui::Button("Generate detailed paths")) {
+        on_generate_detailed_paths(paths, dir);
+
+        if (m_.detailed_milling_solution) {
+          if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
+                auto i = 0;
+                for (const auto& points : m_.detailed_milling_solution->point_lists) {
+                  GCodeSerializer::write_to_file(points, path / std::format("part_{}.k08", i));
+                  ++i;
+                }
+              })) {
+            eray::util::Logger::err("Could not save the g-code");
+          }
+        }
+      }
+
+      if (m_.detailed_milling_solution) {
+        static bool show_trimming = false;
+        ImGui::Checkbox("Show last trimming txt", &show_trimming);
+        if (show_trimming) {
+          m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
+                                                       ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
+                                                       ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
+        }
+      }
+
       ImGui::EndGroup();
       if (disabled) {
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
@@ -915,34 +945,6 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
     }
 
-    static int paths = 100;
-    ImGui::InputInt("Paths", &paths);
-    if (ImGui::Button("Generate detailed paths")) {
-      on_generate_detailed_paths(paths);
-
-      if (m_.detailed_milling_solution) {
-        if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
-              auto i = 0;
-              for (const auto& points : m_.detailed_milling_solution->point_lists) {
-                GCodeSerializer::write_to_file(points, path / std::format("part_{}.k08", i));
-                ++i;
-              }
-            })) {
-          eray::util::Logger::err("Could not save the g-code");
-        }
-      }
-    }
-    ImGui::SameLine();
-
-    if (m_.detailed_milling_solution) {
-      static bool show_trimming = false;
-      ImGui::Checkbox("Show last trimming txt", &show_trimming);
-      if (show_trimming) {
-        m_.scene.renderer().draw_imgui_texture_image(m_.detailed_milling_solution->trimming_texture,
-                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize,
-                                                     ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
-      }
-    }
     ImGui::EndTabItem();
   }
 
@@ -954,9 +956,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       static size_t selected_ind = std::numeric_limits<size_t>::max();
 
       for (const auto& p : m_.milling_path_combiner.paths) {
+        ImGui::PushID(i);
+        ImGui::Checkbox("Reverse", &m_.milling_path_combiner.paths[i].reverse);
+        ImGui::SameLine();
         if (ImGui::Selectable(p.name.c_str(), selected_ind == i)) {
           selected_ind = i;
         }
+        ImGui::PopID();
 
         ++i;
       }
@@ -994,8 +1000,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       ImGui::SameLine();
       if (ImGui::Button("Combine")) {
         m_.combined_points = m_.milling_path_combiner.combine(m_.scene);
-        auto res =
-            System::file_dialog().save_file([this](const auto& path) { GCodeSerializer::write_to_file(m_.combined_points, path); });
+        auto res           = System::file_dialog().save_file(
+            [this](const auto& path) { GCodeSerializer::write_to_file(m_.combined_points, path); });
 
         if (!res) {
           Logger::info("File dialog error");
@@ -1948,7 +1954,7 @@ bool MiniCadApp::on_generate_flat_paths() {
   return true;
 }
 
-bool MiniCadApp::on_generate_detailed_paths(size_t paths) {
+bool MiniCadApp::on_generate_detailed_paths(size_t paths, bool dir) {
   auto handles = std::vector<PatchSurfaceHandle>();
   auto append  = [&handles](const PatchSurfaceHandle& handle) { handles.push_back(handle); };
   for (auto h : *m_.non_transformable_selection) {
@@ -1958,7 +1964,12 @@ bool MiniCadApp::on_generate_detailed_paths(size_t paths) {
     return false;
   }
 
-  m_.detailed_milling_solution = DetailedMillingSolver::solve(m_.scene, handles.front(), true, paths);
+  if (!m_.milling_height_map) {
+    return false;
+  }
+
+  m_.detailed_milling_solution =
+      DetailedMillingSolver::solve(*m_.milling_height_map, m_.scene, handles.front(), dir, paths);
   if (!m_.detailed_milling_solution) {
     return false;
   }
