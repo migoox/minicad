@@ -1348,7 +1348,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(Scene& scene, 
       .trimming_texture = handle,
   };
 }
-std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path) {
+std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path, const WorkpieceDesc& desc) {
   namespace fs = std::filesystem;
 
   if (!fs::exists(path)) {
@@ -1474,8 +1474,7 @@ std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path)
         continue;
       }
 
-      // convert mm to cm and right-handed Z up ---> right-handed Y up
-      pos.z = -*coord / 10.F;
+      pos.z = *coord / 10.F;
     }
 
     while (it != line.end() && (std::isspace(*it) != 0)) {
@@ -1492,7 +1491,7 @@ std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path)
         continue;
       }
       // convert mm to cm and right-handed Z up ---> right-handed Y up
-      pos.y = *coord / 10.F;
+      pos.y = (*coord / 10.F) - (desc.depth - desc.max_depth);
     }
 
     prev_pos = pos;
@@ -1526,6 +1525,63 @@ bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
   return true;
 }
 
-std::vector<eray::math::Vec3f> MillingPathsCombiner::combine() { return std::vector<eray::math::Vec3f>(); }
+std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const WorkpieceDesc& desc) {
+  if (paths.empty()) {
+    return std::vector<eray::math::Vec3f>();
+  }
+
+  const auto diameter     = static_cast<float>(paths[0].diameter) / 2.F;
+  const auto radius       = diameter / 2.F;
+  const auto safety_depth = desc.depth + 1.2F * radius;
+
+  auto result = std::vector<eray::math::Vec3f>();
+  result.emplace_back(0.F, safety_depth, 0.F);
+
+  {
+    auto first = paths[0].points.front();
+    if (std::abs(first.x) > std::abs(first.z)) {
+      if (first.x > 0.F) {
+        result.emplace_back(desc.width / 2.F, safety_depth, first.z);
+        result.emplace_back(desc.width / 2.F, first.y, first.z);
+      } else {
+        result.emplace_back(-desc.width / 2.F, safety_depth, first.z);
+        result.emplace_back(-desc.width / 2.F, first.y, first.z);
+      }
+    } else {
+      if (first.z > 0.F) {
+        result.emplace_back(first.x, safety_depth, desc.height / 2.F);
+        result.emplace_back(first.x, first.y, desc.height / 2.F);
+      } else {
+        result.emplace_back(first.x, safety_depth, -desc.height / 2.F);
+        result.emplace_back(first.x, first.y, -desc.height / 2.F);
+      }
+    }
+  }
+
+  auto real_size = 0;
+  for (auto& path : paths) {
+    if (path.points.empty()) {
+      continue;
+    }
+
+    if (real_size != 0) {
+      auto first = path.points.front();
+      result.emplace_back(first.x, safety_depth, first.z);
+    }
+    result.append_range(path.points);
+
+    auto last = path.points.back();
+    result.emplace_back(last.x, safety_depth, last.z);
+
+    ++real_size;
+  }
+
+  for (auto i = 0U; i < result.size() - 1; ++i) {
+    scene.renderer().debug_line(result[i], result[i + 1]);
+  }
+  eray::util::Logger::info("size: {}", result.size());
+
+  return result;
+}
 
 }  // namespace mini

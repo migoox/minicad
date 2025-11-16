@@ -86,6 +86,7 @@ class MiniCadApp final : public eray::os::Application {
     std::optional<DetailedMillingSolver> detailed_milling_solution;
 
     MillingPathsCombiner milling_path_combiner;
+    std::vector<eray::math::Vec3f> combined_points;
   };
 
   MiniCadApp(std::unique_ptr<eray::os::Window> window, Members&& m);

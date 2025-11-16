@@ -993,10 +993,9 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
       ImGui::SameLine();
       if (ImGui::Button("Combine")) {
-        auto res = System::file_dialog().save_file([this](const auto& path) {
-          auto points = m_.milling_path_combiner.combine();
-          GCodeSerializer::write_to_file(points, path);
-        });
+        m_.combined_points = m_.milling_path_combiner.combine(m_.scene);
+        auto res =
+            System::file_dialog().save_file([this](const auto& path) { GCodeSerializer::write_to_file(m_.combined_points, path); });
 
         if (!res) {
           Logger::info("File dialog error");

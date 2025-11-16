@@ -118,7 +118,8 @@ struct MillingPath {
 };
 
 struct GCodeParser {
-  static std::optional<MillingPath> parse(const std::filesystem::path& path);
+  static std::optional<MillingPath> parse(const std::filesystem::path& path,
+                                          const WorkpieceDesc& desc = WorkpieceDesc{});
 };
 
 struct MillingPathsCombiner {
@@ -133,7 +134,7 @@ struct MillingPathsCombiner {
    */
   bool load_path(const std::filesystem::path& filepath);
 
-  std::vector<eray::math::Vec3f> combine();
+  std::vector<eray::math::Vec3f> combine(Scene& scene, const WorkpieceDesc& desc = WorkpieceDesc{});
 };
 
 struct GCodeSerializer {
