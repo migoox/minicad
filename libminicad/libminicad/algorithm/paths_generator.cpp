@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "liberay/math/mat_fwd.hpp"
@@ -417,8 +418,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
 
   const auto safe_depth = desc.max_depth + 2.F * diameter;
 
-  // == Create border texture
-  // ==========================================================================================
+  // == Create border texture ==========================================================================================
   auto is_border     = std::vector<bool>();
   auto border_normal = std::unordered_map<std::pair<size_t, size_t>, math::Vec3f, PairHash>();
   is_border.resize(height_map.height * height_map.width, false);
@@ -469,8 +469,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     return std::nullopt;
   }
 
-  // == Generate points
-  // ================================================================================================
+  // == Generate points ================================================================================================
   auto points = std::vector<math::Vec3f>();
   points.reserve(border_count);
   auto visited = std::unordered_set<std::pair<size_t, size_t>, PairHash>();
@@ -513,8 +512,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     ++count;
   };
 
-  // == Find outer point
-  // ===============================================================================================
+  // == Find outer point ===============================================================================================
   const auto diag  = math::Vec2f{0.F, desc.height};
   const auto p     = math::Vec2f{0.F, desc.height / 2.F};
   size_t outer_ind = kMaxInd;
@@ -529,8 +527,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     }
   }
 
-  // == Remove self intersections
-  // ======================================================================================
+  // == Remove self intersections ======================================================================================
   auto ind            = outer_ind;
   auto contour_points = std::vector<math::Vec3f>();
   contour_points.reserve(border_count);
@@ -667,17 +664,25 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   }
 
   // == Generate paths =================================================================================================
+  std::vector<std::vector<math::Vec3f>> point_lists;
   auto path_points = std::vector<math::Vec3f>();
   path_points.emplace_back(0.F, safe_depth, 0.F);
   path_points.emplace_back(0.F, safe_depth, desc.height / 2.F + diameter * 2.F);
   path_points.emplace_back(0.F, 0.F, desc.height / 2.F + diameter * 2.F);
   path_points.reserve(path_points.size() + contour_points.size());
-  for (const auto& cp : contour_points) {
-    if (std::isfinite(cp.x) && std::isfinite(cp.y) && std::isfinite(cp.z)) {
-      path_points.push_back(cp);
+  {
+    auto point_list = std::vector<math::Vec3f>();
+    for (const auto& cp : contour_points) {
+      if (std::isfinite(cp.x) && std::isfinite(cp.y) && std::isfinite(cp.z)) {
+        path_points.push_back(cp);
+        point_list.push_back(cp);
+      }
     }
+    point_lists.push_back(point_list);
   }
+
   path_points.emplace_back(contour_points.back().x, safe_depth, contour_points.back().z);
+
   for (;;) {
     auto first_line_ind = kMaxInd;
     for (auto i = 0U; i < segments.size() - 1; ++i) {
@@ -695,11 +700,15 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
     while (std::next(previous_segment) != segments[first_line_ind].end()) {
       ++previous_segment;
     }
+    auto point_list = std::vector<math::Vec3f>();
 
     auto rest = first_line_ind % 2;
     path_points.emplace_back(previous_segment->start.x, safe_depth, previous_segment->start.y);
     path_points.emplace_back(previous_segment->start.x, 0.F, previous_segment->start.y);
     path_points.emplace_back(previous_segment->end.x, 0.F, previous_segment->end.y);
+
+    point_list.emplace_back(previous_segment->start.x, 0.F, previous_segment->start.y);
+    point_list.emplace_back(previous_segment->end.x, 0.F, previous_segment->end.y);
 
     auto i = first_line_ind;
     for (;;) {
@@ -796,6 +805,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
               auto h_dir = curr_dir - norm_dir * math::dot(curr_dir, norm_dir);
               if (math::dot(h_dir, h_dir) > kLineVsContourIntersectionTolerance) {
                 path_points.emplace_back(contour_points[backward_ind]);  // fix intersection
+                point_list.emplace_back(contour_points[backward_ind]);   // fix intersection
               }
             }
             backward_ind = (n + backward_ind - 1) % n;
@@ -811,6 +821,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
               auto h_dir = curr_dir - norm_dir * math::dot(curr_dir, norm_dir);
               if (math::dot(h_dir, h_dir) > kLineVsContourIntersectionTolerance) {
                 path_points.emplace_back(contour_points[forward_ind]);  // fix intersection
+                point_list.emplace_back(contour_points[forward_ind]);   // fix intersection
               }
             }
             forward_ind = (forward_ind + 1) % n;
@@ -821,9 +832,15 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       if (forward) {
         path_points.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
         path_points.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
+
+        point_list.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
+        point_list.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
       } else {
         path_points.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
         path_points.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
+
+        point_list.emplace_back(curr_segment->end.x, 0.F, curr_segment->end.y);
+        point_list.emplace_back(curr_segment->start.x, 0.F, curr_segment->start.y);
       }
 
       segments[i - 1].erase(previous_segment);
@@ -835,6 +852,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
       path_points.emplace_back(previous_segment->start.x, safe_depth, previous_segment->start.y);
     }
     segments[i].erase(previous_segment);
+    point_lists.push_back(point_list);
   }
 
   //   for (auto i = 0U; i < contour_points.size() - 1; ++i) {
@@ -850,6 +868,7 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
 
   return FlatMillingSolver{
       .points        = std::move(path_points),
+      .point_lists   = std::move(point_lists),
       .border_handle = handle,
   };
 }
@@ -1536,7 +1555,7 @@ std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path,
   }
 
   return MillingPath{
-      .name     = std::move(name),
+      .filepath = std::move(path),
       .points   = std::move(points),
       .type     = type,
       .diameter = diameter,
@@ -1555,8 +1574,18 @@ bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
   if (!result) {
     return false;
   }
-  result->name = filepath;
-  paths.emplace_back(*result);
+
+  if (paths.empty()) {
+    diameter = static_cast<float>(result->diameter) / 10.F;
+    type     = result->type;
+  }
+
+  if (result->filepath) {
+    paths.emplace_back(MillingPathsCombinerEntry{.name = *result->filepath, .data = result->points});
+  } else {
+    paths.emplace_back(
+        MillingPathsCombinerEntry{.name = std::format("Path {}", unnamed_path_count++), .data = result->points});
+  }
 
   return true;
 }
@@ -1566,7 +1595,6 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
     return std::vector<eray::math::Vec3f>();
   }
 
-  const auto diameter     = static_cast<float>(paths[0].diameter) / 2.F;
   const auto radius       = diameter / 2.F;
   const auto safety_depth = desc.depth + 1.2F * radius;
 
@@ -1574,9 +1602,9 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   result.emplace_back(0.F, safety_depth, 0.F);
 
   {
-    auto first = paths[0].points.front();
+    auto first = paths[0].front();
     if (paths[0].reverse) {
-      first = paths[0].points.back();
+      first = paths[0].back();
     }
 
     if (std::abs(first.x) > std::abs(first.z)) {
@@ -1601,28 +1629,22 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   auto real_size = 0;
 
   for (auto& path : paths) {
-    if (path.points.empty()) {
+    if (path.size() == 0) {
       continue;
     }
 
-    const bool rev  = path.reverse;
-    const auto& pts = path.points;
+    const bool rev = path.reverse;
 
-    const auto& first_pt = rev ? pts.back() : pts.front();
-    const auto& last_pt  = rev ? pts.front() : pts.back();
+    const auto& first_pt = rev ? path.back() : path.front();
+    const auto& last_pt  = rev ? path.front() : path.back();
 
-    if (real_size != 0) {
+    if (real_size != 0 && path.safe) {
       result.emplace_back(first_pt.x, safety_depth, first_pt.z);
     }
-
-    if (rev) {
-      result.append_range(pts | std::views::reverse);
-    } else {
-      result.append_range(pts);
+    path.append_to(result, rev);
+    if (path.safe) {
+      result.emplace_back(last_pt.x, safety_depth, last_pt.z);
     }
-
-    result.emplace_back(last_pt.x, safety_depth, last_pt.z);
-
     ++real_size;
   }
 
@@ -1632,6 +1654,22 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   eray::util::Logger::info("size: {}", result.size());
 
   return result;
+}
+
+void MillingPathsCombiner::emplace_point(eray::math::Vec3f&& point) {
+  paths.emplace_back(MillingPathsCombinerEntry{
+      .name = std::format("Point {}", unnamed_point_count++), .data = std::move(point), .safe = false});
+}
+
+void MillingPathsCombiner::emplace_path(const MillingPath& path) {
+  if (paths.empty()) {
+    diameter = static_cast<float>(path.diameter) / 10.F;
+    type     = path.type;
+  }
+  paths.push_back(MillingPathsCombinerEntry{
+      .name = path.filepath ? path.filepath->string() : std::format("Path {}", unnamed_path_count++),
+      .data = path.points,
+      .safe = true});
 }
 
 }  // namespace mini

@@ -654,6 +654,10 @@ void MiniCadApp::gui_object_window() {
         obj.name = object_name;
       }
 
+      if (ImGui::Button("Add to milling path combiner")) {
+        m_.milling_path_combiner.emplace_point(obj.transform().pos());
+      }
+
       std::visit(util::match{[&](auto& o) {
                    ImGui::Text("Type: %s", o.type_name().c_str());
                    ImGui::SameLine();
@@ -888,10 +892,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
         on_generate_flat_paths();
 
         if (m_.flat_milling_solution) {
-          const auto& points = m_.flat_milling_solution->points;
-
-          if (!System::file_dialog().save_file(
-                  [&points](const auto& path) { GCodeSerializer::write_to_file(points, path); })) {
+          if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
+                auto i = 0;
+                for (const auto& points : m_.flat_milling_solution->point_lists) {
+                  GCodeSerializer::write_to_file(points, path / std::format("part_{}.f10", i));
+                  ++i;
+                }
+              })) {
             eray::util::Logger::err("Could not save the g-code");
           }
         }
@@ -958,6 +965,8 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       for (const auto& p : m_.milling_path_combiner.paths) {
         ImGui::PushID(i);
         ImGui::Checkbox("Reverse", &m_.milling_path_combiner.paths[i].reverse);
+        ImGui::SameLine();
+        ImGui::Checkbox("Safe", &m_.milling_path_combiner.paths[i].safe);
         ImGui::SameLine();
         if (ImGui::Selectable(p.name.c_str(), selected_ind == i)) {
           selected_ind = i;

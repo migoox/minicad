@@ -78,6 +78,7 @@ struct RoughMillingSolver {
 
 struct FlatMillingSolver {
   std::vector<eray::math::Vec3f> points;
+  std::vector<std::vector<eray::math::Vec3f>> point_lists;
   TextureHandle border_handle;
 
   /**
@@ -112,11 +113,10 @@ struct DetailedMillingSolver {
 enum class PathType : std::uint8_t { Sphere, Flat };
 
 struct MillingPath {
-  std::string name;
+  std::optional<std::filesystem::path> filepath;
   std::vector<eray::math::Vec3f> points;  // [cm]
   PathType type;
   int diameter;  // [cm]
-  bool reverse = false;
 };
 
 struct GCodeParser {
@@ -124,8 +124,60 @@ struct GCodeParser {
                                           const WorkpieceDesc& desc = WorkpieceDesc{});
 };
 
+struct MillingPathsCombinerEntry {
+  std::string name;
+  std::variant<std::vector<eray::math::Vec3f>, eray::math::Vec3f> data;
+  bool safe    = true;
+  bool reverse = false;
+
+  auto front() const {
+    return std::visit(eray::util::match{[](const eray::math::Vec3f& p) { return p; },
+                                        [](const std::vector<eray::math::Vec3f>& points) {
+                                          if (points.empty()) {
+                                            return eray::math::Vec3f::filled(0.F);
+                                          }
+                                          return points.front();
+                                        }},
+                      data);
+  }
+
+  auto back() const {
+    return std::visit(eray::util::match{[](const eray::math::Vec3f& p) { return p; },
+                                        [](const std::vector<eray::math::Vec3f>& points) {
+                                          if (points.empty()) {
+                                            return eray::math::Vec3f::filled(0.F);
+                                          }
+                                          return points.back();
+                                        }},
+                      data);
+  }
+
+  auto size() const {
+    return std::visit(eray::util::match{[](const eray::math::Vec3f&) -> size_t { return 1U; },
+                                        [](const std::vector<eray::math::Vec3f>& points) { return points.size(); }},
+                      data);
+  }
+
+  auto append_to(std::vector<eray::math::Vec3f>& dest, bool rev = false) {
+    std::visit(eray::util::match{[&dest](const eray::math::Vec3f& p) { dest.push_back(p); },
+                                 [&dest, rev](const std::vector<eray::math::Vec3f>& points) {
+                                   if (rev) {
+                                     dest.append_range(points | std::views::reverse);
+                                   } else {
+                                     dest.append_range(points);
+                                   }
+                                 }},
+               data);
+  }
+};
+
 struct MillingPathsCombiner {
-  std::vector<MillingPath> paths;
+  std::vector<MillingPathsCombinerEntry> paths;
+
+  float diameter          = 0.8F;
+  PathType type           = PathType::Sphere;
+  int unnamed_point_count = 0;
+  int unnamed_path_count  = 0;
 
   /**
    * @brief
@@ -135,6 +187,8 @@ struct MillingPathsCombiner {
    * @return false
    */
   bool load_path(const std::filesystem::path& filepath);
+  void emplace_point(eray::math::Vec3f&& point);
+  void emplace_path(const MillingPath& path);
 
   std::vector<eray::math::Vec3f> combine(Scene& scene, const WorkpieceDesc& desc = WorkpieceDesc{});
 };
