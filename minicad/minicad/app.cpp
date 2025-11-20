@@ -655,7 +655,10 @@ void MiniCadApp::gui_object_window() {
       }
 
       if (ImGui::Button("Add to milling path combiner")) {
-        m_.milling_path_combiner.emplace_point(obj.transform().pos());
+        auto entry = std::make_unique<PointObjectMillingPathCombinerEntry>(
+            PointObjectMillingPathCombinerEntry::create(h, m_.scene));
+        m_.milling_path_combiner.emplace_entry(
+            MillingPathsCombinerEntryInfo::from_entry(std::string(obj.name), std::move(entry)));
       }
 
       std::visit(util::match{[&](auto& o) {
@@ -756,6 +759,14 @@ void MiniCadApp::gui_object_window() {
         obj.value()->name = object_name;
       }
 
+      if (ImGui::Button("Save G-code")) {
+        if (auto result = System::file_dialog().save_file(
+                [ach = h, this](const auto& path) { GCodeSerializer::write_to_file(m_.scene, ach, path); });
+            !result) {
+          util::Logger::err("Failed to open file dialog");
+        }
+      }
+
       if (ImGui::Button("Create Natural Spline")) {
         ImGui::mini::OpenModal("Natural Spline");
       }
@@ -781,11 +792,9 @@ void MiniCadApp::gui_object_window() {
 void MiniCadApp::render_gui(Duration /* delta */) {
   ImGui::Begin("MiNI CAD");
   {
-#ifndef NDEBUG
     if (ImGui::Button("Clear Debug")) {
       m_.scene.renderer().clear_debug();
     }
-#endif
 
     static const std::array<os::FileDialog::FilterItem, 1> kFileDialogFilters = {
         os::FileDialog::FilterItem("Project", "json")};
@@ -1008,8 +1017,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
       }
       ImGui::SameLine();
       if (ImGui::Button("Combine")) {
-        m_.combined_points = m_.milling_path_combiner.combine(m_.scene);
-        auto res           = System::file_dialog().save_file(
+        if (m_.milling_height_map) {
+          m_.combined_points = m_.milling_path_combiner.combine(m_.scene, std::ref(*m_.milling_height_map));
+        } else {
+          Logger::warn("Combiner invoked with no milling height map");
+          m_.combined_points = m_.milling_path_combiner.combine(m_.scene);
+        }
+        auto res = System::file_dialog().save_file(
             [this](const auto& path) { GCodeSerializer::write_to_file(m_.combined_points, path); });
 
         if (!res) {

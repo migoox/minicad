@@ -23,8 +23,10 @@
 
 #include "liberay/math/mat_fwd.hpp"
 #include "liberay/math/vec_fwd.hpp"
+#include "libminicad/scene/approx_curve.hpp"
 #include "libminicad/scene/handles.hpp"
 #include "libminicad/scene/param_primitive.hpp"
+#include "libminicad/scene/scene_object.hpp"
 #include "libminicad/scene/trimming.hpp"
 
 namespace mini {
@@ -368,6 +370,26 @@ std::optional<RoughMillingSolver> RoughMillingSolver::solve(HeightMap& height_ma
 
   points.emplace_back(0.F, safety_offset + desc.max_depth, 0.F);
   return RoughMillingSolver{.points = std::move(points)};
+}
+
+bool GCodeSerializer::write_to_file(Scene& scene, ApproxCurveHandle handle, const std::filesystem::path& filename,
+                                    float diameter, const WorkpieceDesc& desc) {
+  const auto radius = diameter / 2.F;
+
+  if (auto obj = scene.harena(handle).get_obj(handle)) {
+    auto points = std::vector<math::Vec3f>();
+    for (auto p : obj.value()->points()) {
+      p.y -= radius;
+      if (p.y >= desc.zero_level) {
+        points.push_back(p);
+      }
+    }
+    write_to_file(points, filename, desc);
+
+    return true;
+  }
+
+  return false;
 }
 
 bool GCodeSerializer::write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,
@@ -1579,32 +1601,110 @@ bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
     diameter = static_cast<float>(result->diameter) / 10.F;
     type     = result->type;
   }
-
   if (result->filepath) {
-    paths.emplace_back(MillingPathsCombinerEntry{.name = *result->filepath, .data = result->points});
+    auto entry = MillingPathsCombinerEntryInfo::from_entry(
+        *result->filepath, std::make_unique<PointArrayMillingPathCombinerEntry>(
+                               PointArrayMillingPathCombinerEntry::create(result->points)));
+
+    paths.emplace_back(std::move(entry));
   } else {
-    paths.emplace_back(
-        MillingPathsCombinerEntry{.name = std::format("Path {}", unnamed_path_count++), .data = result->points});
+    auto entry = MillingPathsCombinerEntryInfo::from_entry(
+        std::format("Path {}", unnamed_path_count++), std::make_unique<PointArrayMillingPathCombinerEntry>(
+                                                          PointArrayMillingPathCombinerEntry::create(result->points)));
+
+    paths.emplace_back(std::move(entry));
   }
 
   return true;
 }
 
-std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const WorkpieceDesc& desc) {
+PointObjectMillingPathCombinerEntry PointObjectMillingPathCombinerEntry::create(PointObjectHandle handle,
+                                                                                Scene& scene) {
+  return PointObjectMillingPathCombinerEntry{std::move(handle), scene};
+}
+
+PointArrayMillingPathCombinerEntry PointArrayMillingPathCombinerEntry::create(
+    const std::vector<eray::math::Vec3f>& points) {
+  return PointArrayMillingPathCombinerEntry{std::vector<eray::math::Vec3f>(points)};
+}
+
+PointArrayMillingPathCombinerEntry PointArrayMillingPathCombinerEntry::optimize_and_create(
+    const std::vector<eray::math::Vec3f>& points, float eps) {
+  auto opt_points = algo::rdp(points, eps);
+  return PointArrayMillingPathCombinerEntry{std::move(opt_points)};
+}
+
+PointArrayMillingPathCombinerEntry PointArrayMillingPathCombinerEntry::from_approx_curve(
+    const ApproxCurveHandle& handle, Scene& scene, float eps) {
+  if (auto obj = scene.harena(handle).get_obj(handle)) {
+    if (eps < 1.e-6F) {
+      return PointArrayMillingPathCombinerEntry{std::vector<math::Vec3f>(obj.value()->points())};
+    }
+
+    return PointArrayMillingPathCombinerEntry{algo::rdp(obj.value()->points(), eps)};
+  }
+
+  eray::util::Logger::warn("Provided non-existing curve handle.");
+  return PointArrayMillingPathCombinerEntry{std::vector<math::Vec3f>()};
+}
+
+eray::math::Vec3f PointObjectMillingPathCombinerEntry::front() {
+  if (auto val = scene->arena<PointObject>().get_obj(point_handle)) {
+    return val.value()->transform().pos();
+  }
+  eray::util::Logger::warn("Point object handle is no longer valid for for path combiner entry");
+  return math::Vec3f::filled(0.F);
+}
+
+eray::math::Vec3f PointObjectMillingPathCombinerEntry::back() { return front(); }
+
+void PointObjectMillingPathCombinerEntry::append_to(std::vector<eray::math::Vec3f>& dest_vec, bool /*reverse*/) {
+  dest_vec.push_back(front());
+}
+
+size_t PointObjectMillingPathCombinerEntry::size() { return scene->harena(point_handle).exists(point_handle) ? 1 : 0; }
+
+eray::math::Vec3f PointArrayMillingPathCombinerEntry::front() { return points.front(); }
+
+eray::math::Vec3f PointArrayMillingPathCombinerEntry::back() { return points.back(); }
+
+void PointArrayMillingPathCombinerEntry::append_to(std::vector<eray::math::Vec3f>& dest_vec, bool reverse) {
+  if (reverse) {
+    dest_vec.append_range(points | std::views::reverse);
+  } else {
+    dest_vec.append_range(points);
+  }
+}
+
+size_t PointArrayMillingPathCombinerEntry::size() { return points.size(); }
+
+MillingPathsCombinerEntryInfo MillingPathsCombinerEntryInfo::from_entry(
+    std::string&& name, std::unique_ptr<IMillingPathsCombinerEntry>&& entry) {
+  return MillingPathsCombinerEntryInfo{
+      .name    = std::move(name),
+      .data    = std::move(entry),
+      .safe    = true,
+      .reverse = false,
+  };
+}
+
+std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
+    Scene& scene, std::optional<std::reference_wrapper<HeightMap>> height_map, const WorkpieceDesc& desc) {
   if (paths.empty()) {
     return std::vector<eray::math::Vec3f>();
   }
 
   const auto radius       = diameter / 2.F;
-  const auto safety_depth = desc.depth + 1.2F * radius;
+  const auto max_height   = height_map ? std::ranges::max(height_map->get().height_map) : desc.depth;
+  const auto safety_depth = max_height + 1.2F * radius;
 
   auto result = std::vector<eray::math::Vec3f>();
   result.emplace_back(0.F, safety_depth, 0.F);
 
   {
-    auto first = paths[0].front();
+    auto first = paths[0].data->front();
     if (paths[0].reverse) {
-      first = paths[0].back();
+      first = paths[0].data->back();
     }
 
     if (std::abs(first.x) > std::abs(first.z)) {
@@ -1629,19 +1729,19 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   auto real_size = 0;
 
   for (auto& path : paths) {
-    if (path.size() == 0) {
+    if (path.data->size() == 0) {
       continue;
     }
 
     const bool rev = path.reverse;
 
-    const auto& first_pt = rev ? path.back() : path.front();
-    const auto& last_pt  = rev ? path.front() : path.back();
+    const auto& first_pt = rev ? path.data->back() : path.data->front();
+    const auto& last_pt  = rev ? path.data->front() : path.data->back();
 
     if (real_size != 0 && path.safe) {
       result.emplace_back(first_pt.x, safety_depth, first_pt.z);
     }
-    path.append_to(result, rev);
+    path.data->append_to(result, rev);
     if (path.safe) {
       result.emplace_back(last_pt.x, safety_depth, last_pt.z);
     }
@@ -1654,22 +1754,6 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(Scene& scene, const
   eray::util::Logger::info("size: {}", result.size());
 
   return result;
-}
-
-void MillingPathsCombiner::emplace_point(eray::math::Vec3f&& point) {
-  paths.emplace_back(MillingPathsCombinerEntry{
-      .name = std::format("Point {}", unnamed_point_count++), .data = std::move(point), .safe = false});
-}
-
-void MillingPathsCombiner::emplace_path(const MillingPath& path) {
-  if (paths.empty()) {
-    diameter = static_cast<float>(path.diameter) / 10.F;
-    type     = path.type;
-  }
-  paths.push_back(MillingPathsCombinerEntry{
-      .name = path.filepath ? path.filepath->string() : std::format("Path {}", unnamed_path_count++),
-      .data = path.points,
-      .safe = true});
 }
 
 }  // namespace mini

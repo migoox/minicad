@@ -43,9 +43,29 @@ class Scene {
     return std::get<Arena<TObject>>(arenas_);
   }
 
+  template <typename TObjectHandle>
+  [[nodiscard]] Arena<typename TObjectHandle::Object>& harena() {
+    return std::get<Arena<typename TObjectHandle::Object>>(arenas_);
+  }
+
+  template <typename TObjectHandle>
+  [[nodiscard]] Arena<typename TObjectHandle::Object>& harena(const TObjectHandle& handle) {
+    return std::get<Arena<typename ERAY_HANDLE_OBJ(handle)>>(arenas_);
+  }
+
   template <typename TObject>
   [[nodiscard]] const Arena<TObject>& arena() const {
     return std::get<Arena<TObject>>(arenas_);
+  }
+
+  template <typename TObjectHandle>
+  [[nodiscard]] const Arena<typename TObjectHandle::Object>& harena() const {
+    return std::get<Arena<typename TObjectHandle::Object>>(arenas_);
+  }
+
+  template <typename TObjectHandle>
+  [[nodiscard]] const Arena<typename TObjectHandle::Object>& harena(const TObjectHandle& handle) const {
+    return std::get<Arena<typename ERAY_HANDLE_OBJ(handle)>>(arenas_);
   }
 
   bool push_back_point_to_curve(const PointObjectHandle& p_handle, const CurveHandle& c_handle);

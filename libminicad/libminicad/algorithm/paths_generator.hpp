@@ -1,10 +1,13 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <liberay/math/vec_fwd.hpp>
 #include <libminicad/renderer/scene_renderer.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <vector>
+
+#include "libminicad/scene/handles.hpp"
 
 namespace mini {
 
@@ -124,55 +127,61 @@ struct GCodeParser {
                                           const WorkpieceDesc& desc = WorkpieceDesc{});
 };
 
-struct MillingPathsCombinerEntry {
+struct IMillingPathsCombinerEntry {
+  virtual ~IMillingPathsCombinerEntry() = default;
+
+  virtual eray::math::Vec3f front()                                              = 0;
+  virtual eray::math::Vec3f back()                                               = 0;
+  virtual void append_to(std::vector<eray::math::Vec3f>& dest_vec, bool reverse) = 0;
+  virtual size_t size()                                                          = 0;
+};
+
+struct PointObjectMillingPathCombinerEntry : public IMillingPathsCombinerEntry {
+  PointObjectHandle point_handle;
+  Scene* scene;  // scene lifetime is broader or the same as the combiner entry
+
+  PointObjectMillingPathCombinerEntry() = delete;
+  PointObjectMillingPathCombinerEntry(PointObjectHandle&& point_handle, Scene& scene)
+      : point_handle(std::move(point_handle)), scene(&scene) {}
+
+  static PointObjectMillingPathCombinerEntry create(PointObjectHandle handle, Scene& scene);
+
+  eray::math::Vec3f front() override;
+  eray::math::Vec3f back() override;
+  void append_to(std::vector<eray::math::Vec3f>& dest_vec, bool reverse) override;
+  size_t size() override;
+};
+
+struct PointArrayMillingPathCombinerEntry : public IMillingPathsCombinerEntry {
+  std::vector<eray::math::Vec3f> points;
+
+  PointArrayMillingPathCombinerEntry() = delete;
+  explicit PointArrayMillingPathCombinerEntry(std::vector<eray::math::Vec3f>&& vec) : points(std::move(vec)) {}
+
+  static PointArrayMillingPathCombinerEntry create(const std::vector<eray::math::Vec3f>& points);
+  static PointArrayMillingPathCombinerEntry optimize_and_create(const std::vector<eray::math::Vec3f>& points,
+                                                                float eps = 0.001F);
+  static PointArrayMillingPathCombinerEntry from_approx_curve(const ApproxCurveHandle& handle, Scene& scene,
+                                                              float eps = 0.001F);
+
+  eray::math::Vec3f front() override;
+  eray::math::Vec3f back() override;
+  void append_to(std::vector<eray::math::Vec3f>& dest_vec, bool reverse) override;
+  size_t size() override;
+};
+
+struct MillingPathsCombinerEntryInfo {
   std::string name;
-  std::variant<std::vector<eray::math::Vec3f>, eray::math::Vec3f> data;
+  std::unique_ptr<IMillingPathsCombinerEntry> data;
   bool safe    = true;
   bool reverse = false;
 
-  auto front() const {
-    return std::visit(eray::util::match{[](const eray::math::Vec3f& p) { return p; },
-                                        [](const std::vector<eray::math::Vec3f>& points) {
-                                          if (points.empty()) {
-                                            return eray::math::Vec3f::filled(0.F);
-                                          }
-                                          return points.front();
-                                        }},
-                      data);
-  }
-
-  auto back() const {
-    return std::visit(eray::util::match{[](const eray::math::Vec3f& p) { return p; },
-                                        [](const std::vector<eray::math::Vec3f>& points) {
-                                          if (points.empty()) {
-                                            return eray::math::Vec3f::filled(0.F);
-                                          }
-                                          return points.back();
-                                        }},
-                      data);
-  }
-
-  auto size() const {
-    return std::visit(eray::util::match{[](const eray::math::Vec3f&) -> size_t { return 1U; },
-                                        [](const std::vector<eray::math::Vec3f>& points) { return points.size(); }},
-                      data);
-  }
-
-  auto append_to(std::vector<eray::math::Vec3f>& dest, bool rev = false) {
-    std::visit(eray::util::match{[&dest](const eray::math::Vec3f& p) { dest.push_back(p); },
-                                 [&dest, rev](const std::vector<eray::math::Vec3f>& points) {
-                                   if (rev) {
-                                     dest.append_range(points | std::views::reverse);
-                                   } else {
-                                     dest.append_range(points);
-                                   }
-                                 }},
-               data);
-  }
+  static MillingPathsCombinerEntryInfo from_entry(std::string&& name,
+                                                  std::unique_ptr<IMillingPathsCombinerEntry>&& entry);
 };
 
 struct MillingPathsCombiner {
-  std::vector<MillingPathsCombinerEntry> paths;
+  std::vector<MillingPathsCombinerEntryInfo> paths;
 
   float diameter          = 0.8F;
   PathType type           = PathType::Sphere;
@@ -187,13 +196,17 @@ struct MillingPathsCombiner {
    * @return false
    */
   bool load_path(const std::filesystem::path& filepath);
-  void emplace_point(eray::math::Vec3f&& point);
-  void emplace_path(const MillingPath& path);
+  void emplace_entry(MillingPathsCombinerEntryInfo&& entry) { paths.emplace_back(std::move(entry)); }
 
-  std::vector<eray::math::Vec3f> combine(Scene& scene, const WorkpieceDesc& desc = WorkpieceDesc{});
+  std::vector<eray::math::Vec3f> combine(Scene& scene,
+                                         std::optional<std::reference_wrapper<HeightMap>> height_map = std::nullopt,
+                                         const WorkpieceDesc& desc                                   = WorkpieceDesc{});
 };
 
 struct GCodeSerializer {
+  static bool write_to_file(Scene& scene, ApproxCurveHandle handle, const std::filesystem::path& filename,
+                            float diameter = 0.8F, const WorkpieceDesc& desc = WorkpieceDesc{});
+
   static bool write_to_file(const std::vector<eray::math::Vec3f>& points, const std::filesystem::path& filename,
                             const WorkpieceDesc& desc = WorkpieceDesc{});
 };
