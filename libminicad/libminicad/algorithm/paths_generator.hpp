@@ -109,8 +109,8 @@ struct DetailedMillingSolver {
    */
   static std::optional<DetailedMillingSolver> solve(const HeightMap& height_map, Scene& scene,
                                                     const PatchSurfaceHandle& patch_handle, bool dir = true,
-                                                    size_t paths = 100, const WorkpieceDesc& desc = WorkpieceDesc{},
-                                                    float diameter = 0.8F);
+                                                    bool rdp = true, size_t paths = 100,
+                                                    const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 
 enum class PathType : std::uint8_t { Sphere, Flat };

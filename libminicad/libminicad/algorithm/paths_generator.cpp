@@ -1018,7 +1018,7 @@ static void line(int x0, int y0, int x1, int y1, std::function<void(int x, int y
 
 std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMap& height_map, Scene& scene,
                                                                   const PatchSurfaceHandle& patch_handle, bool dir,
-                                                                  size_t paths, const WorkpieceDesc& desc,
+                                                                  bool rdp, size_t paths, const WorkpieceDesc& desc,
                                                                   float diameter) {
   constexpr auto kTrimmingTextureSize    = ParamSpaceTrimmingData::kCPUTrimmingTxtSize;
   constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
@@ -1094,6 +1094,9 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
       if (is_below_level(i, j)) {
         trimming_txt[i * kTrimmingTextureSize + j] = 0xFF000000;
       }
+      if (i > kTrimmingTextureSize - 30U) {
+        trimming_txt[i * kTrimmingTextureSize + j] = 0xFF000000;
+      }
     }
   }
 
@@ -1110,14 +1113,6 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
   std::vector<std::vector<Coord>> lines;
   {
     lines.reserve(paths);
-
-    auto mark = [&](size_t i, size_t j) {
-      const auto u = static_cast<float>(j) / kTrimmingTextureSizeFlt;
-      const auto v = static_cast<float>(i) / kTrimmingTextureSizeFlt;
-      auto p       = patch_surface->evaluate(u, v);
-      auto deriv   = patch_surface->evaluate_derivatives(u, v);
-      //   scene.renderer().debug_point(p + math::cross(deriv.first, deriv.second).normalize() * radius);
-    };
 
     auto is_trimmed = [&](size_t i, size_t j) { return trimming_txt[i * kTrimmingTextureSize + j] == 0xFF000000; };
 
@@ -1138,12 +1133,10 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
 
         if ((j_base == 0 || j_base == kTrimmingTextureSize - 1) && !is_trimmed(i, j)) {
           line.emplace_back(i, j);
-          mark(i, j);
         }
 
         if (j_base < kTrimmingTextureSize - 1 && is_trimmed(i, j) != is_trimmed(in, jn)) {
           line.emplace_back(i, j);
-          mark(i, j);
         }
       }
       lines.emplace_back(std::move(line));
@@ -1247,7 +1240,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
     for (auto& p : current_segment_points) {
       fix_intersection(height_map, desc, radius, p);
     }
-    points.append_range(algo::rdp(current_segment_points, 0.001F));
+    points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
   };
 
   auto debug_straight_line = [&](Coord start, Coord end) {
@@ -1365,31 +1358,21 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
       if (forward) {
         current_segment_points.clear();
 
-        // if (!(prev_segment_start.j == segment_start.j &&
-        //       (segment_start.j == 0 || segment_start.j == kTrimmingTextureSize - 1)) &&
-        //     !(prev_segment_start.i == segment_start.i &&
-        //       (segment_start.i == 0 || segment_start.i == kTrimmingTextureSize - 1))) {
         line(prev_segment_start.j, prev_segment_start.i, segment_start.j, segment_start.i, on_draw);
         for (auto& p : current_segment_points) {
           fix_intersection(height_map, desc, radius, p);
         }
-        points.append_range(algo::rdp(current_segment_points, 0.001F));
-        // }
+        points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
 
         draw_straight_line(segment_start, segment_end);
       } else {
         current_segment_points.clear();
 
-        // if (!(prev_segment_end.j == segment_end.j &&
-        //       (segment_end.j == 0 || segment_end.j == kTrimmingTextureSize - 1)) &&
-        //     !(prev_segment_end.i == segment_end.i &&
-        //       (segment_end.i == 0 || segment_end.i == kTrimmingTextureSize - 1))) {
         line(prev_segment_end.j, prev_segment_end.i, segment_end.j, segment_end.i, on_draw);
         for (auto& p : current_segment_points) {
           fix_intersection(height_map, desc, radius, p);
         }
-        points.append_range(algo::rdp(current_segment_points, 0.001F));
-        // }
+        points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
 
         draw_straight_line(segment_end, segment_start);
       }

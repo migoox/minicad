@@ -924,10 +924,13 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       static int paths = 100;
       static bool dir  = true;
+      static bool rdp  = true;
       ImGui::InputInt("Paths", &paths);
       ImGui::Checkbox("Dir", &dir);
+      ImGui::SameLine();
+      ImGui::Checkbox("RDP", &rdp);
       if (ImGui::Button("Generate detailed paths")) {
-        on_generate_detailed_paths(paths, dir);
+        on_generate_detailed_paths(paths, dir, rdp);
 
         if (m_.detailed_milling_solution) {
           if (!System::file_dialog().pick_folder([this](const std::filesystem::path& path) {
@@ -1977,7 +1980,7 @@ bool MiniCadApp::on_generate_flat_paths() {
   return true;
 }
 
-bool MiniCadApp::on_generate_detailed_paths(size_t paths, bool dir) {
+bool MiniCadApp::on_generate_detailed_paths(size_t paths, bool dir, bool rdp) {
   auto handles = std::vector<PatchSurfaceHandle>();
   auto append  = [&handles](const PatchSurfaceHandle& handle) { handles.push_back(handle); };
   for (auto h : *m_.non_transformable_selection) {
@@ -1992,7 +1995,7 @@ bool MiniCadApp::on_generate_detailed_paths(size_t paths, bool dir) {
   }
 
   m_.detailed_milling_solution =
-      DetailedMillingSolver::solve(*m_.milling_height_map, m_.scene, handles.front(), dir, paths);
+      DetailedMillingSolver::solve(*m_.milling_height_map, m_.scene, handles.front(), dir, rdp, paths);
   if (!m_.detailed_milling_solution) {
     return false;
   }
