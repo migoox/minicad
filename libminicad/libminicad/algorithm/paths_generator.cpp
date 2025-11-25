@@ -5,12 +5,18 @@
 #include <cstdint>
 #include <iostream>
 #include <iterator>
+#include <liberay/math/mat_fwd.hpp>
 #include <liberay/math/vec.hpp>
+#include <liberay/math/vec_fwd.hpp>
 #include <liberay/res/image.hpp>
 #include <liberay/util/logger.hpp>
 #include <libminicad/algorithm/paths_generator.hpp>
+#include <libminicad/scene/approx_curve.hpp>
+#include <libminicad/scene/handles.hpp>
 #include <libminicad/scene/patch_surface.hpp>
 #include <libminicad/scene/scene.hpp>
+#include <libminicad/scene/scene_object.hpp>
+#include <libminicad/scene/trimming.hpp>
 #include <limits>
 #include <list>
 #include <optional>
@@ -20,14 +26,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-#include "liberay/math/mat_fwd.hpp"
-#include "liberay/math/vec_fwd.hpp"
-#include "libminicad/scene/approx_curve.hpp"
-#include "libminicad/scene/handles.hpp"
-#include "libminicad/scene/param_primitive.hpp"
-#include "libminicad/scene/scene_object.hpp"
-#include "libminicad/scene/trimming.hpp"
 
 namespace mini {
 
@@ -624,8 +622,8 @@ std::optional<FlatMillingSolver> FlatMillingSolver::solve(Scene& scene, HeightMa
   };
 
   const auto diameter_eps = diameter - 0.08F;
-  const float right_x     = desc.width / 2.F + diameter * 2.F;
-  const float left_x      = -desc.width / 2.F - diameter * 2.F;
+  const float right_x     = desc.width / 2.F + 0.1F;
+  const float left_x      = -desc.width / 2.F - 0.1F;
   const float start_z     = desc.height / 2.F;
 
   auto segments            = std::vector<std::list<ZigZagSegment>>();
