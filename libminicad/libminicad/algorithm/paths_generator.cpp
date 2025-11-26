@@ -1017,12 +1017,17 @@ static void line(int x0, int y0, int x1, int y1, std::function<void(int x, int y
 }
 
 std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMap& height_map, Scene& scene,
-                                                                  const PatchSurfaceHandle& patch_handle, bool dir,
-                                                                  bool rdp, size_t paths, const WorkpieceDesc& desc,
+                                                                  const PatchSurfaceHandle& patch_handle,
+                                                                  Settings settings, const WorkpieceDesc& desc,
                                                                   float diameter) {
   constexpr auto kTrimmingTextureSize    = ParamSpaceTrimmingData::kCPUTrimmingTxtSize;
   constexpr auto kTrimmingTextureSizeFlt = static_cast<float>(ParamSpaceTrimmingData::kCPUTrimmingTxtSize);
   const auto radius                      = diameter / 2.F;
+
+  if (settings.path_count <= 0) {
+    eray::util::Logger::warn("Could not generate the detailed paths: path count <= 0");
+    return std::nullopt;
+  }
 
   if (!scene.arena<PatchSurface>().exists(patch_handle)) {
     eray::util::Logger::warn("Could not generate the detailed paths: no patch surfaces provided");
@@ -1094,7 +1099,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
       if (is_below_level(i, j)) {
         trimming_txt[i * kTrimmingTextureSize + j] = 0xFF000000;
       }
-      if (i > kTrimmingTextureSize - 30U) {
+      if (settings.param_space_offset && i > kTrimmingTextureSize - 30U) {
         trimming_txt[i * kTrimmingTextureSize + j] = 0xFF000000;
       }
     }
@@ -1112,11 +1117,11 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
   };
   std::vector<std::vector<Coord>> lines;
   {
-    lines.reserve(paths);
+    lines.reserve(static_cast<size_t>(settings.path_count));
 
     auto is_trimmed = [&](size_t i, size_t j) { return trimming_txt[i * kTrimmingTextureSize + j] == 0xFF000000; };
 
-    const auto i_step = kTrimmingTextureSize / paths;
+    const auto i_step = kTrimmingTextureSize / settings.path_count;
     for (size_t i_base = 0U; i_base < kTrimmingTextureSize; i_base += i_step) {
       std::vector<Coord> line;
 
@@ -1125,7 +1130,7 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
         auto j  = j_base;
         auto in = i_base;
         auto jn = static_cast<size_t>(j_base + 1U);
-        if (dir) {
+        if (settings.dir) {
           std::swap(i, j);
           in = j_base + 1;
           jn = i_base;
@@ -1240,7 +1245,8 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
     for (auto& p : current_segment_points) {
       fix_intersection(height_map, desc, radius, p);
     }
-    points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
+    points.append_range(settings.rdp_point_reduction ? algo::rdp(current_segment_points, 0.001F)
+                                                     : current_segment_points);
   };
 
   auto debug_straight_line = [&](Coord start, Coord end) {
@@ -1362,7 +1368,8 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
         for (auto& p : current_segment_points) {
           fix_intersection(height_map, desc, radius, p);
         }
-        points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
+        points.append_range(settings.rdp_point_reduction ? algo::rdp(current_segment_points, 0.001F)
+                                                         : current_segment_points);
 
         draw_straight_line(segment_start, segment_end);
       } else {
@@ -1372,7 +1379,8 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
         for (auto& p : current_segment_points) {
           fix_intersection(height_map, desc, radius, p);
         }
-        points.append_range(rdp ? algo::rdp(current_segment_points, 0.001F) : current_segment_points);
+        points.append_range(settings.rdp_point_reduction ? algo::rdp(current_segment_points, 0.001F)
+                                                         : current_segment_points);
 
         draw_straight_line(segment_end, segment_start);
       }
@@ -1401,11 +1409,30 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
     }
   }
 
+  if (settings.dist_point_reduction) {
+    const auto eps = settings.dist_err * settings.dist_err;
+    for (auto& point_list : point_lists) {
+      if (point_list.empty()) {
+        continue;
+      }
+
+      auto last_i = 0U;
+      for (auto i = 1U; i < point_list.size() - 1; ++i) {
+        auto v = point_list[last_i] - point_list[i];
+        if (math::dot(v, v) > eps) {
+          point_list[++last_i] = point_list[i];
+        }
+      }
+      point_list.resize(last_i + 1);
+    }
+  }
+
   return DetailedMillingSolver{
       .point_lists      = std::move(point_lists),
       .trimming_texture = handle,
   };
 }
+
 std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path, const WorkpieceDesc& desc) {
   namespace fs = std::filesystem;
 

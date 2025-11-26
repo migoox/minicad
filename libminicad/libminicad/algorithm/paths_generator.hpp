@@ -99,6 +99,14 @@ struct FlatMillingSolver {
 struct DetailedMillingSolver {
   std::vector<std::vector<eray::math::Vec3f>> point_lists;
   TextureHandle trimming_texture;
+  struct Settings {
+    bool dist_point_reduction = false;
+    float dist_err            = 0.01F;
+    bool param_space_offset   = false;
+    bool dir                  = true;
+    bool rdp_point_reduction  = true;
+    int path_count            = 100;
+  };
 
   /**
    * @brief Uses flat milling tool.
@@ -108,8 +116,7 @@ struct DetailedMillingSolver {
    * @param radius in centimeters
    */
   static std::optional<DetailedMillingSolver> solve(const HeightMap& height_map, Scene& scene,
-                                                    const PatchSurfaceHandle& patch_handle, bool dir = true,
-                                                    bool rdp = true, size_t paths = 100,
+                                                    const PatchSurfaceHandle& patch_handle, Settings settings,
                                                     const WorkpieceDesc& desc = WorkpieceDesc{}, float diameter = 0.8F);
 };
 
