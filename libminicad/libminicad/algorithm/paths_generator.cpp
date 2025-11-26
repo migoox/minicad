@@ -1595,7 +1595,7 @@ std::optional<MillingPath> GCodeParser::parse(const std::filesystem::path& path,
 
 bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
   auto filepath_str = filepath.string();
-  bool exists       = std::ranges::any_of(paths, [&](const auto& path) { return path.name == filepath_str; });
+  bool exists       = std::ranges::any_of(entries, [&](const auto& path) { return path.name == filepath_str; });
   if (exists) {
     eray::util::Logger::warn("Already loaded {}", filepath_str);
     return false;
@@ -1606,7 +1606,7 @@ bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
     return false;
   }
 
-  if (paths.empty()) {
+  if (entries.empty()) {
     diameter = static_cast<float>(result->diameter) / 10.F;
     type     = result->type;
   }
@@ -1615,13 +1615,13 @@ bool MillingPathsCombiner::load_path(const std::filesystem::path& filepath) {
         *result->filepath, std::make_unique<PointArrayMillingPathCombinerEntry>(
                                PointArrayMillingPathCombinerEntry::create(result->points)));
 
-    paths.emplace_back(std::move(entry));
+    entries.emplace_back(std::move(entry));
   } else {
     auto entry = MillingPathsCombinerEntryInfo::from_entry(
         std::format("Path {}", unnamed_path_count++), std::make_unique<PointArrayMillingPathCombinerEntry>(
                                                           PointArrayMillingPathCombinerEntry::create(result->points)));
 
-    paths.emplace_back(std::move(entry));
+    entries.emplace_back(std::move(entry));
   }
 
   return true;
@@ -1690,16 +1690,17 @@ size_t PointArrayMillingPathCombinerEntry::size() { return points.size(); }
 MillingPathsCombinerEntryInfo MillingPathsCombinerEntryInfo::from_entry(
     std::string&& name, std::unique_ptr<IMillingPathsCombinerEntry>&& entry) {
   return MillingPathsCombinerEntryInfo{
-      .name    = std::move(name),
-      .data    = std::move(entry),
-      .safe    = true,
-      .reverse = false,
+      .name        = std::move(name),
+      .data        = std::move(entry),
+      .safe_before = true,
+      .safe_after  = true,
+      .reverse     = false,
   };
 }
 
 std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
     Scene& scene, std::optional<std::reference_wrapper<HeightMap>> height_map, const WorkpieceDesc& desc) {
-  if (paths.empty()) {
+  if (entries.empty()) {
     return std::vector<eray::math::Vec3f>();
   }
 
@@ -1711,9 +1712,9 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
   result.emplace_back(0.F, safety_depth, 0.F);
 
   {
-    auto first = paths[0].data->front();
-    if (paths[0].reverse) {
-      first = paths[0].data->back();
+    auto first = entries[0].data->front();
+    if (entries[0].reverse) {
+      first = entries[0].data->back();
     }
 
     if (std::abs(first.x) > std::abs(first.z)) {
@@ -1737,7 +1738,7 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
 
   auto real_size = 0;
 
-  for (auto& path : paths) {
+  for (auto& path : entries) {
     if (path.data->size() == 0) {
       continue;
     }
@@ -1747,11 +1748,11 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
     const auto& first_pt = rev ? path.data->back() : path.data->front();
     const auto& last_pt  = rev ? path.data->front() : path.data->back();
 
-    if (real_size != 0 && path.safe) {
+    if (real_size != 0 && path.safe_before) {
       result.emplace_back(first_pt.x, safety_depth, first_pt.z);
     }
     path.data->append_to(result, rev);
-    if (path.safe) {
+    if (path.safe_after) {
       result.emplace_back(last_pt.x, safety_depth, last_pt.z);
     }
     ++real_size;
@@ -1767,7 +1768,7 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
 
 bool MillingPathsCombiner::load_path_as_points(Scene& scene, const std::filesystem::path& filepath) {
   auto filepath_str = filepath.string();
-  bool exists       = std::ranges::any_of(paths, [&](const auto& path) { return path.name == filepath_str; });
+  bool exists       = std::ranges::any_of(entries, [&](const auto& path) { return path.name == filepath_str; });
   if (exists) {
     eray::util::Logger::warn("Already loaded {}", filepath_str);
     return false;
@@ -1778,7 +1779,7 @@ bool MillingPathsCombiner::load_path_as_points(Scene& scene, const std::filesyst
     return false;
   }
 
-  if (paths.empty()) {
+  if (entries.empty()) {
     diameter = static_cast<float>(result->diameter) / 10.F;
     type     = result->type;
   }
@@ -1792,7 +1793,8 @@ bool MillingPathsCombiner::load_path_as_points(Scene& scene, const std::filesyst
           PointObjectMillingPathCombinerEntry::create(scene_points->at(i), scene));
       auto entry_info =
           MillingPathsCombinerEntryInfo::from_entry(std::string(std::format("{}. Loaded", i)), std::move(entry));
-      entry_info.safe = false;
+      entry_info.safe_before = false;
+      entry_info.safe_after  = false;
       emplace_entry(std::move(entry_info));
     }
   } else {

@@ -968,20 +968,23 @@ void MiniCadApp::render_gui(Duration /* delta */) {
     ImGui::EndTabItem();
   }
 
-  if (ImGui::BeginTabItem("Paths combiner")) {
+  if (ImGui::BeginTabItem("Paths combiner", nullptr)) {
     if (ImGui::BeginListBox("##PathsListBox")) {
       size_t i                      = 0;
       constexpr auto kSelectionNull = std::numeric_limits<size_t>::max();
 
       static size_t selected_ind = std::numeric_limits<size_t>::max();
 
-      for (const auto& p : m_.milling_path_combiner.paths) {
+      for (const auto& p : m_.milling_path_combiner.entries) {
         ImGui::PushID(i);
-        ImGui::Checkbox("Reverse", &m_.milling_path_combiner.paths[i].reverse);
+        ImGui::Checkbox("Reverse", &m_.milling_path_combiner.entries[i].reverse);
         ImGui::SameLine();
-        ImGui::Checkbox("Safe", &m_.milling_path_combiner.paths[i].safe);
+        ImGui::Checkbox("Safe ^", &m_.milling_path_combiner.entries[i].safe_before);
         ImGui::SameLine();
-        if (ImGui::Selectable(p.name.c_str(), selected_ind == i)) {
+        ImGui::Checkbox("Safe v", &m_.milling_path_combiner.entries[i].safe_after);
+        ImGui::SameLine();
+        int name_offset = std::max(static_cast<int>(p.name.size()) - 20, 0);
+        if (ImGui::Selectable(p.name.c_str() + name_offset, selected_ind == i)) {
           selected_ind = i;
         }
         ImGui::PopID();
@@ -992,20 +995,22 @@ void MiniCadApp::render_gui(Duration /* delta */) {
 
       if (selected_ind != kSelectionNull) {
         if (ImGui::Button("Remove")) {
-          m_.milling_path_combiner.paths.erase(m_.milling_path_combiner.paths.begin() + selected_ind);
+          m_.milling_path_combiner.entries.erase(m_.milling_path_combiner.entries.begin() + selected_ind);
           selected_ind = kSelectionNull;
         }
 
-        if (selected_ind < m_.milling_path_combiner.paths.size() - 1) {
+        if (selected_ind < m_.milling_path_combiner.entries.size() - 1) {
           if (ImGui::Button("v")) {
-            std::swap(m_.milling_path_combiner.paths[selected_ind], m_.milling_path_combiner.paths[selected_ind + 1]);
+            std::swap(m_.milling_path_combiner.entries[selected_ind],
+                      m_.milling_path_combiner.entries[selected_ind + 1]);
             selected_ind++;
           }
         }
 
         if (selected_ind > 0) {
           if (ImGui::Button("^")) {
-            std::swap(m_.milling_path_combiner.paths[selected_ind], m_.milling_path_combiner.paths[selected_ind - 1]);
+            std::swap(m_.milling_path_combiner.entries[selected_ind],
+                      m_.milling_path_combiner.entries[selected_ind - 1]);
             selected_ind--;
           }
         }

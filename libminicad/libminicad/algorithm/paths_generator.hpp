@@ -180,15 +180,16 @@ struct PointArrayMillingPathCombinerEntry : public IMillingPathsCombinerEntry {
 struct MillingPathsCombinerEntryInfo {
   std::string name;
   std::unique_ptr<IMillingPathsCombinerEntry> data;
-  bool safe    = true;
-  bool reverse = false;
+  bool safe_before = true;
+  bool safe_after  = true;
+  bool reverse     = false;
 
   static MillingPathsCombinerEntryInfo from_entry(std::string&& name,
                                                   std::unique_ptr<IMillingPathsCombinerEntry>&& entry);
 };
 
 struct MillingPathsCombiner {
-  std::vector<MillingPathsCombinerEntryInfo> paths;
+  std::vector<MillingPathsCombinerEntryInfo> entries;
 
   float diameter          = 0.8F;
   PathType type           = PathType::Sphere;
@@ -204,7 +205,7 @@ struct MillingPathsCombiner {
    */
   bool load_path(const std::filesystem::path& filepath);
   bool load_path_as_points(Scene& scene, const std::filesystem::path& filepath);
-  void emplace_entry(MillingPathsCombinerEntryInfo&& entry) { paths.emplace_back(std::move(entry)); }
+  void emplace_entry(MillingPathsCombinerEntryInfo&& entry) { entries.emplace_back(std::move(entry)); }
 
   std::vector<eray::math::Vec3f> combine(Scene& scene,
                                          std::optional<std::reference_wrapper<HeightMap>> height_map = std::nullopt,
