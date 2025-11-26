@@ -1110,7 +1110,8 @@ std::optional<DetailedMillingSolver> DetailedMillingSolver::solve(const HeightMa
   // j (column) -> u parameter
   // i (row) -> v
 
-  // == Generate line segments =========================================================================================
+  // == Generate line segments ========================
+  // j=================================================================
   struct Coord {
     int i = 0;
     int j = 0;
@@ -1762,6 +1763,43 @@ std::vector<eray::math::Vec3f> MillingPathsCombiner::combine(
   eray::util::Logger::info("size: {}", result.size());
 
   return result;
+}
+
+bool MillingPathsCombiner::load_path_as_points(Scene& scene, const std::filesystem::path& filepath) {
+  auto filepath_str = filepath.string();
+  bool exists       = std::ranges::any_of(paths, [&](const auto& path) { return path.name == filepath_str; });
+  if (exists) {
+    eray::util::Logger::warn("Already loaded {}", filepath_str);
+    return false;
+  }
+
+  auto result = GCodeParser::parse(filepath);
+  if (!result) {
+    return false;
+  }
+
+  if (paths.empty()) {
+    diameter = static_cast<float>(result->diameter) / 10.F;
+    type     = result->type;
+  }
+
+  if (auto scene_points = scene.create_many_objs<PointObject>(Point{}, result->points.size())) {
+    for (auto i = 0U; i < scene_points->size(); ++i) {
+      auto p = scene.arena<PointObject>().unsafe_get_obj(scene_points->at(i));
+      p->transform().set_local_pos(result->points[i]);
+      p->update();
+      auto entry = std::make_unique<PointObjectMillingPathCombinerEntry>(
+          PointObjectMillingPathCombinerEntry::create(scene_points->at(i), scene));
+      auto entry_info =
+          MillingPathsCombinerEntryInfo::from_entry(std::string(std::format("{}. Loaded", i)), std::move(entry));
+      entry_info.safe = false;
+      emplace_entry(std::move(entry_info));
+    }
+  } else {
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace mini

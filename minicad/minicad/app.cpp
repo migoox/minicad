@@ -1019,6 +1019,14 @@ void MiniCadApp::render_gui(Duration /* delta */) {
           Logger::info("File dialog error");
         }
       }
+      if (ImGui::Button("Load as points")) {
+        auto res = System::file_dialog().open_file(
+            [this](const auto& path) { m_.milling_path_combiner.load_path_as_points(m_.scene, path); });
+
+        if (!res) {
+          Logger::info("File dialog error");
+        }
+      }
       ImGui::SameLine();
       if (ImGui::Button("Combine")) {
         if (m_.milling_height_map) {

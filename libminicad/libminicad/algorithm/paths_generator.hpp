@@ -203,6 +203,7 @@ struct MillingPathsCombiner {
    * @return false
    */
   bool load_path(const std::filesystem::path& filepath);
+  bool load_path_as_points(Scene& scene, const std::filesystem::path& filepath);
   void emplace_entry(MillingPathsCombinerEntryInfo&& entry) { paths.emplace_back(std::move(entry)); }
 
   std::vector<eray::math::Vec3f> combine(Scene& scene,

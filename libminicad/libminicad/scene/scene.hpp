@@ -199,7 +199,8 @@ class Scene {
   void clear();
 
  public:
-  static constexpr std::size_t kMaxObjects = 10000;
+  static constexpr std::size_t kMaxObjects      = 10000;
+  static constexpr std::size_t kMaxPointObjects = 30000;
 
  private:
   void remove_from_order(size_t ind);

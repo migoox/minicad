@@ -17,7 +17,7 @@ std::uint32_t Scene::next_signature_ = 0;
 
 Scene::Scene(std::unique_ptr<ISceneRenderer>&& renderer)
     : renderer_(std::move(renderer)), signature_(next_signature_++) {
-  arena<PointObject>().init(kMaxObjects, signature_);
+  arena<PointObject>().init(kMaxPointObjects, signature_);
   arena<Curve>().init(kMaxObjects, signature_);
   arena<PatchSurface>().init(kMaxObjects, signature_);
   arena<FillInSurface>().init(kMaxObjects, signature_);
